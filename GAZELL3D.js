@@ -18,6 +18,7 @@
     enableGazellifySimilar: true,
     enableGazellifyDetail: true,
     enableGazellifySearch: true,
+    enableOriginalTitleTooltip: true,
   });
 
   const GAZELLIFY_SEQUENCE = Object.freeze([
@@ -275,6 +276,30 @@
       opacity: 1;
     }
 
+    .gz-tooltip {
+      position: fixed;
+      z-index: 9999;
+      pointer-events: none;
+      background: var(--gz-tooltip-bg, rgba(0, 0, 0, 0.85));
+      color: var(--gz-tooltip-color, #fff);
+      border: 1px solid var(--gz-tooltip-border, rgba(255, 255, 255, 0.15));
+      padding: 0.4rem 0.75rem;
+      border-radius: 0.45rem;
+      font-size: 1.25rem;
+      line-height: 1.35;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 0.1s ease, transform 0.1s ease;
+      max-width: 600px;
+      word-break: break-word;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+    }
+
+    .gz-tooltip--visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
     @media (max-width: 1100px) {
       .gz-similar-layout {
         flex-direction: column;
@@ -307,6 +332,140 @@
       .split(/[^A-Za-z0-9]+/)
       .map((token) => token.trim().toUpperCase())
       .filter(Boolean);
+  const setOriginalTitle = (element, originalText) => {
+    if (!element || element.dataset.gzOriginal) return;
+    const source = originalText ?? element.textContent ?? '';
+    const value = normalizeText(source);
+    if (value) element.dataset.gzOriginal = value;
+  };
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+  const parseColorString = (value) => {
+    if (!value) return null;
+    const rgbMatch = value.match(/rgba?\(([^)]+)\)/i);
+    if (rgbMatch) {
+      const parts = rgbMatch[1].split(',').map((part) => part.trim());
+      if (parts.length >= 3) {
+        const [r, g, b] = parts.slice(0, 3).map((part) => clamp(parseInt(part, 10) || 0, 0, 255));
+        const a = parts[3] !== undefined ? clamp(parseFloat(parts[3]) || 0, 0, 1) : 1;
+        return { r, g, b, a };
+      }
+    }
+    return null;
+  };
+  const getRelativeLuminance = (color) => {
+    if (!color) return 0;
+    const toLinear = (component) => {
+      const channel = component / 255;
+      return channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * toLinear(color.r) + 0.7152 * toLinear(color.g) + 0.0722 * toLinear(color.b);
+  };
+  const getEffectiveBackgroundColor = () => {
+    const nodes = [document.body, document.documentElement];
+    for (const node of nodes) {
+      if (!node) continue;
+      const value = window.getComputedStyle(node).backgroundColor;
+      const color = parseColorString(value);
+      if (color && color.a > 0) return color;
+    }
+    return { r: 17, g: 17, b: 17, a: 1 };
+  };
+  let cachedTooltipTheme;
+  const getTooltipTheme = () => {
+    if (cachedTooltipTheme) return cachedTooltipTheme;
+    const bgColor = getEffectiveBackgroundColor();
+    const isLightBackground = getRelativeLuminance(bgColor) > 0.5;
+    cachedTooltipTheme = isLightBackground
+      ? {
+          bg: 'rgba(0, 0, 0, 0.82)',
+          color: 'rgba(255, 255, 255, 0.95)',
+          border: 'rgba(0, 0, 0, 0.25)',
+        }
+      : {
+          bg: 'rgba(255, 255, 255, 0.96)',
+          color: 'rgba(8, 11, 25, 0.95)',
+          border: 'rgba(255, 255, 255, 0.35)',
+        };
+    return cachedTooltipTheme;
+  };
+  const applyTooltipTheme = (element) => {
+    if (!element) return;
+    const theme = getTooltipTheme();
+    element.style.setProperty('--gz-tooltip-bg', theme.bg);
+    element.style.setProperty('--gz-tooltip-color', theme.color);
+    element.style.setProperty('--gz-tooltip-border', theme.border);
+  };
+
+  let tooltipElement;
+  let tooltipTarget = null;
+  let tooltipInitialized = false;
+
+  const ensureTooltipElement = () => {
+    if (tooltipElement) return tooltipElement;
+    tooltipElement = create('div', 'gz-tooltip');
+    applyTooltipTheme(tooltipElement);
+    document.body.appendChild(tooltipElement);
+    return tooltipElement;
+  };
+
+  const hideTooltip = () => {
+    if (!tooltipElement) return;
+    tooltipElement.classList.remove('gz-tooltip--visible');
+  };
+
+  const positionTooltip = (event) => {
+    if (!tooltipElement) return;
+    const offset = 16;
+    const tooltipRect = tooltipElement.getBoundingClientRect();
+    const maxX = window.innerWidth - tooltipRect.width - 12;
+    const maxY = window.innerHeight - tooltipRect.height - 12;
+    const nextX = Math.min(Math.max(event.clientX + offset, 12), Math.max(12, maxX));
+    const nextY = Math.min(Math.max(event.clientY + offset, 12), Math.max(12, maxY));
+    tooltipElement.style.left = `${nextX}px`;
+    tooltipElement.style.top = `${nextY}px`;
+  };
+
+  const showTooltip = (text) => {
+    if (!text) return;
+    const element = ensureTooltipElement();
+    element.textContent = text;
+    element.classList.add('gz-tooltip--visible');
+  };
+
+  const getTooltipTarget = (node) => (node instanceof Element ? node.closest('[data-gz-original]') : null);
+
+  const handleTooltipEnter = (event) => {
+    const target = getTooltipTarget(event.target);
+    if (!target) return;
+    const text = target.dataset.gzOriginal;
+    if (!text) return;
+    tooltipTarget = target;
+    showTooltip(text);
+    positionTooltip(event);
+  };
+
+  const handleTooltipLeave = (event) => {
+    if (!tooltipTarget) return;
+    const current = getTooltipTarget(event.target);
+    if (current !== tooltipTarget) return;
+    const next = getTooltipTarget(event.relatedTarget);
+    if (next === tooltipTarget) return;
+    tooltipTarget = null;
+    hideTooltip();
+  };
+
+  const handleTooltipMove = (event) => {
+    if (!tooltipTarget || !tooltipElement || !tooltipElement.classList.contains('gz-tooltip--visible')) return;
+    positionTooltip(event);
+  };
+
+  const initTooltip = () => {
+    if (tooltipInitialized) return;
+    tooltipInitialized = true;
+    document.addEventListener('mouseover', handleTooltipEnter);
+    document.addEventListener('mouseout', handleTooltipLeave);
+    document.addEventListener('mousemove', handleTooltipMove);
+  };
 
 
   const ready = (cb) => {
@@ -945,6 +1104,7 @@
     if (!CONFIG.enableGazellifyDetail) return;
     const headline = document.querySelector('.torrent__name');
     if (!headline || headline.dataset.gzDetail === '1') return;
+    setOriginalTitle(headline);
     const metaTitle = document.querySelector('.meta__title');
     if (!metaTitle) return;
     const titleText = getText(metaTitle.childNodes[0] || '');
@@ -952,7 +1112,8 @@
     const yearNode = metaTitle.querySelector('span');
     const yearText = yearNode ? yearNode.textContent.replace(/[()]/g, '').trim() : '';
     const heading = yearText ? `${titleText} (${yearText})` : titleText;
-    const subtitle = formatTorrentName(headline.textContent || '');
+    const originalHeadline = headline.dataset.gzOriginal || headline.textContent || '';
+    const subtitle = formatTorrentName(originalHeadline);
     if (!subtitle) return;
 
     const wrapper = create('div', 'gz-detail-title');
@@ -971,12 +1132,13 @@
     if (!CONFIG.enableGazellifySearch) return;
     $$(SELECTORS.searchResults).forEach((link) => {
       if (!link || link.dataset.gzSearch === '1') return;
+      setOriginalTitle(link);
       const container = link.closest('.torrent-search--list__overview')?.closest('tr');
       const popupTitle = container?.querySelector('.meta__poster-popup-title');
       const popupYear = container?.querySelector('.meta__poster-popup-year');
       const popupHeading = popupTitle ? popupTitle.childNodes[0]?.textContent.trim() : '';
       const popupYearText = popupYear ? popupYear.textContent.replace(/[()]/g, '').trim() : '';
-      const raw = normalizeText(link.textContent || '');
+      const raw = normalizeText(link.dataset.gzOriginal || link.textContent || '');
       if (!raw) return;
       const { heading, subtitle } = popupHeading
         ? {
@@ -1029,7 +1191,9 @@
     $$('.torrent-search--grouped__name', panel).forEach((heading) => {
       const link = $('a', heading);
       if (!link) return;
-      const formatted = formatTorrentName(link.textContent, {
+      setOriginalTitle(link);
+      const sourceText = link.dataset.gzOriginal || link.textContent || '';
+      const formatted = formatTorrentName(sourceText, {
         typeLabel: findTorrentTypeForHeading(heading),
       });
       if (formatted) {
@@ -1245,6 +1409,9 @@
 
   ready(() => {
     injectStyles(STYLE);
+    if (CONFIG.enableOriginalTitleTooltip) {
+      initTooltip();
+    }
 
     if (initPage()) return;
 
