@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.1.2
+// @version      1.1.3
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -734,7 +734,8 @@
     'YT',
     'RED',
     'ZDF',
-    'CTHP'
+    'CTHP',
+    'KLASSIKI'
   ];
 
   const AUDIO_CHANNEL_PATTERN = /\b(?:1\.0|2\.0|2\.1|3\.0|3\.1|4\.0|4\.1|5\.0|5\.1|6\.1|7\.1)\b/i;
