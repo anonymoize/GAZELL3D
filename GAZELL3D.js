@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.1.1
+// @version      1.1.2
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -872,6 +872,7 @@
     { regex: /\bVorbis\b/i, value: 'Vorbis' },
     { regex: /\bLPCM\b|\bPCM\b/i, value: 'LPCM' },
     { regex: /\bMP3\b/i, value: 'MP3' },
+    { regex: /\bMP2\b/i, value: 'MP2' }
   ];
 
   const HDR_PATTERNS = [
