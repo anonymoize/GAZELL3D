@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.2.4
+// @version      1.2.4.1
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -20,7 +20,7 @@
   const CONFIG = Object.freeze({
     removeTorrentIcons: true,
     enableGazellifySimilar: true,
-    enableGazellifyDetail: false,
+    enableGazellifyDetail: true,
     enableGazellifySearch: true,
     enableOriginalTitleTooltip: true,
   });
@@ -382,7 +382,6 @@
       /\b(?:H\.?26[45]|HEVC|AVC|x265|x264|MPEG-?2|MPEG-?4)\b/i,
       /\b(?:DTS:?X|DTS-?HD|DD-?EX|DDP|Dolby)\b/i,
       /\bS\d{1,3}E\d{1,3}\b/i,
-      new RegExp(`\\b(${SERVICE_TOKENS.join('|')})\\b`, 'i'),
     ];
     patterns.forEach((pattern) => {
       const match = pattern.exec(text);
