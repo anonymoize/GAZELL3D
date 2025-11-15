@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.2.2
+// @version      1.2.3
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -1787,7 +1787,7 @@
 
     const isFullDisc =
       typeof typeLabel === 'string' && typeLabel.trim().toLowerCase().includes('full disc');
-    const hasDiscContext = /\b(?:PAL|NTSC|SECAM|DVD\d?|Blu-?ray|BD|UHD)\b/i.test(baseTitle);
+    const hasDiscContext = /\b(?:PAL|NTSC|SECAM|DVD\d?|Blu-ray|BD|UHD)\b/i.test(baseTitle);
     const country =
       isFullDisc || hasDiscContext
         ? (() => {
