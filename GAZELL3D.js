@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.1.4
+// @version      1.1.5
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
 // @match        https://blutopia.cc/torrents/*
 // @match        https://blutopia.cc/torrents*
+// @match        https://fearnopeer.com/torrents/*
+// @match        https://fearnopeer.com/torrents*
 // @updateURL    https://github.com/anonymoize/GAZELL3D/raw/refs/heads/main/GAZELL3D.js
 // @downloadURL  https://github.com/anonymoize/GAZELL3D/raw/refs/heads/main/GAZELL3D.js
 // @grant        GM_addStyle
@@ -18,7 +20,7 @@
   const CONFIG = Object.freeze({
     removeTorrentIcons: true,
     enableGazellifySimilar: true,
-    enableGazellifyDetail: true,
+    enableGazellifyDetail: false,
     enableGazellifySearch: true,
     enableOriginalTitleTooltip: true,
   });
