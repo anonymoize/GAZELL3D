@@ -536,7 +536,7 @@
     { regex: /\bDivX\b/i, value: 'DivX' },
   ];
 
-  const RESOLUTIONS = ['4320p', '2160p', '1080p', '1080i', '720p', '576p', '576i', '480p', '480i', "360p", '240p', '144p'];
+  const RESOLUTIONS = ['4320p', '2160p', '1080p', '1080i', '720p', '576p', '576i', '540p', '480p', '480i', "360p", '240p', '144p'];
 
   const SOURCE_PATTERNS = [
     { regex: /\bUHD[\s-]*Blu-?ray\b/i, value: 'UHD BluRay' },
