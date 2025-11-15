@@ -2,7 +2,7 @@
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
 // @version      1.0.0
-// @description  Improves UNIT3D torrent layouts for better readability and usability.
+// @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://blutopia.cc/torrents/*
 // @grant        GM_addStyle
