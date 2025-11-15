@@ -302,6 +302,11 @@
       transform: translateY(0);
     }
 
+    .gz-label--unknown {
+      color: #ffd95e;
+      font-weight: 600;
+    }
+
     @media (max-width: 1100px) {
       .gz-similar-layout {
         flex-direction: column;
@@ -339,6 +344,30 @@
     const source = originalText ?? element.textContent ?? '';
     const value = normalizeText(source);
     if (value) element.dataset.gzOriginal = value;
+  };
+  const applyUnknownHighlight = (element, text = '') => {
+    if (!element) return;
+    const value = text || '';
+    if (!/unknown/i.test(value)) {
+      element.textContent = value;
+      return;
+    }
+    element.textContent = '';
+    const regex = /unknown/gi;
+    let lastIndex = 0;
+    let match;
+    while ((match = regex.exec(value))) {
+      if (match.index > lastIndex) {
+        element.appendChild(document.createTextNode(value.slice(lastIndex, match.index)));
+      }
+      const span = create('span', 'gz-label--unknown');
+      span.textContent = match[0];
+      element.appendChild(span);
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < value.length) {
+      element.appendChild(document.createTextNode(value.slice(lastIndex)));
+    }
   };
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
   const parseColorString = (value) => {
@@ -1122,7 +1151,7 @@
     const headingEl = create('div', 'gz-detail-title__heading');
     headingEl.textContent = heading;
     const subEl = create('div', 'gz-detail-title__subheading');
-    subEl.textContent = subtitle;
+    applyUnknownHighlight(subEl, subtitle);
     wrapper.append(headingEl, subEl);
 
     headline.textContent = '';
@@ -1155,7 +1184,7 @@
       const headingEl = create('div', 'gz-search-title__heading');
       headingEl.textContent = heading;
       const subEl = create('div', 'gz-search-title__subheading');
-      subEl.textContent = subtitle;
+      applyUnknownHighlight(subEl, subtitle);
       wrapper.append(headingEl, subEl);
       link.appendChild(wrapper);
       link.dataset.gzSearch = '1';
@@ -1199,7 +1228,9 @@
         typeLabel: findTorrentTypeForHeading(heading),
       });
       if (formatted) {
-        link.textContent = formatted;
+        applyUnknownHighlight(link, formatted);
+      } else {
+        link.textContent = '';
       }
     });
   };
