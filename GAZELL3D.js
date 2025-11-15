@@ -334,9 +334,9 @@
   };
 
   const VIDEO_CODEC_PATTERNS = [
-    { regex: /\bHEVC\b|\bH\.?265\b|\bH265\b|\bx265\b/i, value: 'H.265' },
-    { regex: /\bAVC\b|\bH\.?264\b|\bH264\b|\bx264\b/i, value: 'H.264' },
-    { regex: /\bVVC\b|\bH\.?266\b|\bH266\b|\bx266\b/i, value: 'H.266' },
+    { regex: /\bHEVC\b|\bH\.?265\b|\bH265\b|\bx265\b/i, value: 'H265' },
+    { regex: /\bAVC\b|\bH\.?264\b|\bH264\b|\bx264\b/i, value: 'H264' },
+    { regex: /\bVVC\b|\bH\.?266\b|\bH266\b|\bx266\b/i, value: 'H266' },
     { regex: /\bAV1\b/i, value: 'AV1' },
     { regex: /\bVC-?1\b/i, value: 'VC-1' },
     { regex: /\bMPEG-?2\b/i, value: 'MPEG-2' },
@@ -351,7 +351,7 @@
   const SOURCE_PATTERNS = [
     { regex: /\bUHD[\s-]*Blu-?ray\b/i, value: 'UHD BluRay' },
     { regex: /\bBlu-?ray\b/i, value: 'BluRay' },
-    { regex: /\bWEB[-\s]?DL\b|\bWEBRip\b/i, value: 'Web' },
+    { regex: /\bWEB[-\s]?DL\b|\bWEBRip\b/i, value: 'WEB' },
     { regex: /\bDVD(?:Rip)?\b|\bNTSC DVD[59]\b|\bPAL DVD[59]\b|\bDVD[59]\b/i, value: 'DVD' },
     { regex: /\bHD-?DVD\b|\bHDDVD\b/i, value: 'HD DVD' },
     { regex: /\bHDTV\b/i, value: 'HDTV' },
@@ -685,9 +685,9 @@
   ];
 
   const HDR_PATTERNS = [
-    { regex: /\bDV\s+HDR10\+\b/i, value: 'DV HDR10+' },
+    { regex: /\bDV\s+HDR10\+/i, value: 'DV HDR10+' },
     { regex: /\bDV\s+HDR\b/i, value: 'DV HDR' },
-    { regex: /\bHDR10\+\b/i, value: 'HDR10+' },
+    { regex: /\bHDR10\+/i, value: 'HDR10+' },
     { regex: /\bHLG\b/i, value: 'HLG' },
     { regex: /\bDV\b/i, value: 'DV' },
     { regex: /\bHDR\b/i, value: 'HDR' },
@@ -833,7 +833,8 @@
               `\\b(${SERVICE_TOKENS.join('|')})\\b(?=[^\\n]*\\bWEB(?:-?DL|Rip)\\b)`,
               'i'
             );
-            const match = serviceRegex.exec(baseTitle);
+            const fallbackRegex = new RegExp(`\\b(${SERVICE_TOKENS.join('|')})\\b`, 'i');
+            const match = serviceRegex.exec(baseTitle) || fallbackRegex.exec(baseTitle);
             if (!match) return '';
             const token = match[1];
             return SERVICE_TOKENS.find((candidate) => candidate.toLowerCase() === token.toLowerCase()) || token;
@@ -867,22 +868,25 @@
       return matchPattern ? baseTitle.match(matchPattern)[0].toUpperCase() : '';
     })();
 
-    const language = (() => {
-      if (/Dual[-\s]?Audio/i.test(baseTitle)) {
-        return 'Dual-Audio';
-      }
-      if (/\bDubbed\b/i.test(baseTitle)) {
+  const language = (() => {
+    if (/Dual[-\s]?Audio/i.test(baseTitle)) {
+      return 'Dual-Audio';
+    }
+    if (/\bDubbed\b/i.test(baseTitle)) {
         return 'Dubbed';
       }
-      const languageRegex = new RegExp(
-        `\\b(${Object.keys(LANGUAGE_MAP).join('|')})\\b`,
-        'i'
-      );
-      const match = languageRegex.exec(baseTitle);
-      if (!match) return '';
-      const key = match[1].toUpperCase();
-      return LANGUAGE_MAP[key] || match[1];
-    })();
+    const languageRegex = new RegExp(
+      `\\b(${Object.keys(LANGUAGE_MAP).join('|')})\\b`,
+      'i'
+    );
+    const match = languageRegex.exec(baseTitle);
+    if (!match) return '';
+    const key = match[1].toUpperCase();
+    if (service && key === service) {
+      return '';
+    }
+    return LANGUAGE_MAP[key] || match[1];
+  })();
 
     const audioCodec = getMatchFromPatterns(AUDIO_CODEC_PATTERNS, baseTitle) || 'UNKNOWN';
     const audioChannels = (() => {
