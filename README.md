@@ -6,7 +6,7 @@ GAZELL3D is a Tampermonkey/Greasemonkey userscript that reimagines UNIT3D-based 
 
 1. Install a userscript manager such as Tampermonkey (Chrome/Edge) or Violentmonkey (Firefox).
 2. Create a new userscript and paste the contents of `GAZELL3D.js`.
-3. Save and enable the script. It runs automatically on `https://{UNIT3D SITE}/torrents/*` and `https://{UNIT3D SITE}/torrents/*`.
+3. Save and enable the script. It runs automatically on `https://{UNIT3D SITE}/torrents*`.
 
 ## Features
 
@@ -21,7 +21,7 @@ GAZELL3D is a Tampermonkey/Greasemonkey userscript that reimagines UNIT3D-based 
 
 - Builds a grouped left-column stack containing the torrent group table plus optional “Requests”, “Playlists”, “Collection”, and “Also downloaded” panels (when available).
 - Optionally removes noisy icon columns from the similar torrent tables via a MutationObserver (`CONFIG.removeTorrentIcons`).
-- Adds `gazellify()`, a torrent renaming pass that rewrites grouped torrent names using parsed components (resolution, source, service, codec, bit-depth, HDR, Atmos, cut info, season/episode, language, scene group, etc.). Toggle this via `CONFIG.enableGazellify`.
+- Adds `gazellify()`, a torrent renaming pass that rewrites grouped torrent names using parsed components (resolution, source, service, codec, bit-depth, HDR, Atmos, cut info, season/episode, language, scene group, etc.). Toggle this per page type via `CONFIG.enableGazellifySimilar`, `CONFIG.enableGazellifyDetail`, and `CONFIG.enableGazellifySearch`.
 - The rename order is explicit: `{Video Codec} / [Bit Depth] / {Resolution} / [Country] / [Service] / {Source} / [S##E##] / [Language|Dual-Audio|Dubbed] / {Audio Codec + Channels} / [Atmos] / [HDR|SDR] / [Hybrid] / [Cut] / [REPACK#/PROPER#] / {Release Group}`. Optional brackets only render when detected so scene tags remain compact but informative, and DVD sources include specific multi-disc or region info (e.g., `NTSC 3xDVD9 / 5xDVD5`).
 - Includes robust parsing helpers for codecs (video/audio), HDR variants, scene groups, streaming service tags, languages, and country codes to normalize the formatted titles.
 
@@ -29,12 +29,13 @@ GAZELL3D is a Tampermonkey/Greasemonkey userscript that reimagines UNIT3D-based 
 
 - Rebuilds the individual torrent page into the same two-column layout, keeping the torrent body content on the left and moving a refined meta card to the right.
 - Collapses the torrent button list into inline buttons, preserving only the `.form__group` entries so tag sections and other markup remain untouched.
+- Replaces the large torrent name heading with the same `{Title (Year)}` and gazellified subtitle pattern used on search pages, keeping the presentation consistent.
 
 ### General Utilities
 
 - Provides lightweight DOM helpers (`$`, `$$`, `create`, `appendAll`, `removeNode`) and normalized text utilities to keep DOM mutations consistent.
-- Uses a shared mutation observer to wait for dynamic page loads and to re-run once the target structure is rendered.
-- Exposes concise configuration at the top of the script so future tweaks (e.g., disabling gazellify or icon stripping) only require flipping a boolean.
+- Uses shared mutation observers to wait for dynamic page loads and to re-run once the target structure is rendered (similar page, detail page, and search page).
+- Exposes concise configuration at the top of the script so future tweaks (e.g., disabling gazellify per page type or icon stripping) only require flipping a boolean.
 
 ## Configuration
 
@@ -42,8 +43,10 @@ At the top of `GAZELL3D.js`, adjust the `CONFIG` object:
 
 ```js
 const CONFIG = Object.freeze({
-  removeTorrentIcons: true, // strip the “torrent-icons” column from similar lists
-  enableGazellify: true,    // reformat torrent names with parsed metadata
+  removeTorrentIcons: true,      // strip the “torrent-icons” column from similar lists
+  enableGazellifySimilar: true,  // reformat grouped torrent names
+  enableGazellifyDetail: true,   // restyle the detail page headline
+  enableGazellifySearch: true,   // restyle search result rows
 });
 ```
 

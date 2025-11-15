@@ -4,7 +4,9 @@
 // @version      1.0.0
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
+// @match        https://aither.cc/torrents*
 // @match        https://blutopia.cc/torrents/*
+// @match        https://blutopia.cc/torrents*
 // @grant        GM_addStyle
 // ==/UserScript==
 
@@ -13,11 +15,14 @@
 
   const CONFIG = Object.freeze({
     removeTorrentIcons: true,
-    enableGazellify: true,
+    enableGazellifySimilar: true,
+    enableGazellifyDetail: true,
+    enableGazellifySearch: true,
   });
 
   const GAZELLIFY_SEQUENCE = Object.freeze([
     'videoCodec',
+    'bitDepth',
     'resolution',
     'country',
     'service',
@@ -26,7 +31,6 @@
     'language',
     'audio',
     'atmos',
-    'bitDepth',
     'hdr',
     'hybrid',
     'cut',
@@ -37,6 +41,7 @@
   const SELECTORS = Object.freeze({
     similarArticle: 'main.page__torrent-similar--index article',
     torrentArticle: 'main.page__torrent--show article',
+    torrentSearchPage: 'main.page__torrent--index',
     torrentGroup: 'section.panelV2[x-data="torrentGroup"]',
     metaSection: 'section.meta',
     torrentButtons: 'menu.torrent__buttons',
@@ -44,6 +49,7 @@
     searchBox: 'search',
     layout: '.gz-similar-layout',
     torrentTable: '.similar-torrents__torrents',
+    searchResults: '.torrent-search--list__name',
   });
 
   const STYLE = `
@@ -85,6 +91,27 @@
 
     .gz-meta-card .meta__title-link {
       text-align: center;
+    }
+
+    .gz-detail-title {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .gz-detail-title__heading {
+      font-size: 1.6em;
+      font-weight: 700;
+      text-align: center;
+      color: inherit;
+    }
+
+    .gz-detail-title__subheading {
+      font-size: 1em;
+      text-align: center;
+      color: inherit;
+      opacity: 0.75;
     }
 
     .gz-meta-card .meta__poster-link {
@@ -221,6 +248,33 @@
       content: none !important;
     }
 
+    .gz-search-title {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      line-height: 1.2;
+    }
+
+    .gz-search-title__heading {
+      font-size: 1.10em;
+      font-weight: 600;
+      color: inherit;
+      transition: opacity 0.15s ease;
+    }
+
+    .gz-search-title__subheading {
+      font-size: 0.75em;
+      color: inherit;
+      opacity: 0.7;
+      margin-top: 0.30rem;
+      transition: opacity 0.15s ease;
+    }
+
+    .torrent-search--list__name:hover .gz-search-title__heading,
+    .torrent-search--list__name:hover .gz-search-title__subheading {
+      opacity: 1;
+    }
+
     @media (max-width: 1100px) {
       .gz-similar-layout {
         flex-direction: column;
@@ -253,6 +307,7 @@
       .split(/[^A-Za-z0-9]+/)
       .map((token) => token.trim().toUpperCase())
       .filter(Boolean);
+
 
   const ready = (cb) => {
     if (READY_STATES.includes(document.readyState)) {
@@ -302,7 +357,7 @@
     { regex: /\bHDTV\b/i, value: 'HDTV' },
     { regex: /\bLaserDisc\b/i, value: 'LaserDisc' },
     { regex: /\bVHS\b/i, value: 'VHS' },
-    { regex: /\bTV\b/i, value: 'TV' },
+    { regex: /\bTV[-\s]?Rip\b|\bTV\b/i, value: 'TV' },
   ];
 
   const SERVICE_TOKENS = [
@@ -761,8 +816,9 @@
       return getMatchFromPatterns(SOURCE_PATTERNS, baseTitle) || 'UNKNOWN';
     })();
 
+    const isWebSource = /\bWEB(?:[-\s]?DL|Rip)\b/i.test(baseTitle);
     const service =
-      source === 'WEB'
+      isWebSource
         ? (() => {
             const serviceRegex = new RegExp(
               `\\b(${SERVICE_TOKENS.join('|')})\\b(?=[^\\n]*\\bWEB(?:-?DL|Rip)\\b)`,
@@ -855,6 +911,92 @@
     return GAZELLIFY_SEQUENCE.map((key) => partValues[key]).filter(Boolean).join(' / ');
   };
 
+  const buildSearchDisplay = (text) => {
+    const normalized = normalizeText(text);
+    if (!normalized) return { heading: '', subtitle: '' };
+    const yearMatch = normalized.match(/\b(19|20)\d{2}\b/);
+    let headingTitle = normalized;
+    let yearText = '';
+    if (yearMatch) {
+      yearText = yearMatch[0];
+      headingTitle = normalized.slice(0, yearMatch.index).replace(/[-–_.]+$/g, '').trim();
+    }
+    if (!headingTitle) headingTitle = normalized;
+
+    const heading = yearText ? `${headingTitle} (${yearText})` : headingTitle;
+    const subtitle = formatTorrentName(normalized);
+    return { heading, subtitle };
+  };
+
+  const updateDetailTitle = () => {
+    if (!CONFIG.enableGazellifyDetail) return;
+    const headline = document.querySelector('.torrent__name');
+    if (!headline || headline.dataset.gzDetail === '1') return;
+    const metaTitle = document.querySelector('.meta__title');
+    if (!metaTitle) return;
+    const titleText = getText(metaTitle.childNodes[0] || '');
+    if (!titleText) return;
+    const yearNode = metaTitle.querySelector('span');
+    const yearText = yearNode ? yearNode.textContent.replace(/[()]/g, '').trim() : '';
+    const heading = yearText ? `${titleText} (${yearText})` : titleText;
+    const subtitle = formatTorrentName(headline.textContent || '');
+    if (!subtitle) return;
+
+    const wrapper = create('div', 'gz-detail-title');
+    const headingEl = create('div', 'gz-detail-title__heading');
+    headingEl.textContent = heading;
+    const subEl = create('div', 'gz-detail-title__subheading');
+    subEl.textContent = subtitle;
+    wrapper.append(headingEl, subEl);
+
+    headline.textContent = '';
+    headline.appendChild(wrapper);
+    headline.dataset.gzDetail = '1';
+  };
+
+  const gazellifySearchResults = () => {
+    if (!CONFIG.enableGazellifySearch) return;
+    $$(SELECTORS.searchResults).forEach((link) => {
+      if (!link || link.dataset.gzSearch === '1') return;
+      const container = link.closest('.torrent-search--list__overview')?.closest('tr');
+      const popupTitle = container?.querySelector('.meta__poster-popup-title');
+      const popupYear = container?.querySelector('.meta__poster-popup-year');
+      const popupHeading = popupTitle ? popupTitle.childNodes[0]?.textContent.trim() : '';
+      const popupYearText = popupYear ? popupYear.textContent.replace(/[()]/g, '').trim() : '';
+      const raw = normalizeText(link.textContent || '');
+      if (!raw) return;
+      const { heading, subtitle } = popupHeading
+        ? {
+            heading: popupYearText ? `${popupHeading} (${popupYearText})` : popupHeading,
+            subtitle: formatTorrentName(raw),
+          }
+        : buildSearchDisplay(raw);
+      if (!heading || !subtitle) return;
+
+      link.textContent = '';
+      const wrapper = create('div', 'gz-search-title');
+      const headingEl = create('div', 'gz-search-title__heading');
+      headingEl.textContent = heading;
+      const subEl = create('div', 'gz-search-title__subheading');
+      subEl.textContent = subtitle;
+      wrapper.append(headingEl, subEl);
+      link.appendChild(wrapper);
+      link.dataset.gzSearch = '1';
+    });
+  };
+
+  const watchSearchResults = () => {
+    if (!CONFIG.enableGazellifySearch) return;
+    if (searchResultsObserver) {
+      searchResultsObserver.disconnect();
+      searchResultsObserver = null;
+    }
+    const searchPage = $(SELECTORS.torrentSearchPage);
+    if (!searchPage) return;
+    searchResultsObserver = new MutationObserver(() => gazellifySearchResults());
+    searchResultsObserver.observe(searchPage, { childList: true, subtree: true });
+  };
+
   const findTorrentTypeForHeading = (heading) => {
     const row = heading.closest('tr');
     if (!row) return '';
@@ -868,7 +1010,7 @@
   };
 
   const gazellify = () => {
-    if (!CONFIG.enableGazellify) return;
+    if (!CONFIG.enableGazellifySimilar) return;
     const panel = $(SELECTORS.torrentGroup);
     if (!panel) return;
     $$('.torrent-search--grouped__name', panel).forEach((heading) => {
@@ -885,6 +1027,7 @@
 
   let torrentIconObserver;
   let torrentIconTarget;
+  let searchResultsObserver;
 
   const stripTorrentDecorations = () => {
     $$('.torrent-icons').forEach((node) => node.remove());
@@ -1057,6 +1200,8 @@
     if (!card) return false;
     right.appendChild(card);
 
+    updateDetailTitle();
+
     return true;
   };
 
@@ -1071,6 +1216,15 @@
     const torrentArticle = $(SELECTORS.torrentArticle);
     if (torrentArticle) {
       return buildTorrentLayout(torrentArticle);
+    }
+
+    const searchPage = $(SELECTORS.torrentSearchPage);
+    if (searchPage) {
+      if (CONFIG.enableGazellifySearch) {
+        gazellifySearchResults();
+        watchSearchResults();
+      }
+      return true;
     }
 
     return false;
