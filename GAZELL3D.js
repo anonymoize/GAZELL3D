@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.2.3.1
+// @version      1.2.4
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -371,6 +371,27 @@
     if (lastIndex < value.length) {
       element.appendChild(document.createTextNode(value.slice(lastIndex)));
     }
+  };
+  const findMetadataStartIndex = (text = '') => {
+    const yearMatch = text.match(/\b(19|20)\d{2}\b/);
+    let startIndex = yearMatch ? yearMatch.index + yearMatch[0].length : Number.POSITIVE_INFINITY;
+    const patterns = [
+      /\b(?:2160p|4320p|1080p|720p|576p|480p|1080i|720i|576i|480i|360p|240p|144p)\b/i,
+      /\b(?:HDR10\+?|DV|HLG|SDR)\b/i,
+      /\b(?:Blu-ray|BluRay|WEB(?:-?DL|Rip)|HDTV|UHD|DVD\d?|NTSC|PAL|SECAM|LaserDisc|VHS)\b/i,
+      /\b(?:H\.?26[45]|HEVC|AVC|x265|x264|MPEG-?2|MPEG-?4)\b/i,
+      /\b(?:DTS:?X|DTS-?HD|DD-?EX|DDP|Dolby)\b/i,
+      /\bS\d{1,3}E\d{1,3}\b/i,
+      new RegExp(`\\b(${SERVICE_TOKENS.join('|')})\\b`, 'i'),
+    ];
+    patterns.forEach((pattern) => {
+      const match = pattern.exec(text);
+      if (match && match.index < startIndex) {
+        startIndex = match.index;
+      }
+    });
+    if (!Number.isFinite(startIndex)) return 0;
+    return startIndex;
   };
   const normalizeSceneGroupName = (value = '') =>
     String(value)
@@ -1771,6 +1792,8 @@
     })();
 
     const isWebSource = /\bWEB(?:[-\s]?DL|Rip)\b/i.test(baseTitle);
+    const metadataStart = findMetadataStartIndex(baseTitle);
+    const metadataSlice = metadataStart ? baseTitle.slice(metadataStart) : baseTitle;
     const service =
       isWebSource
         ? (() => {
@@ -1779,7 +1802,7 @@
               'i'
             );
             const fallbackRegex = new RegExp(`\\b(${SERVICE_TOKENS.join('|')})\\b`, 'i');
-            const match = serviceRegex.exec(baseTitle) || fallbackRegex.exec(baseTitle);
+            const match = serviceRegex.exec(metadataSlice) || fallbackRegex.exec(metadataSlice);
             if (!match) return '';
             const token = match[1];
             return SERVICE_TOKENS.find((candidate) => candidate.toLowerCase() === token.toLowerCase()) || token;
@@ -1815,22 +1838,22 @@
       return matchPattern ? baseTitle.match(matchPattern)[0].toUpperCase() : '';
     })();
 
-  const language = (() => {
-    if (/Dual[-\s]?Audio/i.test(baseTitle)) {
-      return 'Dual-Audio';
-    }
-    if (/\bDubbed\b/i.test(baseTitle)) {
-        return 'Dubbed';
+    const language = (() => {
+      if (/Dual[-\s]?Audio/i.test(baseTitle)) {
+        return 'Dual-Audio';
       }
-    const languageRegex = new RegExp(
-      `\\b(${Object.keys(LANGUAGE_MAP).join('|')})\\b`,
-      'i'
-    );
-    const match = languageRegex.exec(baseTitle);
-    if (!match) return '';
-    const key = match[1].toUpperCase();
-    if (service && key === service) {
-      return '';
+      if (/\bDubbed\b/i.test(baseTitle)) {
+          return 'Dubbed';
+      }
+      const languageRegex = new RegExp(
+        `\\b(${Object.keys(LANGUAGE_MAP).join('|')})\\b`,
+        'i'
+      );
+      const match = languageRegex.exec(metadataSlice);
+      if (!match) return '';
+      const key = match[1].toUpperCase();
+      if (service && key === service) {
+        return '';
     }
     return LANGUAGE_MAP[key] || match[1];
   })();
