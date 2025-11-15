@@ -1529,6 +1529,7 @@
     DEN: 'DEN',
     DNK: 'DEN',
     EUR: 'EUR',
+    CEE: 'CEE',
   };
 
   const LANGUAGE_MAP = {
