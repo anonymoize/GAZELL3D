@@ -704,6 +704,15 @@
     { regex: /\bSuper\s+Duper\s+Cut\b/i, value: 'Super Duper Cut' },
     { regex: /\bOpen\s+Matte\b/i, value: 'Open Matte' },
     { regex: /\bUncensored\b/i, value: 'Uncensored' },
+    { regex: /\bUncut\b/i, value: 'Uncut' },
+    { regex: /\bRemastered\b/i, value: 'Remastered' },
+    { regex: /\bRestored\b/i, value: 'Restored' },
+    { regex: /\bAnniversary\s+Edition\b/i, value: 'Anniversary Edition' },
+    { regex: /\bUltimate\s+Edition\b/i, value: 'Ultimate Edition' },
+    { regex: /\bCollector'?s\s+Edition\b/i, value: "Collector's Edition" },
+    { regex: /\bFinal\s+Cut\b/i, value: 'Final Cut' },
+    { regex: /\bIMAX\b/i, value: 'IMAX' },
+    { regex: /\bWorkprint\b/i, value: 'Workprint' },
   ];
 
   const RELEASE_GROUP_BLOCK_TOKENS = (() => {
