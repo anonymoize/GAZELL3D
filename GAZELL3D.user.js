@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.2.5.1
+// @version      1.3.0
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -25,6 +25,7 @@
     enableGazellifyDetail: true,
     enableGazellifySearch: true,
     enableOriginalTitleTooltip: true,
+    enableSideLayout: true,
   });
 
   const GAZELLIFY_SEQUENCE = Object.freeze([
@@ -646,9 +647,9 @@
   };
 
   const VIDEO_CODEC_PATTERNS = [
-    { regex: /\bHEVC\b|\bH\.?265\b|\bH265\b|\bx265\b/i, value: 'H265' },
-    { regex: /\bAVC\b|\bH\.?264\b|\bH264\b|\bx264\b/i, value: 'H264' },
-    { regex: /\bVVC\b|\bH\.?266\b|\bH266\b|\bx266\b/i, value: 'H266' },
+    { regex: /\bHEVC\b|\bH\.?265\b|\bH265\b|\bx265\b/i, value: 'H.265' },
+    { regex: /\bAVC\b|\bH\.?264\b|\bH264\b|\bx264\b/i, value: 'H.264' },
+    { regex: /\bVVC\b|\bH\.?266\b|\bH266\b|\bx266\b/i, value: 'H.266' },
     { regex: /\bAV1\b/i, value: 'AV1' },
     { regex: /\bVC-?1\b/i, value: 'VC-1' },
     { regex: /\bMPEG-?2\b/i, value: 'MPEG-2' },
@@ -663,7 +664,8 @@
   const SOURCE_PATTERNS = [
     { regex: /\bUHD[\s-]*Blu-?ray\b/i, value: 'UHD BluRay' },
     { regex: /\bBlu-?ray\b/i, value: 'BluRay' },
-    { regex: /\bWEB[-\s]?DL\b|\bWEBRip\b/i, value: 'WEB' },
+    { regex: /\bWEB[-\s]?DL\b/i, value: 'WEB-DL' },
+    { regex: /\bWEBRip\b/i, value: 'WEBRip' },
     { regex: /\bDVD(?:Rip)?\b|\bNTSC DVD[59]\b|\bPAL DVD[59]\b|\bDVD[59]\b/i, value: 'DVD' },
     { regex: /\bHD-?DVD\b|\bHDDVD\b/i, value: 'HD DVD' },
     { regex: /\bHDTV\b/i, value: 'HDTV' },
@@ -951,7 +953,7 @@
     headingEl.textContent = heading;
     const subEl = create('div', 'gz-detail-title__subheading');
     applyUnknownHighlight(subEl, subtitle);
-    wrapper.append(headingEl, subEl);
+    wrapper.append(subEl);
 
     headline.textContent = '';
     headline.appendChild(wrapper);
@@ -1141,7 +1143,13 @@
   };
 
   const buildSimilarLayout = (article = $(SELECTORS.similarArticle)) => {
-    if (!article || article.querySelector(':scope > .gz-similar-layout')) return !!article;
+    if (!article) return false;
+
+    gazellify();
+    expandAllTorrentGroups();
+
+    if (article.querySelector(':scope > .gz-similar-layout')) return true;
+    if (!CONFIG.enableSideLayout) return true;
 
     const meta = $(SELECTORS.metaSection, article);
     const torrents = $(SELECTORS.torrentGroup, article);
@@ -1162,14 +1170,17 @@
     right.appendChild(card);
 
     watchTorrentDecorations();
-    gazellify();
-    expandAllTorrentGroups();
 
     return true;
   };
 
   const buildTorrentLayout = (article = $(SELECTORS.torrentArticle)) => {
-    if (!article || article.querySelector(':scope > .gz-similar-layout')) return !!article;
+    if (!article) return false;
+
+    updateDetailTitle();
+
+    if (article.querySelector(':scope > .gz-similar-layout')) return true;
+    if (!CONFIG.enableSideLayout) return true;
 
     const meta = $(SELECTORS.metaSection, article);
     if (!meta) return false;
@@ -1206,8 +1217,6 @@
     const card = createMetaCard(meta);
     if (!card) return false;
     right.appendChild(card);
-
-    updateDetailTitle();
 
     return true;
   };
