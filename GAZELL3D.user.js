@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.2.4.1
+// @version      1.2.5
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -12,6 +12,8 @@
 // @updateURL    https://github.com/anonymoize/GAZELL3D/raw/refs/heads/main/GAZELL3D.js
 // @downloadURL  https://github.com/anonymoize/GAZELL3D/raw/refs/heads/main/GAZELL3D.js
 // @grant        GM_addStyle
+// @grant        GM_xmlhttpRequest
+// @connect      raw.githubusercontent.com
 // ==/UserScript==
 
 (function () {
@@ -440,19 +442,33 @@
     }
 
     console.log('GAZELL3D: Fetching config...');
-    const response = await fetch(CONFIG_URL);
-    if (!response.ok) throw new Error('Config fetch failed');
-    const data = await response.json();
-
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({
-        timestamp: Date.now(),
-        data
-      }));
-    } catch (e) {
-      console.warn('GAZELL3D: Cache write error', e);
-    }
-    return data;
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method: 'GET',
+        url: CONFIG_URL,
+        onload: (response) => {
+          if (response.status >= 200 && response.status < 300) {
+            try {
+              const data = JSON.parse(response.responseText);
+              try {
+                localStorage.setItem(CACHE_KEY, JSON.stringify({
+                  timestamp: Date.now(),
+                  data
+                }));
+              } catch (e) {
+                console.warn('GAZELL3D: Cache write error', e);
+              }
+              resolve(data);
+            } catch (e) {
+              reject(new Error('Config parse failed: ' + e.message));
+            }
+          } else {
+            reject(new Error('Config fetch failed with status: ' + response.status));
+          }
+        },
+        onerror: (err) => reject(new Error('Config fetch error: ' + err))
+      });
+    });
   };
 
   const initReleaseGroupBlockTokens = () => {
