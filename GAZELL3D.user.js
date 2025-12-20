@@ -373,22 +373,41 @@
     }
   };
   const findMetadataStartIndex = (text = '') => {
-    const yearMatch = text.match(/\b(19|20)\d{2}\b/);
-    let startIndex = yearMatch ? yearMatch.index + yearMatch[0].length : Number.POSITIVE_INFINITY;
+    // 1. TV Shows: Priority on Season/Episode patterns.
+    // This allows unique title modifiers (like "AKA Title") to exist between Year and Season.
+    const tvPattern = /\b(?:S\d{1,3}(?:E\d{1,3})?|E\d{1,3}|Season\s*\d+|Complete(?:\s*Series)?|OVA|OAD|NCED|NCOP)\b/i;
+    const tvMatch = text.match(tvPattern);
+    if (tvMatch) {
+      return tvMatch.index;
+    }
+
+    // 2. Movies: Priority on Year.
+    // If a Year is present, we assume everything after it is metadata.
+    // This handles cases like "Movie Title 1999 Language 1080p..."
+    const yearMatch = text.match(/\b(?:19|20)\d{2}\b/);
+    if (yearMatch) {
+      return yearMatch.index + yearMatch[0].length;
+    }
+
+    // 3. Fallback: If no Season or Year, look for the start of common technical tags.
     const patterns = [
-      /\b(?:2160p|4320p|1080p|720p|576p|480p|1080i|720i|576i|480i|360p|240p|144p)\b/i,
-      /\b(?:HDR10\+?|DV|HLG|SDR)\b/i,
-      /\b(?:Blu-ray|BluRay|WEB(?:-?DL|Rip)|HDTV|UHD|DVD\d?|NTSC|PAL|SECAM|LaserDisc|VHS)\b/i,
-      /\b(?:H\.?26[45]|HEVC|AVC|x265|x264|MPEG-?2|MPEG-?4)\b/i,
-      /\b(?:DTS:?X|DTS-?HD|DD-?EX|DDP|Dolby)\b/i,
-      /\bS\d{1,3}E\d{1,3}\b/i,
+      /\b(?:2160p|4320p|1080p|720p|576p|480p|1080i|720i|576i|480i|360p|240p|144p|8K|4K|2K|SD)\b/i,
+      /\b(?:Blu-?ray|WEB(?:-?DL|Rip)?|HDTV|UHD|DVD(?:\d|R)?|BD|BRRip|BDRip|DVDRip|NTSC|PAL|SECAM|LaserDisc|VHS|PPV|VOD|REMUX|ISO)\b/i,
+      /\b(?:H\.?26[45]|HEVC|AVC|x265|x264|MPEG-?2|MPEG-?4|VP9|AV1|VC-?1|XviD|DivX)\b/i,
+      /\b(?:DTS(?::?X|-?HD)?|TrueHD|Atmos|DD(?:\+|P|-?EX)?|Dolby(?:[\s\.]?Digital)?|FLAC|AAC|AC-?3|E-?AC-?3|PCM|LPCM|Opus|Vorbis|WMA|MP3)\b/i,
+      /\b(?:HDR10\+?|DV|HLG|SDR|10.?bit)\b/i,
+      /\b(?:JAPANESE|ENGLISH|KOREAN|FRENCH|GERMAN|SPANISH|ITALIAN|RUSSIAN|HINDI|THAI|CHINESE|MANDARIN|CANTONESE|PORTUGUESE|POLISH|FINNISH|SWEDISH|NORWEGIAN|DANISH|DUTCH|TURKISH|LATINO|MULTI(?:-?AUDIO)?|DUAL(?:-?AUDIO)?)\b/i,
+      /\b(?:MKV|MP4|AVI|WMV|M4V|TS)\b/i,
     ];
-    patterns.forEach((pattern) => {
+
+    let startIndex = Number.POSITIVE_INFINITY;
+    for (const pattern of patterns) {
       const match = pattern.exec(text);
       if (match && match.index < startIndex) {
         startIndex = match.index;
       }
-    });
+    }
+
     if (!Number.isFinite(startIndex)) return 0;
     return startIndex;
   };
@@ -1180,15 +1199,15 @@
     const isLightBackground = getRelativeLuminance(bgColor) > 0.5;
     cachedTooltipTheme = isLightBackground
       ? {
-          bg: 'rgba(0, 0, 0, 0.82)',
-          color: 'rgba(255, 255, 255, 0.95)',
-          border: 'rgba(0, 0, 0, 0.25)',
-        }
+        bg: 'rgba(0, 0, 0, 0.82)',
+        color: 'rgba(255, 255, 255, 0.95)',
+        border: 'rgba(0, 0, 0, 0.25)',
+      }
       : {
-          bg: 'rgba(255, 255, 255, 0.96)',
-          color: 'rgba(8, 11, 25, 0.95)',
-          border: 'rgba(255, 255, 255, 0.35)',
-        };
+        bg: 'rgba(255, 255, 255, 0.96)',
+        color: 'rgba(8, 11, 25, 0.95)',
+        border: 'rgba(255, 255, 255, 0.35)',
+      };
     return cachedTooltipTheme;
   };
   const applyTooltipTheme = (element) => {
@@ -1796,16 +1815,16 @@
     const service =
       isWebSource
         ? (() => {
-            const serviceRegex = new RegExp(
-              `\\b(${SERVICE_TOKENS.join('|')})\\b(?=[^\\n]*\\bWEB(?:-?DL|Rip)\\b)`,
-              'i'
-            );
-            const fallbackRegex = new RegExp(`\\b(${SERVICE_TOKENS.join('|')})\\b`, 'i');
-            const match = serviceRegex.exec(metadataSlice) || fallbackRegex.exec(metadataSlice);
-            if (!match) return '';
-            const token = match[1];
-            return SERVICE_TOKENS.find((candidate) => candidate.toLowerCase() === token.toLowerCase()) || token;
-          })()
+          const serviceRegex = new RegExp(
+            `\\b(${SERVICE_TOKENS.join('|')})\\b(?=[^\\n]*\\bWEB(?:-?DL|Rip)\\b)`,
+            'i'
+          );
+          const fallbackRegex = new RegExp(`\\b(${SERVICE_TOKENS.join('|')})\\b`, 'i');
+          const match = serviceRegex.exec(metadataSlice) || fallbackRegex.exec(metadataSlice);
+          if (!match) return '';
+          const token = match[1];
+          return SERVICE_TOKENS.find((candidate) => candidate.toLowerCase() === token.toLowerCase()) || token;
+        })()
         : '';
 
     const isFullDisc =
@@ -1814,15 +1833,15 @@
     const country =
       isFullDisc || hasDiscContext
         ? (() => {
-            const countryRegex = new RegExp(
-              `\\b(${Object.keys(COUNTRY_MAP).join('|')})\\b`,
-              'i'
-            );
-            const match = countryRegex.exec(baseTitle);
-            if (!match) return '';
-            const token = match[1].toUpperCase();
-            return COUNTRY_MAP[token] || token;
-          })()
+          const countryRegex = new RegExp(
+            `\\b(${Object.keys(COUNTRY_MAP).join('|')})\\b`,
+            'i'
+          );
+          const match = countryRegex.exec(baseTitle);
+          if (!match) return '';
+          const token = match[1].toUpperCase();
+          return COUNTRY_MAP[token] || token;
+        })()
         : '';
 
     const seasonEpisode = (() => {
@@ -1842,7 +1861,7 @@
         return 'Dual-Audio';
       }
       if (/\bDubbed\b/i.test(baseTitle)) {
-          return 'Dubbed';
+        return 'Dubbed';
       }
       const languageRegex = new RegExp(
         `\\b(${Object.keys(LANGUAGE_MAP).join('|')})\\b`,
@@ -1853,9 +1872,9 @@
       const key = match[1].toUpperCase();
       if (service && key === service) {
         return '';
-    }
-    return LANGUAGE_MAP[key] || match[1];
-  })();
+      }
+      return LANGUAGE_MAP[key] || match[1];
+    })();
 
     const audioCodec = getMatchFromPatterns(AUDIO_CODEC_PATTERNS, baseTitle) || 'UNKNOWN';
     const audioChannels = (() => {
@@ -1959,9 +1978,9 @@
       if (!raw) return;
       const { heading, subtitle } = popupHeading
         ? {
-            heading: popupYearText ? `${popupHeading} (${popupYearText})` : popupHeading,
-            subtitle: formatTorrentName(raw),
-          }
+          heading: popupYearText ? `${popupHeading} (${popupYearText})` : popupHeading,
+          subtitle: formatTorrentName(raw),
+        }
         : buildSearchDisplay(raw);
       if (!heading || !subtitle) return;
 
