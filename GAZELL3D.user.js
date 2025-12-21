@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.3.2.1
+// @version      1.3.2.2
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -1088,89 +1088,86 @@
   const applyGazelleButtons = () => {
     if (!CONFIG.enableGazelleButtons) return;
 
-    const table = $(SELECTORS.torrentTable);
-    if (!table) return;
+    const tables = $$(SELECTORS.torrentTable);
+    if (!tables.length) return;
 
-    // Check/Update Header
-    const actionsHeader = table.querySelector('.similar-torrents__actions-header');
-    if (actionsHeader && actionsHeader.getAttribute('colspan') !== '1') {
-      actionsHeader.setAttribute('colspan', '1');
-    }
+    tables.forEach((table) => {
+      // Check/Update Header
+      const actionsHeader = table.querySelector('.similar-torrents__actions-header');
+      if (actionsHeader && actionsHeader.getAttribute('colspan') !== '1') {
+        actionsHeader.setAttribute('colspan', '1');
+      }
 
-    // Update Rows
-    $$('tbody tr', table).forEach((row) => {
-      // Check if already processed
-      if (row.querySelector('.gz-actions-cell')) return;
+      // Update Rows
+      $$('tbody tr', table).forEach((row) => {
+        // Check if already processed
+        if (row.querySelector('.gz-actions-cell')) return;
 
-      const editCell = row.querySelector('.torrent-search--grouped__edit');
-      const bookmarkCell = row.querySelector('.torrent-search--grouped__bookmark');
-      const downloadCell = row.querySelector('.torrent-search--grouped__download');
+        const editCell = row.querySelector('.torrent-search--grouped__edit');
+        const bookmarkCell = row.querySelector('.torrent-search--grouped__bookmark');
+        const downloadCell = row.querySelector('.torrent-search--grouped__download');
 
-      if (!editCell && !bookmarkCell && !downloadCell) return;
+        if (!editCell && !bookmarkCell && !downloadCell) return;
 
-      const newCell = create('td', 'gz-actions-cell');
-      const parts = [];
+        const newCell = create('td', 'gz-actions-cell');
+        const parts = [];
 
-      // Edit Button
-      if (editCell) {
-        if (CONFIG.showEditButton) {
-          const link = $('a', editCell);
+        // Edit Button
+        if (editCell) {
+          if (CONFIG.showEditButton) {
+            const link = $('a', editCell);
+            if (link) {
+              link.textContent = 'ED';
+              link.removeAttribute('title');
+              parts.push(link);
+            }
+          }
+          editCell.remove();
+        }
+
+        // Bookmark Button
+        if (bookmarkCell) {
+          const btn = $('button', bookmarkCell);
+          if (btn) {
+            // Preserve the button but replace content
+            btn.textContent = 'BM';
+            parts.push(btn);
+          }
+          bookmarkCell.remove();
+        }
+
+        // Download Button
+        if (downloadCell) {
+          const link = $('a', downloadCell);
           if (link) {
-            link.textContent = 'ED';
-            link.removeAttribute('title');
+            link.textContent = 'DL';
             parts.push(link);
           }
+          downloadCell.remove();
         }
-        editCell.remove();
-      }
 
-      // Bookmark Button
-      if (bookmarkCell) {
-        const btn = $('button', bookmarkCell);
-        if (btn) {
-          // Preserve the button but replace content
-          btn.textContent = 'BM';
-          parts.push(btn);
-        }
-        bookmarkCell.remove();
-      }
+        // Assemble: [ ED | BM | DL ]
+        newCell.appendChild(document.createTextNode('[ '));
+        parts.forEach((part, index) => {
+          if (index > 0) {
+            newCell.appendChild(document.createTextNode(' | '));
+          }
+          newCell.appendChild(part);
+        });
+        newCell.appendChild(document.createTextNode(' ]'));
 
-      // Download Button
-      if (downloadCell) {
-        const link = $('a', downloadCell);
-        if (link) {
-          link.textContent = 'DL';
-          parts.push(link);
+        // Insert new cell where the others were.
+        const overview = row.querySelector('.torrent-search--grouped__overview');
+        if (overview) {
+          overview.insertAdjacentElement('afterend', newCell);
+        } else {
+          // Fallback
+          const size = row.querySelector('.torrent-search--grouped__size');
+          if (size) {
+            size.insertAdjacentElement('beforebegin', newCell);
+          }
         }
-        downloadCell.remove();
-      }
-
-      // Assemble: [ ED | BM | DL ]
-      newCell.appendChild(document.createTextNode('[ '));
-      parts.forEach((part, index) => {
-        if (index > 0) {
-          newCell.appendChild(document.createTextNode(' | '));
-        }
-        newCell.appendChild(part);
       });
-      newCell.appendChild(document.createTextNode(' ]'));
-
-      // Insert new cell where the others were.
-      // We removed the 3 calls, so we need to insert at the correct index.
-      // The cells were: Overview | Edit | Bookmark | Download | Size ...
-      // We removed Edit, Bookmark, Download.
-      // Overview is usually before them. Size is after.
-      // Let's find the 'torrent-search--grouped__overview' cell and insert after it.
-      const overview = row.querySelector('.torrent-search--grouped__overview');
-      if (overview) {
-        overview.insertAdjacentElement('afterend', newCell);
-      } else {
-        // Fallback, prepend? Or try finding size
-        const size = row.querySelector('.torrent-search--grouped__size');
-        if (size) {
-          size.insertAdjacentElement('beforebegin', newCell);
-        }
-      }
     });
   };
 
@@ -1183,26 +1180,38 @@
     };
 
     runTransforms();
-    const table = $(SELECTORS.torrentTable);
 
-    if (!table) {
-      if (torrentIconObserver) {
-        torrentIconObserver.disconnect();
-        torrentIconObserver = null;
-        torrentIconTarget = null;
+    // Observe the main torrent container group to catch changes (pagination, filters, expanding seasons)
+    const targetNode = $(SELECTORS.torrentGroup);
+
+    if (!targetNode) {
+      // Fallback to table if group not found, though group is safer for multi-table pages
+      const table = $(SELECTORS.torrentTable);
+      if (!table) {
+        if (torrentIconObserver) {
+          torrentIconObserver.disconnect();
+          torrentIconObserver = null;
+          torrentIconTarget = null;
+        }
+        return;
       }
+      if (torrentIconTarget === table) return;
+      if (torrentIconObserver) torrentIconObserver.disconnect();
+      torrentIconObserver = new MutationObserver(runTransforms);
+      torrentIconObserver.observe(table, { childList: true, subtree: true });
+      torrentIconTarget = table;
       return;
     }
 
-    if (torrentIconTarget === table) return;
+    if (torrentIconTarget === targetNode) return;
 
     if (torrentIconObserver) {
       torrentIconObserver.disconnect();
     }
 
     torrentIconObserver = new MutationObserver(runTransforms);
-    torrentIconObserver.observe(table, { childList: true, subtree: true });
-    torrentIconTarget = table;
+    torrentIconObserver.observe(targetNode, { childList: true, subtree: true });
+    torrentIconTarget = targetNode;
   };
 
   const createLayoutContainer = (article, referenceNode = null) => {
