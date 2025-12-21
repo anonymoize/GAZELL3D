@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.3.1
+// @version      1.3.1.1
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -657,6 +657,7 @@
     { regex: /\bMPEG\b/i, value: 'MPEG' },
     { regex: /\bXvid\b/i, value: 'Xvid' },
     { regex: /\bDivX\b/i, value: 'DivX' },
+    { regex: /\bJPEG2000\b/i, value: 'JPEG2000' },
   ];
 
   const RESOLUTIONS = ['4320p', '2160p', '1080p', '1080i', '720p', '576p', '576i', '540p', '480p', '480i', "360p", '240p', '144p'];
@@ -672,6 +673,7 @@
     { regex: /\bLaserDisc\b/i, value: 'LaserDisc' },
     { regex: /\bVHS\b/i, value: 'VHS' },
     { regex: /\bTV[-\s]?Rip\b|\bTV\b/i, value: 'TV' },
+    { regex: /\bDCP\b/i, value: 'DCP' },
   ];
 
 
