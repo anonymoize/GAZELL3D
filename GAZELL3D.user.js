@@ -1585,21 +1585,81 @@
         // 6. Snatched
         const tdSnatched = create('td', 'gz-col-stat');
         const snatchedCell = row.querySelector('.torrent-search--grouped__completed, .torrent__times-completed-count');
-        tdSnatched.textContent = getText(snatchedCell);
+        const snatchedLink = snatchedCell ? (snatchedCell.tagName === 'A' ? snatchedCell : snatchedCell.querySelector('a')) : null;
+        if (snatchedLink) {
+          const link = create('a');
+          link.href = snatchedLink.href;
+          link.textContent = getText(snatchedCell);
+          link.style.color = 'inherit';
+          link.style.textDecoration = 'none';
+          tdSnatched.appendChild(link);
+        } else {
+          tdSnatched.textContent = getText(snatchedCell);
+        }
+        if (snatchedCell) {
+          if (snatchedCell.classList) {
+            snatchedCell.classList.forEach(cls => {
+              if (cls.startsWith('torrent-activity-indicator--')) {
+                tdSnatched.classList.add(cls);
+              }
+            });
+          }
+          if (snatchedCell.title) tdSnatched.title = snatchedCell.title;
+        }
         newRow.appendChild(tdSnatched);
 
         // 7. Seeders
         const tdSeeders = create('td', 'gz-col-stat');
         const seedersCell = row.querySelector('.torrent-search--grouped__seeders, .torrent__seeder-count');
-        tdSeeders.textContent = getText(seedersCell);
+        const seedersLink = seedersCell ? (seedersCell.tagName === 'A' ? seedersCell : seedersCell.querySelector('a')) : null;
+        if (seedersLink) {
+          const link = create('a');
+          link.href = seedersLink.href;
+          link.textContent = getText(seedersCell);
+          link.style.color = 'inherit';
+          link.style.textDecoration = 'none';
+          tdSeeders.appendChild(link);
+        } else {
+          tdSeeders.textContent = getText(seedersCell);
+        }
         tdSeeders.style.color = '#76dba6';
+        if (seedersCell) {
+          if (seedersCell.classList) {
+            seedersCell.classList.forEach(cls => {
+              if (cls.startsWith('torrent-activity-indicator--')) {
+                tdSeeders.classList.add(cls);
+              }
+            });
+          }
+          if (seedersCell.title) tdSeeders.title = seedersCell.title;
+        }
         newRow.appendChild(tdSeeders);
 
         // 8. Leechers
         const tdLeechers = create('td', 'gz-col-stat');
         const leechersCell = row.querySelector('.torrent-search--grouped__leechers, .torrent__leecher-count');
-        tdLeechers.textContent = getText(leechersCell);
+        const leechersLink = leechersCell ? (leechersCell.tagName === 'A' ? leechersCell : leechersCell.querySelector('a')) : null;
+        if (leechersLink) {
+          const link = create('a');
+          link.href = leechersLink.href;
+          link.textContent = getText(leechersCell);
+          link.style.color = 'inherit';
+          link.style.textDecoration = 'none';
+          tdLeechers.appendChild(link);
+        } else {
+          tdLeechers.textContent = getText(leechersCell);
+        }
         tdLeechers.style.color = '#db7676';
+        if (leechersCell) {
+          if (leechersCell.classList) {
+            leechersCell.classList.forEach(cls => {
+              if (cls.startsWith('torrent-activity-indicator--')) {
+                tdLeechers.classList.add(cls);
+              }
+            });
+          }
+          if (leechersCell.title) tdLeechers.title = leechersCell.title;
+        }
         newRow.appendChild(tdLeechers);
 
         tbody.appendChild(newRow);
