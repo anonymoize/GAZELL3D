@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.3.1.2
+// @version      1.3.2
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -27,6 +27,7 @@
     enableOriginalTitleTooltip: true,
     showEditButton: true,
     enableSideLayout: true,
+    enableGazelleButtons: true,
   });
 
   const GAZELLIFY_SEQUENCE = Object.freeze([
@@ -323,6 +324,28 @@
         max-width: none;
         flex: 1 1 auto;
       }
+    }
+
+    .gz-actions-cell {
+      white-space: nowrap;
+      text-align: center;
+      font-size: 0.9em;
+      font-weight: bold;
+    }
+    
+    .gz-actions-cell a, .gz-actions-cell button {
+      display: inline-block;
+      cursor: pointer;
+      color: inherit;
+      text-decoration: none;
+      border: none;
+      background: none;
+      padding: 0;
+      font: inherit;
+    }
+
+    .gz-actions-cell a:hover, .gz-actions-cell button:hover {
+      text-decoration: underline;
     }
   `;
 
@@ -1062,10 +1085,104 @@
     }
   };
 
-  const watchTorrentDecorations = () => {
-    if (!CONFIG.removeTorrentIcons) return;
+  const applyGazelleButtons = () => {
+    if (!CONFIG.enableGazelleButtons) return;
 
-    stripTorrentDecorations();
+    const table = $(SELECTORS.torrentTable);
+    if (!table) return;
+
+    // Check/Update Header
+    const actionsHeader = table.querySelector('.similar-torrents__actions-header');
+    if (actionsHeader && actionsHeader.getAttribute('colspan') !== '1') {
+      actionsHeader.setAttribute('colspan', '1');
+    }
+
+    // Update Rows
+    $$('tbody tr', table).forEach((row) => {
+      // Check if already processed
+      if (row.querySelector('.gz-actions-cell')) return;
+
+      const editCell = row.querySelector('.torrent-search--grouped__edit');
+      const bookmarkCell = row.querySelector('.torrent-search--grouped__bookmark');
+      const downloadCell = row.querySelector('.torrent-search--grouped__download');
+
+      if (!editCell && !bookmarkCell && !downloadCell) return;
+
+      const newCell = create('td', 'gz-actions-cell');
+      const parts = [];
+
+      // Edit Button
+      if (editCell) {
+        if (CONFIG.showEditButton) {
+          const link = $('a', editCell);
+          if (link) {
+            link.textContent = 'ED';
+            link.removeAttribute('title');
+            parts.push(link);
+          }
+        }
+        editCell.remove();
+      }
+
+      // Bookmark Button
+      if (bookmarkCell) {
+        const btn = $('button', bookmarkCell);
+        if (btn) {
+          // Preserve the button but replace content
+          btn.textContent = 'BM';
+          parts.push(btn);
+        }
+        bookmarkCell.remove();
+      }
+
+      // Download Button
+      if (downloadCell) {
+        const link = $('a', downloadCell);
+        if (link) {
+          link.textContent = 'DL';
+          parts.push(link);
+        }
+        downloadCell.remove();
+      }
+
+      // Assemble: [ ED | BM | DL ]
+      newCell.appendChild(document.createTextNode('[ '));
+      parts.forEach((part, index) => {
+        if (index > 0) {
+          newCell.appendChild(document.createTextNode(' | '));
+        }
+        newCell.appendChild(part);
+      });
+      newCell.appendChild(document.createTextNode(' ]'));
+
+      // Insert new cell where the others were.
+      // We removed the 3 calls, so we need to insert at the correct index.
+      // The cells were: Overview | Edit | Bookmark | Download | Size ...
+      // We removed Edit, Bookmark, Download.
+      // Overview is usually before them. Size is after.
+      // Let's find the 'torrent-search--grouped__overview' cell and insert after it.
+      const overview = row.querySelector('.torrent-search--grouped__overview');
+      if (overview) {
+        overview.insertAdjacentElement('afterend', newCell);
+      } else {
+        // Fallback, prepend? Or try finding size
+        const size = row.querySelector('.torrent-search--grouped__size');
+        if (size) {
+          size.insertAdjacentElement('beforebegin', newCell);
+        }
+      }
+    });
+  };
+
+  const watchTorrentDecorations = () => {
+    if (!CONFIG.removeTorrentIcons && !CONFIG.enableGazelleButtons) return;
+
+    const runTransforms = () => {
+      if (CONFIG.removeTorrentIcons) stripTorrentDecorations();
+      if (CONFIG.enableGazelleButtons) applyGazelleButtons();
+    };
+
+    runTransforms();
     const table = $(SELECTORS.torrentTable);
 
     if (!table) {
@@ -1083,7 +1200,7 @@
       torrentIconObserver.disconnect();
     }
 
-    torrentIconObserver = new MutationObserver(stripTorrentDecorations);
+    torrentIconObserver = new MutationObserver(runTransforms);
     torrentIconObserver.observe(table, { childList: true, subtree: true });
     torrentIconTarget = table;
   };
