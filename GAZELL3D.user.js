@@ -25,6 +25,7 @@
     enableGazellifyDetail: true,
     enableGazellifySearch: true,
     enableOriginalTitleTooltip: true,
+    showEditButton: true,
     enableSideLayout: true,
   });
 
@@ -1043,10 +1044,22 @@
   const stripTorrentDecorations = () => {
     $$('.torrent-icons').forEach((node) => {
       Array.from(node.childNodes).forEach((child) => {
-        if (child.nodeType === 1 && (child.hasAttribute('data-seadex') || child.classList.contains('torrent-icons__torrent-trump'))) return;
+        if (
+          child.nodeType === 1 &&
+          (child.hasAttribute('data-seadex') ||
+            child.classList.contains('torrent-icons__torrent-trump') ||
+            child.classList.contains('torrent-icons__personal-release') ||
+            child.classList.contains('torrent-icons__internal'))
+        ) {
+          return;
+        }
         child.remove();
       });
     });
+
+    if (!CONFIG.showEditButton) {
+      $$('.torrent-search--grouped__edit a[title="Edit"]').forEach((node) => node.remove());
+    }
   };
 
   const watchTorrentDecorations = () => {
