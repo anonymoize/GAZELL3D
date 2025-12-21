@@ -1043,7 +1043,7 @@
   const stripTorrentDecorations = () => {
     $$('.torrent-icons').forEach((node) => {
       Array.from(node.childNodes).forEach((child) => {
-        if (child.nodeType === 1 && child.hasAttribute('data-seadex')) return;
+        if (child.nodeType === 1 && (child.hasAttribute('data-seadex') || child.classList.contains('torrent-icons__torrent-trump'))) return;
         child.remove();
       });
     });
