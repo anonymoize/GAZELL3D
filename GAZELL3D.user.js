@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.3.2.3
+// @version      1.5
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -28,6 +28,7 @@
     showEditButton: true,
     enableSideLayout: true,
     enableGazelleButtons: true,
+    enableGazelleTorrentLayout: true,
   });
 
   const GAZELLIFY_SEQUENCE = Object.freeze([
@@ -346,6 +347,100 @@
 
     .gz-actions-cell a:hover, .gz-actions-cell button:hover {
       text-decoration: underline;
+    }
+
+    .gz-torrent-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9em;
+      margin-top: 1rem;
+    }
+
+    .gz-torrent-table th {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.7);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .gz-torrent-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      vertical-align: middle;
+    }
+
+    .gz-torrent-table .gz-col-ep {
+      width: 1%;
+      white-space: nowrap;
+      color: rgba(255, 255, 255, 0.9);
+      font-weight: 600;
+    }
+
+    .gz-torrent-table .gz-col-name {
+      width: auto;
+    }
+    
+    .gz-torrent-table .gz-col-size {
+      width: 1%;
+      white-space: nowrap;
+      text-align: right;
+    }
+    
+    .gz-torrent-table .gz-col-stat {
+      width: 1%;
+      white-space: nowrap;
+      text-align: center;
+    }
+
+    .gz-torrent-table .ep-hidden {
+      color: transparent;
+    }
+    
+    .gz-torrent-table .torrent-name-link {
+        font-weight: 600;
+        text-decoration: none;
+        color: inherit;
+        font-size: 1.05em;
+    }
+    
+    .gz-torrent-table .gz-torrent-icons {
+        display: inline-flex;
+        gap: 6px;
+        margin-right: 8px;
+        vertical-align: middle;
+        float: right;
+        margin-top: 5px;
+    }
+    
+    .gz-torrent-table .gz-torrent-icons i {
+        font-size: 0.9em;
+        opacity: 0.8;
+    }
+
+    .gz-season-header {
+       background: rgba(255, 255, 255, 0.06);
+    }
+    
+    .gz-season-header td {
+        font-weight: 700;
+        font-size: 1.1em;
+        padding: 12px;
+        color: rgba(255, 255, 255, 0.95);
+    }
+
+    .gz-group-header {
+       background: rgba(255, 255, 255, 0.03);
+       border-bottom: 2px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .gz-group-header td {
+        font-weight: 700;
+        padding: 8px 12px;
+        font-size: 0.95em;
+        color: rgba(255, 255, 255, 0.85);
+        text-align: left;
     }
   `;
 
@@ -938,7 +1033,14 @@
       group: group || 'NOGRP',
     };
 
-    return GAZELLIFY_SEQUENCE.map((key) => partValues[key]).filter(Boolean).join(' / ');
+    const isSimilarPage = window.location.pathname.includes('/similar');
+    const shouldHideSeasonEpisode = CONFIG.enableGazelleTorrentLayout && isSimilarPage;
+
+    return GAZELLIFY_SEQUENCE
+      .filter((key) => !(shouldHideSeasonEpisode && key === 'seasonEpisode'))
+      .map((key) => partValues[key])
+      .filter(Boolean)
+      .join(' / ');
   };
 
   const buildSearchDisplay = (text) => {
@@ -1288,12 +1390,384 @@
     });
   };
 
+  const gazellifyTorrentLayout = (article) => {
+    const section = $(SELECTORS.torrentGroup, article);
+    if (!section) return;
+
+    // 1. Detect Mode
+    // TV Mode: Has 'summary[x-bind="season"]' or 'summary[x-bind="specials"]' inside details
+    const seasonDetails = Array.from(section.querySelectorAll('summary[x-bind="season"], summary[x-bind="specials"]'))
+      .map(summary => summary.closest('details'))
+      .filter(Boolean);
+
+    const isSeasonLayout = seasonDetails.length > 0;
+
+    // Movie Mode: If no seasons, look for the main torrent table rows directly
+    let movieRows = [];
+    if (!isSeasonLayout) {
+      // Use querySelectorAll to get rows from ALL tbodys (essential for movies with multiple types)
+      // Flatten NodeList to Array
+      const tableRows = section.querySelectorAll('.similar-torrents__torrents tbody tr, .data-table-wrapper table tbody tr');
+      if (tableRows.length > 0) {
+        movieRows = Array.from(tableRows);
+      } else {
+        return; // Nothing to process
+      }
+    }
+
+    const newTable = create('table', 'gz-torrent-table');
+
+    const thead = create('thead');
+    // Conditionally include Actions header
+    const actionsHeader = CONFIG.enableGazelleButtons ? '<th class="gz-col-actions">Actions</th>' : '';
+    // NOTE: Episode/Season header removed; using mini-headers instead.
+
+    thead.innerHTML = `
+        <tr>
+            <th class="gz-col-type">Type</th>
+            <th class="gz-col-name">Release</th>
+            ${actionsHeader}
+            <th class="gz-col-size">Size</th>
+            <th class="gz-col-stat" title="Snatched"><i class="fas fa-save"></i></th>
+            <th class="gz-col-stat" title="Seeders"><i class="fas fa-arrow-up"></i></th>
+            <th class="gz-col-stat" title="Leechers"><i class="fas fa-arrow-down"></i></th>
+        </tr>
+    `;
+    newTable.appendChild(thead);
+
+    const tbody = create('tbody');
+    let rowIdCounter = 0;
+
+    // Shared row processing logic
+    const processRows = (rows, episodeId) => {
+      // Insert Group Header (Mini-header) if Season Layout
+      // This replaces the Episode/Season column
+      if (isSeasonLayout && episodeId) {
+        const groupRow = create('tr', 'gz-group-header');
+        // Colspan: Type(1) + Rel(1) + Act?(1) + Size(1) + Snatch(1) + Seed(1) + Leech(1) = 6 or 7
+        const colSpan = CONFIG.enableGazelleButtons ? 7 : 6;
+        groupRow.innerHTML = `<td colspan="${colSpan}">${episodeId}</td>`;
+        tbody.appendChild(groupRow);
+      }
+
+      let currentType = '';
+      let lastPrintedType = null;
+      let firstInGroup = true;
+
+      rows.forEach(row => {
+        // Extract Type if present (rowspan header)
+        const typeHeader = row.querySelector('.similar-torrents__type');
+        if (typeHeader) {
+          currentType = normalizeText(typeHeader.textContent);
+        }
+
+        const nameLink = row.querySelector('.torrent-search--grouped__name a');
+        if (!nameLink) return;
+
+        // Assign Sync ID
+        const syncId = `gz-sync-${++rowIdCounter}`;
+        row.dataset.gzSyncId = syncId;
+
+        const newRow = create('tr');
+        newRow.dataset.gzSyncId = syncId;
+
+        // 1. Episode/Season Column -> REMOVED (Replaced by header)
+
+        // 2. Type Column
+        const tdType = create('td', 'gz-col-type');
+        if (currentType !== lastPrintedType) {
+          tdType.textContent = currentType;
+          lastPrintedType = currentType;
+        }
+        newRow.appendChild(tdType);
+
+        // 3. Release Column (Name + Icons)
+        const tdName = create('td', 'gz-col-name');
+        const iconSpan = create('span', 'gz-torrent-icons');
+
+        const updateIcons = () => {
+          iconSpan.innerHTML = '';
+          const originalIcons = row.querySelector('.torrent-icons');
+          if (originalIcons) {
+            Array.from(originalIcons.children).forEach(icon => {
+              // Filter text nodes but keep elements
+              if (icon.nodeType !== 1) return;
+
+              // Apply filtering logic
+              const isKeep = icon.hasAttribute('data-seadex') ||
+                icon.classList.contains('torrent-icons__torrent-trump') ||
+                icon.classList.contains('torrent-icons__personal-release') ||
+                icon.classList.contains('torrent-icons__internal');
+
+              if (CONFIG.removeTorrentIcons && !isKeep) {
+                return;
+              }
+
+              // Skip comment icon always
+              if (icon.classList.contains('fa-comment-alt-plus') || icon.classList.contains('torrent-icons__comments')) return;
+
+              iconSpan.appendChild(icon.cloneNode(true));
+            });
+          }
+        };
+        updateIcons(); // Initial population
+
+        const newLink = nameLink.cloneNode(true);
+        newLink.className = 'torrent-name-link';
+
+        // Appending Order: Name then Icons (Icons on the right)
+        tdName.appendChild(newLink);
+        tdName.appendChild(iconSpan);
+        newRow.appendChild(tdName);
+
+        // 4. Actions Column [ ED | BM | DL ] - Only if Enabled
+        if (CONFIG.enableGazelleButtons) {
+          const tdActions = create('td', 'gz-actions-cell');
+          const actions = [];
+
+          // Edit
+          if (CONFIG.showEditButton) {
+            const editLink = row.querySelector('.torrent-search--grouped__edit a');
+            if (editLink) {
+              const el = create('a');
+              el.href = editLink.href;
+              el.textContent = 'ED';
+              el.title = 'Edit';
+              actions.push(el);
+            }
+          }
+
+          // Bookmark
+          const bookmarkBtn = row.querySelector('.torrent-search--grouped__bookmark button');
+          if (bookmarkBtn) {
+            const bmClone = bookmarkBtn.cloneNode(true);
+            bmClone.textContent = 'BM';
+            bmClone.title = 'Bookmark';
+            bmClone.classList.remove('form__button');
+            bmClone.style.background = 'none';
+            bmClone.style.border = 'none';
+            bmClone.style.cursor = 'pointer';
+            bmClone.style.padding = '0';
+            bmClone.style.color = 'inherit';
+            actions.push(bmClone);
+          }
+
+          // Download
+          const dlLink = row.querySelector('.torrent-search--grouped__download a');
+          if (dlLink) {
+            const dl = create('a');
+            dl.href = dlLink.href;
+            dl.textContent = 'DL';
+            dl.title = 'Download';
+            actions.push(dl);
+          }
+
+          actions.forEach((act, idx) => {
+            tdActions.appendChild(act);
+            if (idx < actions.length - 1) {
+              tdActions.appendChild(document.createTextNode(' | '));
+            }
+          });
+
+          if (actions.length > 0) {
+            tdActions.prepend(document.createTextNode('[ '));
+            tdActions.appendChild(document.createTextNode(' ]'));
+          }
+          newRow.appendChild(tdActions);
+        }
+
+        // 5. Size
+        const tdSize = create('td', 'gz-col-size');
+        const sizeCell = row.querySelector('.torrent-search--grouped__size');
+        tdSize.textContent = getText(sizeCell);
+        newRow.appendChild(tdSize);
+
+        // 6. Snatched
+        const tdSnatched = create('td', 'gz-col-stat');
+        const snatchedCell = row.querySelector('.torrent-search--grouped__completed, .torrent__times-completed-count');
+        tdSnatched.textContent = getText(snatchedCell);
+        newRow.appendChild(tdSnatched);
+
+        // 7. Seeders
+        const tdSeeders = create('td', 'gz-col-stat');
+        const seedersCell = row.querySelector('.torrent-search--grouped__seeders, .torrent__seeder-count');
+        tdSeeders.textContent = getText(seedersCell);
+        tdSeeders.style.color = '#76dba6';
+        newRow.appendChild(tdSeeders);
+
+        // 8. Leechers
+        const tdLeechers = create('td', 'gz-col-stat');
+        const leechersCell = row.querySelector('.torrent-search--grouped__leechers, .torrent__leecher-count');
+        tdLeechers.textContent = getText(leechersCell);
+        tdLeechers.style.color = '#db7676';
+        newRow.appendChild(tdLeechers);
+
+        tbody.appendChild(newRow);
+      });
+    };
+
+    if (isSeasonLayout) {
+      // Sort seasons: Regular seasons first (numeric descending), then Specials (last)
+      seasonDetails.sort((a, b) => {
+        const ta = normalizeText(getText(a.querySelector('summary')));
+        const tb = normalizeText(getText(b.querySelector('summary')));
+
+        // Check for Specials
+        const isSpecA = ta.toLowerCase().includes('special');
+        const isSpecB = tb.toLowerCase().includes('special');
+        if (isSpecA && !isSpecB) return 1;
+        if (!isSpecA && isSpecB) return -1;
+        if (isSpecA && isSpecB) return 0;
+
+        // Sort by Season Number (Descending)
+        const na = parseInt((ta.match(/\d+/) || ['0'])[0]);
+        const nb = parseInt((tb.match(/\d+/) || ['0'])[0]);
+        return nb - na;
+      });
+
+      seasonDetails.forEach(season => {
+        const seasonSummary = normalizeText(getText(season.querySelector('summary')));
+
+        // Determine prefix (S01 or S00 for Specials)
+        const isSpecials = seasonSummary.toLowerCase().includes('special');
+        let seasonPrefix = 'S??';
+        if (isSpecials) {
+          seasonPrefix = 'S00';
+        } else {
+          const seasonNumMatch = seasonSummary.match(/(\d+)/);
+          if (seasonNumMatch) {
+            seasonPrefix = `S${seasonNumMatch[0].padStart(2, '0')}`;
+          }
+        }
+
+        // Header Row (Main Season Header)
+        // Colspan: 6 (base) or 7 (with actions)
+        const colSpan = CONFIG.enableGazelleButtons ? 7 : 6;
+        const seasonRow = create('tr', 'gz-season-header');
+        seasonRow.innerHTML = `<td colspan="${colSpan}">${seasonSummary}</td>`;
+        tbody.appendChild(seasonRow);
+
+        // 1. Check for Season Packs (mixed content)
+        const packSummaries = Array.from(season.querySelectorAll('summary[x-bind="pack"]'));
+        // Include both Episode and Special inner items
+        const episodeSummaries = Array.from(season.querySelectorAll('summary[x-bind="episode"], summary[x-bind="special"]'));
+        const hasEpisodes = episodeSummaries.length > 0;
+
+        if (packSummaries.length > 0) {
+          packSummaries.forEach(packSummary => {
+            const packDetails = packSummary.closest('details');
+            const table = packDetails.querySelector('table');
+            // If episodes exist, use "S01" to distinguish packs from episodes.
+            // If NO episodes exist, the main Season header is enough; hide the mini-header.
+            const label = hasEpisodes ? seasonPrefix : '';
+            if (table) processRows($$('tbody tr', table), label);
+          });
+        }
+
+        // 2. Check for nested episodes
+        if (hasEpisodes) {
+          // Handle Episodic/Special content
+          episodeSummaries.forEach(epSummary => {
+            const epDetails = epSummary.closest('details');
+            const epText = normalizeText(getText(epSummary));
+            // Match "Episode 1" or "Special 1" or simple numbers
+            const epNumMatch = epText.match(/(?:Episode|Special)\s*(\d+)/i) || epText.match(/(\d+)/);
+            const epNum = epNumMatch ? epNumMatch[1].padStart(2, '0') : '??';
+            const epId = `${seasonPrefix}E${epNum}`;
+
+            const table = epDetails.querySelector('table');
+            if (table) processRows($$('tbody tr', table), epId);
+          });
+        }
+
+        // 3. Fallback: Direct table if NO packs and NO episodes
+        if (packSummaries.length === 0 && !hasEpisodes) {
+          // Handle Direct content (no nested structure found)
+          const table = season.querySelector('table');
+          if (table) {
+            // Pass empty string to avoid duplicating the Season header
+            processRows($$('tbody tr', table), '');
+          }
+        }
+      });
+    } else {
+      // Movie Layout (Flat)
+      processRows(movieRows, '');
+    }
+
+    newTable.appendChild(tbody);
+
+    const wrapper = section.querySelector('.data-table-wrapper') || section;
+
+    // Hide original content locally instead of removing it from DOM
+    // This allows other scripts (like Seadex) to find the original rows and modify them
+    Array.from(wrapper.children).forEach(child => {
+      if (!child.classList.contains('gz-torrent-table')) {
+        child.style.display = 'none';
+      }
+    });
+
+    wrapper.appendChild(newTable);
+
+    // Observe the original hidden wrapper for changes (like Async Seadex icons)
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach(mutation => {
+        if (mutation.type === 'childList') {
+          // Check if the mutation happened inside a .torrent-icons span
+          const target = mutation.target;
+          if (target.matches && (target.matches('.torrent-icons') || target.closest('.torrent-icons'))) {
+            const row = target.closest('tr');
+            const syncId = row ? row.dataset.gzSyncId : null;
+            if (syncId) {
+              const newRow = newTable.querySelector(`tr[data-gz-sync-id="${syncId}"]`);
+              // Trigger icon update on the new row
+              if (newRow) {
+                // We need to re-run the exact icon-copy logic.
+                // Since 'updateIcons' is scoped, we duplicate the logic here or make it accessible.
+                const iconSpan = newRow.querySelector('.gz-torrent-icons');
+                if (iconSpan) {
+                  iconSpan.innerHTML = ''; // Rebuild
+                  const originalIcons = row.querySelector('.torrent-icons');
+                  if (originalIcons) {
+                    Array.from(originalIcons.children).forEach(icon => {
+                      if (icon.nodeType !== 1) return;
+                      const isKeep = icon.hasAttribute('data-seadex') ||
+                        icon.classList.contains('torrent-icons__torrent-trump') ||
+                        icon.classList.contains('torrent-icons__personal-release') ||
+                        icon.classList.contains('torrent-icons__internal');
+                      if (CONFIG.removeTorrentIcons && !isKeep) return;
+                      if (icon.classList.contains('fa-comment-alt-plus') || icon.classList.contains('torrent-icons__comments')) return;
+                      iconSpan.appendChild(icon.cloneNode(true));
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+    });
+
+    observer.observe(wrapper, { childList: true, subtree: true });
+
+    // Remove "Expand all" button
+    const expandBtn = section.querySelector('.panel__actions button[x-bind="all"]');
+    if (expandBtn) expandBtn.parentElement.remove();
+  };
+
   const buildSimilarLayout = (article = $(SELECTORS.similarArticle)) => {
     if (!article) return false;
 
     gazellify();
-    expandAllTorrentGroups();
-    watchTorrentDecorations();
+
+    if (CONFIG.enableGazelleTorrentLayout) {
+      gazellifyTorrentLayout(article);
+      const filters = article.querySelector('.compact-search.similar-torrents__filters');
+      if (filters) filters.remove();
+    } else {
+      expandAllTorrentGroups();
+      watchTorrentDecorations();
+    }
 
     if (article.querySelector(':scope > .gz-similar-layout')) return true;
     if (!CONFIG.enableSideLayout) return true;
