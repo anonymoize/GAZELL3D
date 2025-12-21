@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.3.2.2
+// @version      1.3.2.3
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -1293,6 +1293,7 @@
 
     gazellify();
     expandAllTorrentGroups();
+    watchTorrentDecorations();
 
     if (article.querySelector(':scope > .gz-similar-layout')) return true;
     if (!CONFIG.enableSideLayout) return true;
@@ -1314,8 +1315,6 @@
     const card = createMetaCard(meta);
     if (!card) return false;
     right.appendChild(card);
-
-    watchTorrentDecorations();
 
     return true;
   };
