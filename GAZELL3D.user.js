@@ -714,8 +714,8 @@
     }
 
     .gz-dropdown-tab.active {
-      color: #76dba6;
-      border-bottom-color: #76dba6;
+      color: #eaeeecff;
+      border-bottom-color: #eaeeecff;
     }
 
     .gz-dropdown-panel {
@@ -745,7 +745,7 @@
     }
 
     .gz-panel-copy-btn.copied {
-      color: #76dba6;
+      color: #eaeeecff;
     }
 
     .gz-dropdown-description {
@@ -944,6 +944,53 @@
 
     .gz-bbcode-h6 {
       font-size: 0.9em;
+    }
+
+    /* BBCode Table Styles */
+    .gz-bbcode-table {
+      width: auto !important;
+      border-collapse: separate !important;
+      border-spacing: 0 !important;
+      margin: 10px 0 !important;
+      background: rgba(0, 0, 0, 0.25) !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      border-radius: 6px !important;
+      overflow: hidden !important;
+    }
+
+    .gz-bbcode-table tr {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    }
+
+    .gz-bbcode-table tr:last-child {
+      border-bottom: none !important;
+    }
+
+    .gz-bbcode-table td {
+      padding: 12px 16px !important;
+      vertical-align: middle !important;
+      line-height: 1.5 !important;
+    }
+
+    .gz-bbcode-table td:first-child {
+      font-weight: 500 !important;
+      color: rgba(255, 255, 255, 0.75) !important;
+      white-space: nowrap !important;
+      padding-right: 48px !important;
+      border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+
+    .gz-bbcode-table td:last-child {
+      padding-left: 24px !important;
+    }
+
+    .gz-bbcode-table th {
+      padding: 12px 16px !important;
+      text-align: left !important;
+      font-weight: 600 !important;
+      background: rgba(255, 255, 255, 0.04) !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+      color: rgba(255, 255, 255, 0.9) !important;
     }
 
     /* File List Tree Styles */
@@ -2389,6 +2436,19 @@
         // Comparison: [comparison=title]...[/comparison]
         result = result.replace(/\[comparison=([^\]]*)\]([\s\S]*?)\[\/comparison\]/gi, '<details class="gz-bbcode-comparison"><summary>$1</summary><div class="gz-bbcode-spoiler-content">$2</div></details>');
 
+        // Font: [font=fontname]text[/font]
+        result = result.replace(/\[font=([^\]]+)\]([\s\S]*?)\[\/font\]/gi, '<span style="font-family: $1;">$2</span>');
+
+        // Table tags: [table], [tr], [td], [th]
+        result = result.replace(/\[table\]/gi, '<table class="gz-bbcode-table">');
+        result = result.replace(/\[\/table\]/gi, '</table>');
+        result = result.replace(/\[tr\]/gi, '<tr>');
+        result = result.replace(/\[\/tr\]/gi, '</tr>');
+        result = result.replace(/\[td\]/gi, '<td>');
+        result = result.replace(/\[\/td\]/gi, '</td>');
+        result = result.replace(/\[th\]/gi, '<th>');
+        result = result.replace(/\[\/th\]/gi, '</th>');
+
       } while (result !== prevResult);
 
       return result;
@@ -2415,6 +2475,19 @@
     html = html.replace(/(<\/details>)<br>/gi, '$1');
     html = html.replace(/(<\/blockquote>)<br>/gi, '$1');
     html = html.replace(/<br>(<\/)/gi, '$1');
+
+    // Clean up <br> tags around table elements (they break table layout)
+    html = html.replace(/(<table[^>]*>)<br>/gi, '$1');
+    html = html.replace(/<br>(<\/table>)/gi, '$1');
+    html = html.replace(/(<tr>)<br>/gi, '$1');
+    html = html.replace(/<br>(<\/tr>)/gi, '$1');
+    html = html.replace(/(<td>)<br>/gi, '$1');
+    html = html.replace(/<br>(<\/td>)/gi, '$1');
+    html = html.replace(/(<th>)<br>/gi, '$1');
+    html = html.replace(/<br>(<\/th>)/gi, '$1');
+    html = html.replace(/(<\/tr>)<br>/gi, '$1');
+    html = html.replace(/(<\/td>)<br>/gi, '$1');
+    html = html.replace(/(<\/th>)<br>/gi, '$1');
 
     return html;
   };
@@ -3019,7 +3092,10 @@
     const header = create('div', 'gz-dropdown-header');
     const uploader = torrentData.uploader || 'Anonymous';
     const uploadDate = formatDate(torrentData.created_at);
-    header.innerHTML = `Uploaded by <strong>${uploader}</strong> on <span>${uploadDate}</span>`;
+    const uploaderDisplay = uploader === 'Anonymous'
+      ? `<strong>${uploader}</strong>`
+      : `<a href="https://aither.cc/users/${uploader}" target="_blank" rel="noopener"><strong>${uploader}</strong></a>`;
+    header.innerHTML = `Uploaded by ${uploaderDisplay} on <span>${uploadDate}</span>`;
     container.appendChild(header);
 
     // Tabs
