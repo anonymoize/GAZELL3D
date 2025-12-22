@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.6.2
+// @version      1.7
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -89,9 +89,9 @@
   const STYLE = `
     .gz-similar-layout {
       display: flex;
-      gap: 1.5rem;
+      gap: 1.75rem;
       width: 100%;
-      margin-top: 1.5rem;
+      margin-top: 1rem;
       align-items: flex-start;
     }
 
@@ -107,16 +107,22 @@
     }
 
     .gz-similar-layout__column--right {
-      flex: 0 0 360px;
-      max-width: 360px;
+      flex: 0 0 300px;
+      max-width: 300px;
       width: 100%;
     }
 
     .gz-meta-card {
       display: flex;
       flex-direction: column;
-      gap: 1.25rem;
+      gap: 1rem;
       width: 100%;
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 1rem;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
     }
 
     .gz-meta-card .meta__backdrop {
@@ -125,27 +131,42 @@
 
     .gz-meta-card .meta__title-link {
       text-align: center;
+      text-decoration: none;
+      color: inherit;
+      transition: opacity 0.15s ease;
+    }
+
+    .gz-meta-card .meta__title-link:hover {
+      opacity: 0.85;
+    }
+
+    .gz-meta-card .meta__title {
+      font-size: 1.15em;
+      font-weight: 600;
+      line-height: 1.3;
+      margin: 0;
     }
 
     .gz-detail-title {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.45rem;
+      gap: 0.35rem;
     }
 
     .gz-detail-title__heading {
-      font-size: 1.6em;
+      font-size: 1.4em;
       font-weight: 700;
       text-align: center;
       color: inherit;
+      line-height: 1.25;
     }
 
     .gz-detail-title__subheading {
-      font-size: 1em;
+      font-size: 0.9em;
       text-align: center;
       color: inherit;
-      opacity: 0.75;
+      opacity: 0.65;
     }
 
     .gz-meta-card .meta__poster-link {
@@ -153,133 +174,232 @@
       display: block;
       align-self: stretch;
       float: none !important;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .gz-meta-card .meta__poster-link:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
     }
 
     .gz-meta-card .meta__poster {
       width: 100%;
       height: auto;
-      border-radius: 0.75rem;
+      display: block;
+      border-radius: 0;
       float: none !important;
     }
 
     .gz-meta-card .work__tags,
-    .gz-meta-card .meta__ids,
-    .gz-inline-buttons {
+    .gz-meta-card .meta__ids {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       justify-content: center;
-      gap: 0.5rem;
+      gap: 0.4rem;
       padding: 0;
       margin: 0;
-      font-size: 1.25rem;
+      font-size: 0.85rem;
     }
 
     .gz-meta-card .meta__ids li,
-    .gz-meta-card .work__tags li,
-    .gz-inline-buttons li {
+    .gz-meta-card .work__tags li {
       list-style: none;
-      white-space: normal;
-      flex: 1 1 140px;
+      white-space: nowrap;
+      flex: 0 0 auto;
       display: flex;
       justify-content: center;
       align-items: center;
     }
 
     .gz-meta-card .meta__ids img {
-      height: 18px;
+      height: 16px;
       width: auto;
+      opacity: 0.8;
+      transition: opacity 0.15s ease;
+    }
+
+    .gz-meta-card .meta__ids a:hover img {
+      opacity: 1;
+    }
+
+    .gz-inline-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      justify-content: center;
+      width: 100%;
     }
 
     .gz-inline-buttons .form__group {
       display: flex;
-      flex: 1;
+      flex: 1 1 calc(50% - 0.2rem);
       min-width: 0;
     }
 
     .gz-inline-buttons .form__button {
       flex: 1;
       white-space: nowrap;
-      padding: 0.35rem 0.6rem;
+      padding: 0.4rem 0.5rem;
       justify-content: center;
+      font-size: 0.8rem;
+      border-radius: 0.5rem;
     }
 
     .gz-meta-card .meta__description {
       margin: 0;
-      padding: 0.85rem 1rem;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 0.75rem;
-      background: rgba(255, 255, 255, 0.02);
-    }
-
-    @media (max-width: 1100px) {
-      .gz-meta-card .work__tags {
-        flex-wrap: wrap;
-      }
+      padding: 0.75rem;
+      border: none;
+      border-radius: 0.6rem;
+      background: rgba(255, 255, 255, 0.03);
+      font-size: 0.85em;
+      line-height: 1.5;
+      color: rgba(255, 255, 255, 0.8);
     }
 
     .gz-meta-card .meta__chip-container {
       display: flex;
       flex-direction: column;
-      gap: 0.75rem;
+      gap: 0.5rem;
       width: 100%;
-      padding: 1rem;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 0.75rem;
-      background: rgba(255, 255, 255, 0.02);
+      padding: 0.75rem;
+      border: none;
+      border-radius: 0.6rem;
+      background: rgba(255, 255, 255, 0.03);
     }
 
     .gz-meta-card .meta-chip-wrapper {
       width: 100%;
     }
 
-    .gz-meta-card .meta__chip-container .meta-chip__value {
+    .gz-meta-card .meta-chip {
+      padding: 0.4rem;
+      border-radius: 0.5rem;
+      transition: background 0.15s ease;
+    }
+
+    .gz-meta-card .meta-chip:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .gz-meta-card .meta-chip__image {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .gz-meta-card .meta-chip__name {
+      font-size: 0.85em;
+      font-weight: 500;
+    }
+
+    .gz-meta-card .meta-chip__value {
+      font-size: 0.75em;
+      opacity: 0.7;
       white-space: normal;
     }
 
     .gz-meta-card .work__tags,
-    .gz-meta-card .meta__ids,
-    .gz-inline-buttons {
-      padding: 0.6rem 0.8rem;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 0.75rem;
-      background: rgba(255, 255, 255, 0.02);
+    .gz-meta-card .meta__ids {
+      padding: 0;
+      border: none;
+      border-radius: 0;
+      background: transparent;
     }
 
     .gz-meta-card .gz-meta-divider {
       border: none;
-      border-top: 1px solid rgba(255, 255, 255, 0.12);
-      margin: 0.5rem 0 0.75rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      margin: 0.25rem 0 0.5rem;
     }
 
     .gz-meta-card .gz-chip-heading {
-      text-align: center;
-      letter-spacing: 0.08em;
-      margin: 0 0 0.4rem;
-    }
-
-    .gz-inline-buttons {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.4rem;
-      justify-content: flex-start;
-      width: 100%;
-    }
-
-    .gz-inline-buttons .form__group {
-      flex: 1 1 160px;
-      min-width: 140px;
-    }
-
-    .gz-inline-buttons .form__button {
-      width: 100%;
-      padding: 0.35rem 0.6rem;
-      justify-content: center;
-      white-space: nowrap;
+      text-align: left;
+      font-size: 0.7em;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(255, 255, 255, 0.5);
+      margin: 0.25rem 0 0.35rem 0.25rem;
+      font-weight: 600;
     }
 
     .gz-meta-card .work__tags li::after {
       content: none !important;
+    }
+
+    .gz-meta-card .work__tags li {
+      padding: 0.35rem 0.65rem;
+      background: rgba(255, 255, 255, 0);
+      border-radius: 0.4rem;
+      font-size: 1.4em;
+    }
+
+    .gz-meta-card .work__tags li a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .gz-meta-card .work__tags li a:hover {
+      text-decoration: underline;
+    }
+
+    /* Header section with centered title and action links (ANT-style) */
+    .gz-page-header {
+      text-align: center;
+      margin-bottom: 1.25rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .gz-page-header__title {
+      font-size: 1.6em;
+      font-weight: 600;
+      margin: 0 0 0.75rem;
+      color: inherit;
+    }
+
+    .gz-page-header__title a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .gz-page-header__title a:hover {
+      text-decoration: underline;
+    }
+
+    .gz-page-header__actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.25rem 0.5rem;
+      font-size: 0.9em;
+    }
+
+    .gz-page-header__actions a,
+    .gz-page-header__actions button {
+      color: rgba(255, 255, 255, 0.75);
+      text-decoration: none;
+      background: none;
+      border: none;
+      padding: 0;
+      font: inherit;
+      cursor: pointer;
+      transition: color 0.15s ease;
+    }
+
+    .gz-page-header__actions a:hover,
+    .gz-page-header__actions button:hover {
+      color: rgba(255, 255, 255, 1);
+      text-decoration: underline;
+    }
+
+    .gz-page-header__actions .gz-separator {
+      color: rgba(255, 255, 255, 0.3);
+      user-select: none;
     }
 
     .gz-search-title {
@@ -346,6 +466,51 @@
       .gz-similar-layout__column--right {
         max-width: none;
         flex: 1 1 auto;
+      }
+
+      .gz-meta-card {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: flex-start;
+      }
+
+      .gz-meta-card .meta__poster-link {
+        flex: 0 0 200px;
+        max-width: 200px;
+      }
+
+      .gz-meta-card .meta__title-link,
+      .gz-meta-card .meta__description,
+      .gz-meta-card .work__tags,
+      .gz-meta-card .meta__ids {
+        flex: 1 1 calc(100% - 220px);
+        min-width: 200px;
+      }
+
+      .gz-meta-card .gz-meta-divider,
+      .gz-meta-card .gz-chip-heading,
+      .gz-meta-card .meta__chip-container {
+        flex: 1 1 100%;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .gz-meta-card {
+        flex-direction: column;
+      }
+
+      .gz-meta-card .meta__poster-link {
+        flex: 1 1 100%;
+        max-width: 280px;
+        align-self: center;
+      }
+
+      .gz-meta-card .meta__title-link,
+      .gz-meta-card .meta__description,
+      .gz-meta-card .work__tags,
+      .gz-meta-card .meta__ids {
+        flex: 1 1 100%;
       }
     }
 
@@ -1965,7 +2130,6 @@
     };
 
     [
-      '.meta__title-link',
       '.meta__poster-link',
       '.work__tags',
       '.meta__ids',
@@ -3618,13 +3782,76 @@
     const torrents = $(SELECTORS.torrentGroup, article);
     if (!meta || !torrents) return false;
 
+    // Create the page header with title and action links
+    const createPageHeader = () => {
+      const header = create('div', 'gz-page-header');
+
+      // Extract and clone the title
+      const titleLink = meta.querySelector('.meta__title-link');
+      if (titleLink) {
+        const titleEl = create('h1', 'gz-page-header__title');
+        const titleAnchor = titleLink.cloneNode(true);
+        titleAnchor.className = '';
+        titleEl.appendChild(titleAnchor);
+        header.appendChild(titleEl);
+      }
+
+      // Extract action links from the dropdown menu
+      const dropdown = meta.querySelector('.meta__dropdown');
+      if (dropdown) {
+        const actionsEl = create('div', 'gz-page-header__actions');
+        const items = dropdown.querySelectorAll('li');
+
+        items.forEach((item, index) => {
+          const link = item.querySelector('a');
+          const form = item.querySelector('form');
+
+          if (link) {
+            const newLink = link.cloneNode(true);
+            newLink.className = '';
+            actionsEl.appendChild(newLink);
+          } else if (form) {
+            // Clone the entire form to preserve functionality
+            const newForm = form.cloneNode(true);
+            newForm.style.display = 'inline';
+            actionsEl.appendChild(newForm);
+          }
+
+          // Add separator between items
+          if (index < items.length - 1) {
+            const sep = create('span', 'gz-separator');
+            sep.textContent = '|';
+            actionsEl.appendChild(sep);
+          }
+        });
+
+        if (actionsEl.children.length > 0) {
+          header.appendChild(actionsEl);
+        }
+      }
+
+      // Remove the original dropdown and title from meta (since they're now in header)
+      const actionsDiv = meta.querySelector('.meta__actions');
+      if (actionsDiv) actionsDiv.remove();
+
+      return header;
+    };
+
     const extraPanels = ['requests', 'playlists', 'collection', 'Also downloaded']
       .map((label) => findPanelByHeading(label))
       .filter(Boolean);
 
     removeNode($(SELECTORS.searchBox, article));
 
-    const { left, right } = createLayoutContainer(article, article.firstElementChild);
+    // Create and insert the page header before the layout
+    const pageHeader = createPageHeader();
+
+    const { layout, left, right } = createLayoutContainer(article, article.firstElementChild);
+
+    // Insert header before the layout
+    if (pageHeader.children.length > 0) {
+      layout.parentNode.insertBefore(pageHeader, layout);
+    }
 
     appendAll(left, [torrents, ...extraPanels]);
 
@@ -3646,6 +3873,61 @@
     const meta = $(SELECTORS.metaSection, article);
     if (!meta) return false;
 
+    // Create the page header with title and action links (same as similar page)
+    const createPageHeader = () => {
+      const header = create('div', 'gz-page-header');
+
+      // Extract and clone the title
+      const titleLink = meta.querySelector('.meta__title-link');
+      if (titleLink) {
+        const titleEl = create('h1', 'gz-page-header__title');
+        const titleAnchor = titleLink.cloneNode(true);
+        titleAnchor.className = '';
+        titleEl.appendChild(titleAnchor);
+        header.appendChild(titleEl);
+      }
+
+      // Extract action links from the dropdown menu
+      const dropdown = meta.querySelector('.meta__dropdown');
+      if (dropdown) {
+        const actionsEl = create('div', 'gz-page-header__actions');
+        const items = dropdown.querySelectorAll('li');
+
+        items.forEach((item, index) => {
+          const link = item.querySelector('a');
+          const form = item.querySelector('form');
+
+          if (link) {
+            const newLink = link.cloneNode(true);
+            newLink.className = '';
+            actionsEl.appendChild(newLink);
+          } else if (form) {
+            // Clone the entire form to preserve functionality
+            const newForm = form.cloneNode(true);
+            newForm.style.display = 'inline';
+            actionsEl.appendChild(newForm);
+          }
+
+          // Add separator between items
+          if (index < items.length - 1) {
+            const sep = create('span', 'gz-separator');
+            sep.textContent = '|';
+            actionsEl.appendChild(sep);
+          }
+        });
+
+        if (actionsEl.children.length > 0) {
+          header.appendChild(actionsEl);
+        }
+      }
+
+      // Remove the original dropdown from meta (since it's now in header)
+      const actionsDiv = meta.querySelector('.meta__actions');
+      if (actionsDiv) actionsDiv.remove();
+
+      return header;
+    };
+
     const torrentButtons = $(SELECTORS.torrentButtons, article);
 
     const fragment = document.createDocumentFragment();
@@ -3654,25 +3936,21 @@
       fragment.appendChild(child);
     });
 
-    const { left, right } = createLayoutContainer(article, meta);
+    // Create and insert the page header before the layout
+    const pageHeader = createPageHeader();
+
+    const { layout, left, right } = createLayoutContainer(article, meta);
+
+    // Insert header before the layout
+    if (pageHeader.children.length > 0) {
+      layout.parentNode.insertBefore(pageHeader, layout);
+    }
+
     left.appendChild(fragment);
 
+    // Keep torrent buttons in their original form (don't convert to inline buttons)
     if (torrentButtons) {
-      const inline = create('div', 'gz-inline-buttons');
-      Array.from(torrentButtons.children)
-        .filter((node) => node.matches && node.matches('.form__group'))
-        .forEach((node) => inline.appendChild(node));
-      torrentButtons.remove();
-
-      const buttonsWrapper = create('div', 'torrent__buttons');
-      buttonsWrapper.appendChild(inline);
-
-      const tagBar = $(SELECTORS.tagBar, left);
-      if (tagBar) {
-        tagBar.insertAdjacentElement('afterend', buttonsWrapper);
-      } else {
-        left.insertBefore(buttonsWrapper, left.firstElementChild || null);
-      }
+      left.insertBefore(torrentButtons, left.firstElementChild || null);
     }
 
     const card = createMetaCard(meta);
