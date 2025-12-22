@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.7.1
+// @version      1.7.2
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -87,11 +87,17 @@
   });
 
   const STYLE = `
+    /* Reduce outer padding on the article when using side layout */
+    main.page__torrent-similar--index article {
+      padding-left: 0.75rem !important;
+      padding-right: 0.75rem !important;
+    }
+
     .gz-similar-layout {
       display: flex;
-      gap: 1.75rem;
+      gap: 1.25rem;
       width: 100%;
-      margin-top: 1rem;
+      margin-top: 0.5rem;
       align-items: flex-start;
     }
 
@@ -540,7 +546,7 @@
       width: 100%;
       border-collapse: collapse;
       font-size: 0.9em;
-      margin-top: 1rem;
+      margin-top: 0;
     }
 
     .gz-torrent-table th {
@@ -3298,6 +3304,12 @@
   const gazellifyTorrentLayout = (article) => {
     const section = $(SELECTORS.torrentGroup, article);
     if (!section) return;
+
+    // Hide the panel header ("Torrents" label) to reduce vertical gap
+    const panelHeader = section.querySelector('header.panel__header');
+    if (panelHeader) {
+      panelHeader.style.display = 'none';
+    }
 
     // 1. Detect Mode
     // TV Mode: Has 'summary[x-bind="season"]' or 'summary[x-bind="specials"]' inside details
