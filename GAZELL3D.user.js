@@ -2172,7 +2172,7 @@
     return null;
   };
 
-  // Fetch all torrents for a given TMDB ID
+  // Fetch all torrents for a given TMDB ID (with pagination support)
   const fetchTorrentsByTmdb = async (tmdbId) => {
     if (torrentDataCache) return torrentDataCache;
     if (torrentDataPromise) return torrentDataPromise;
@@ -2184,27 +2184,55 @@
 
     torrentDataPromise = (async () => {
       try {
-        const response = await gmFetchJson(
-          `https://aither.cc/api/torrents/filter?perPage=100&tmdbId=${tmdbId}`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${AITHER_API_KEY}`
+        const dataMap = new Map();
+        let currentPage = 1;
+        let hasMorePages = true;
+        const perPage = 100;
+
+        while (hasMorePages) {
+          const response = await gmFetchJson(
+            `https://aither.cc/api/torrents/filter?perPage=${perPage}&page=${currentPage}&tmdbId=${tmdbId}`,
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${AITHER_API_KEY}`
+              }
+            }
+          );
+
+          if (!response || !response.data) {
+            if (currentPage === 1) {
+              console.warn('GAZELL3D: Empty API response');
+              return null;
+            }
+            // No more data on subsequent page, we're done
+            break;
+          }
+
+          // Add torrents from this page to the map
+          response.data.forEach(torrent => {
+            dataMap.set(torrent.id, torrent.attributes);
+          });
+
+          // Check if there are more pages to fetch
+          // If we got fewer results than perPage, we've reached the last page
+          if (response.data.length < perPage) {
+            hasMorePages = false;
+          } else {
+            currentPage++;
+            // Safety limit to prevent infinite loops (max 20 pages = 2000 torrents)
+            if (currentPage > 20) {
+              console.warn('GAZELL3D: Reached maximum page limit (20 pages)');
+              hasMorePages = false;
             }
           }
-        );
-
-        if (!response || !response.data) {
-          console.warn('GAZELL3D: Empty API response');
-          return null;
         }
 
-        // Build a map of torrent ID -> torrent data
-        const dataMap = new Map();
-        response.data.forEach(torrent => {
-          dataMap.set(torrent.id, torrent.attributes);
-        });
+        if (dataMap.size > 0) {
+          console.log(`GAZELL3D: Fetched ${dataMap.size} torrents across ${currentPage} page(s)`);
+        }
+
         torrentDataCache = dataMap;
         return dataMap;
       } catch (err) {
