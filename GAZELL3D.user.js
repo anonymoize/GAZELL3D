@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.7.3
+// @version      1.7.4
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -583,6 +583,7 @@
     .gz-torrent-table .gz-col-actions {
       width: 100px;
       white-space: nowrap;
+      padding-left: 8px !important;
     }
     
     .gz-torrent-table .gz-col-size {
@@ -611,10 +612,8 @@
     .gz-torrent-table .gz-torrent-icons {
         display: inline-flex;
         gap: 6px;
-        margin-right: 8px;
+        margin-left: 12px;
         vertical-align: middle;
-        float: right;
-        margin-top: 5px;
     }
     
     .gz-torrent-table .gz-torrent-icons i {
@@ -3439,9 +3438,9 @@
             <th class="gz-col-name">Release</th>
             ${actionsHeader}
             <th class="gz-col-size">Size</th>
-            <th class="gz-col-stat" title="Snatched"><i class="fas fa-save"></i></th>
             <th class="gz-col-stat" title="Seeders"><i class="fas fa-arrow-up"></i></th>
             <th class="gz-col-stat" title="Leechers"><i class="fas fa-arrow-down"></i></th>
+            <th class="gz-col-stat" title="Snatched"><i class="fas fa-save"></i></th>
         </tr>
     `;
     newTable.appendChild(thead);
@@ -3662,33 +3661,7 @@
         tdSize.textContent = getText(sizeCell);
         newRow.appendChild(tdSize);
 
-        // 6. Snatched
-        const tdSnatched = create('td', 'gz-col-stat');
-        const snatchedCell = row.querySelector('.torrent-search--grouped__completed, .torrent__times-completed-count');
-        const snatchedLink = snatchedCell ? (snatchedCell.tagName === 'A' ? snatchedCell : snatchedCell.querySelector('a')) : null;
-        if (snatchedLink) {
-          const link = create('a');
-          link.href = snatchedLink.href;
-          link.textContent = getText(snatchedCell);
-          link.style.color = 'inherit';
-          link.style.textDecoration = 'none';
-          tdSnatched.appendChild(link);
-        } else {
-          tdSnatched.textContent = getText(snatchedCell);
-        }
-        if (snatchedCell) {
-          if (snatchedCell.classList) {
-            snatchedCell.classList.forEach(cls => {
-              if (cls.startsWith('torrent-activity-indicator--')) {
-                tdSnatched.classList.add(cls);
-              }
-            });
-          }
-          if (snatchedCell.title) tdSnatched.title = snatchedCell.title;
-        }
-        newRow.appendChild(tdSnatched);
-
-        // 7. Seeders
+        // 6. Seeders
         const tdSeeders = create('td', 'gz-col-stat');
         const seedersCell = row.querySelector('.torrent-search--grouped__seeders, .torrent__seeder-count');
         const seedersLink = seedersCell ? (seedersCell.tagName === 'A' ? seedersCell : seedersCell.querySelector('a')) : null;
@@ -3715,7 +3688,7 @@
         }
         newRow.appendChild(tdSeeders);
 
-        // 8. Leechers
+        // 7. Leechers
         const tdLeechers = create('td', 'gz-col-stat');
         const leechersCell = row.querySelector('.torrent-search--grouped__leechers, .torrent__leecher-count');
         const leechersLink = leechersCell ? (leechersCell.tagName === 'A' ? leechersCell : leechersCell.querySelector('a')) : null;
@@ -3741,6 +3714,32 @@
           if (leechersCell.title) tdLeechers.title = leechersCell.title;
         }
         newRow.appendChild(tdLeechers);
+
+        // 8. Snatched
+        const tdSnatched = create('td', 'gz-col-stat');
+        const snatchedCell = row.querySelector('.torrent-search--grouped__completed, .torrent__times-completed-count');
+        const snatchedLink = snatchedCell ? (snatchedCell.tagName === 'A' ? snatchedCell : snatchedCell.querySelector('a')) : null;
+        if (snatchedLink) {
+          const link = create('a');
+          link.href = snatchedLink.href;
+          link.textContent = getText(snatchedCell);
+          link.style.color = 'inherit';
+          link.style.textDecoration = 'none';
+          tdSnatched.appendChild(link);
+        } else {
+          tdSnatched.textContent = getText(snatchedCell);
+        }
+        if (snatchedCell) {
+          if (snatchedCell.classList) {
+            snatchedCell.classList.forEach(cls => {
+              if (cls.startsWith('torrent-activity-indicator--')) {
+                tdSnatched.classList.add(cls);
+              }
+            });
+          }
+          if (snatchedCell.title) tdSnatched.title = snatchedCell.title;
+        }
+        newRow.appendChild(tdSnatched);
 
         tbody.appendChild(newRow);
       });
