@@ -1,19 +1,16 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.5.2
+// @version      1.6.0
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
-// @match        https://blutopia.cc/torrents/*
-// @match        https://blutopia.cc/torrents*
-// @match        https://fearnopeer.com/torrents/*
-// @match        https://fearnopeer.com/torrents*
 // @updateURL    https://github.com/anonymoize/GAZELL3D/raw/refs/heads/main/GAZELL3D.js
 // @downloadURL  https://github.com/anonymoize/GAZELL3D/raw/refs/heads/main/GAZELL3D.js
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
+// @connect      aither.cc
 // ==/UserScript==
 
 (function () {
@@ -22,14 +19,39 @@
   const CONFIG = Object.freeze({
     removeTorrentIcons: true,
     enableGazellifySimilar: true,
-    enableGazellifyDetail: true,
+    enableGazellifyDetail: false,
     enableGazellifySearch: true,
     enableOriginalTitleTooltip: true,
     showEditButton: true,
     enableSideLayout: true,
     enableGazelleButtons: true,
-    enableGazelleTorrentLayout: false,
+    enableGazelleTorrentLayout: true,
+    enableTorrentDropdowns: false,
   });
+
+  // API key for Aither (required for dropdown feature)
+  const AITHER_API_KEY = 'YOUR_API_KEY_HERE';
+
+  // Utility for making authenticated API calls
+  const gmFetchJson = (url, opts = {}, method = 'GET', timeout = 15000) => {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method,
+        timeout,
+        ...opts,
+        url: url.toString(),
+        ontimeout: () => reject(new Error(`Request timed out after ${timeout}ms`)),
+        onerror: (err) => reject(err || new Error('Failed to fetch')),
+        onload: (response) => {
+          try {
+            resolve(JSON.parse(response.responseText));
+          } catch (e) {
+            reject(new Error('Failed to parse JSON response'));
+          }
+        }
+      });
+    });
+  };
 
   const GAZELLIFY_SEQUENCE = Object.freeze([
     'videoCodec',
@@ -372,24 +394,34 @@
     }
 
     .gz-torrent-table .gz-col-ep {
-      width: 1%;
+      width: 60px;
       white-space: nowrap;
       color: rgba(255, 255, 255, 0.9);
       font-weight: 600;
     }
 
+    .gz-torrent-table .gz-col-type {
+      width: 80px;
+      white-space: nowrap;
+    }
+
     .gz-torrent-table .gz-col-name {
-      width: auto;
+      /* Takes remaining space */
+    }
+
+    .gz-torrent-table .gz-col-actions {
+      width: 100px;
+      white-space: nowrap;
     }
     
     .gz-torrent-table .gz-col-size {
-      width: 1%;
+      width: 80px;
       white-space: nowrap;
       text-align: right;
     }
     
     .gz-torrent-table .gz-col-stat {
-      width: 1%;
+      width: 50px;
       white-space: nowrap;
       text-align: center;
     }
@@ -441,6 +473,361 @@
         font-size: 0.95em;
         color: rgba(255, 255, 255, 0.85);
         text-align: left;
+    }
+
+    /* Torrent Info Dropdown Styles */
+    .gz-dropdown-row {
+      background: rgba(0, 0, 0, 0.15);
+    }
+
+    .gz-dropdown-row td {
+      padding: 0 !important;
+    }
+
+    .gz-dropdown-container {
+      padding: 12px 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      /* Prevent layout shift */
+      width: 100%;
+      box-sizing: border-box;
+      contain: layout style;
+    }
+
+    /* Ensure gazelle table doesn't shift when dropdown opens */
+    .gz-torrent-table {
+      table-layout: fixed;
+      width: 100%;
+    }
+
+    .gz-dropdown-header {
+      font-size: 0.85em;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .gz-dropdown-header a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .gz-dropdown-header a:hover {
+      text-decoration: underline;
+    }
+
+    .gz-dropdown-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 0;
+    }
+
+    .gz-dropdown-tab {
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 0.9em;
+      color: rgba(255, 255, 255, 0.7);
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s ease;
+      margin-bottom: -1px;
+    }
+
+    .gz-dropdown-tab:hover {
+      color: rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .gz-dropdown-tab.active {
+      color: #76dba6;
+      border-bottom-color: #76dba6;
+    }
+
+    .gz-dropdown-panel {
+      display: none;
+    }
+
+    .gz-dropdown-panel.active {
+      display: block;
+    }
+
+    .gz-dropdown-description {
+      font-size: 0.9em;
+      line-height: 1.5;
+      color: rgba(255, 255, 255, 0.85);
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .gz-dropdown-description:empty::after {
+      content: 'No description available.';
+      color: rgba(255, 255, 255, 0.5);
+      font-style: italic;
+    }
+
+    .gz-dropdown-filelist {
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .gz-dropdown-filelist table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85em;
+    }
+
+    .gz-dropdown-filelist th,
+    .gz-dropdown-filelist td {
+      padding: 6px 10px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .gz-dropdown-filelist th {
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 600;
+    }
+
+    .gz-dropdown-filelist td:last-child {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .gz-dropdown-mediainfo {
+      max-height: 600px;
+      overflow: auto;
+    }
+
+    .gz-dropdown-mediainfo pre {
+      margin: 0;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
+      font-size: 0.8em;
+      font-family: 'Monaco', 'Consolas', monospace;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .gz-dropdown-loading {
+      text-align: center;
+      padding: 20px;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .gz-dropdown-error {
+      text-align: center;
+      padding: 20px;
+      color: #db7676;
+    }
+
+    .gz-torrent-table .torrent-name-link.gz-clickable {
+      cursor: pointer;
+    }
+
+    .gz-torrent-table .torrent-name-link.gz-clickable:hover {
+      text-decoration: underline;
+    }
+
+    /* BBCode Styles */
+    .gz-bbcode-img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+      margin: 4px 0;
+    }
+
+    .gz-bbcode-quote {
+      margin: 8px 0;
+      padding: 10px 14px;
+      border-left: 3px solid rgba(118, 219, 166, 0.6);
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 0 4px 4px 0;
+    }
+
+    .gz-bbcode-quote cite {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .gz-bbcode-code {
+      margin: 8px 0;
+      padding: 10px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 4px;
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 0.85em;
+      overflow-x: auto;
+    }
+
+    .gz-bbcode-spoiler,
+    .gz-bbcode-comparison {
+      margin: 8px 0;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+    }
+
+    .gz-bbcode-spoiler summary,
+    .gz-bbcode-comparison summary {
+      padding: 8px 12px;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.03);
+      font-weight: 500;
+    }
+
+    .gz-bbcode-spoiler[open] summary,
+    .gz-bbcode-comparison[open] summary {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .gz-bbcode-spoiler-content {
+      padding: 10px 12px;
+    }
+
+    .gz-bbcode-note {
+      margin: 10px 0;
+      padding: 12px 16px;
+      background: rgba(118, 219, 166, 0.08);
+      border: 1px solid rgba(118, 219, 166, 0.3);
+      border-radius: 6px;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .gz-bbcode-alert {
+      margin: 10px 0;
+      padding: 12px 16px;
+      background: rgba(219, 118, 118, 0.08);
+      border: 1px solid rgba(219, 118, 118, 0.3);
+      border-radius: 6px;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .gz-bbcode-list {
+      margin: 8px 0;
+      padding-left: 24px;
+      list-style-type: disc;
+    }
+
+    .gz-bbcode-list li {
+      margin: 4px 0;
+      padding-left: 4px;
+    }
+
+    /* File List Tree Styles */
+    .gz-filelist-root-info {
+      margin-bottom: 10px;
+      padding: 8px 12px;
+      background: rgba(118, 219, 166, 0.06);
+      border-radius: 4px;
+      font-size: 0.9em;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .gz-filelist-root-info strong {
+      color: rgba(118, 219, 166, 0.9);
+    }
+
+    .gz-filelist-folder-row {
+      cursor: pointer;
+    }
+
+    .gz-filelist-folder-row:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .gz-folder-toggle {
+      display: inline-block;
+      width: 12px;
+      margin-right: 4px;
+      font-size: 0.8em;
+      color: rgba(255, 255, 255, 0.6);
+      transition: transform 0.15s ease;
+    }
+
+    .gz-folder-icon {
+      margin-right: 6px;
+    }
+
+    .gz-folder-name {
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.95);
+    }
+
+    .gz-folder-count {
+      font-weight: 400;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 0.9em;
+      margin-left: 6px;
+    }
+
+    .gz-filelist-file-row td:first-child {
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .gz-tree-indent {
+      display: inline-block !important;
+      flex-shrink: 0;
+      height: 1em;
+      vertical-align: middle;
+    }
+
+    /* MediaInfo Summary Styles */
+    .gz-mediainfo-summary {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+
+    .gz-mediainfo-section {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .gz-mediainfo-label {
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.7);
+      min-width: 80px;
+      flex-shrink: 0;
+    }
+
+    .gz-mediainfo-value {
+      color: rgba(255, 255, 255, 0.9);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .gz-mediainfo-raw-container {
+      margin-top: 8px;
+    }
+
+    .gz-mediainfo-raw-container summary {
+      cursor: pointer;
+      color: rgba(118, 219, 166, 0.9);
+      font-size: 0.85em;
+      padding: 6px 0;
+    }
+
+    .gz-mediainfo-raw-container summary:hover {
+      text-decoration: underline;
+    }
+
+    .gz-mediainfo-raw {
+      margin-top: 8px;
+      max-height: 300px;
+      overflow: auto;
     }
   `;
 
@@ -795,15 +1182,7 @@
     { regex: /\bDCP\b/i, value: 'DCP' },
   ];
 
-
-
   const AUDIO_CHANNEL_PATTERN = /\b(?:1\.0|2\.0|2\.1|3\.0|3\.1|4\.0|4\.1|5\.0|5\.1|6\.1|7\.1)\b/i;
-
-
-
-
-
-
 
   const AUDIO_CODEC_PATTERNS = [
     { regex: /\bDTS-?HD\s*MA\b/i, value: 'DTS-HD MA' },
@@ -1390,6 +1769,730 @@
     });
   };
 
+  // =====================
+  // Torrent Dropdown Feature
+  // =====================
+
+  // Cache for fetched torrent data
+  let torrentDataCache = null;
+  let torrentDataPromise = null;
+
+  // Extract TMDB ID from the page
+  const getTmdbIdFromPage = () => {
+    const tmdbLink = document.querySelector('li.meta__tmdb > a.meta-id-tag');
+    if (tmdbLink && tmdbLink.title) {
+      const match = tmdbLink.title.match(/:\s*(\d+)/);
+      if (match) return parseInt(match[1], 10);
+    }
+    return null;
+  };
+
+  // Fetch all torrents for a given TMDB ID
+  const fetchTorrentsByTmdb = async (tmdbId) => {
+    if (torrentDataCache) return torrentDataCache;
+    if (torrentDataPromise) return torrentDataPromise;
+
+    if (!AITHER_API_KEY || AITHER_API_KEY === 'YOUR_API_KEY_HERE') {
+      console.warn('GAZELL3D: Aither API key not configured');
+      return null;
+    }
+
+    torrentDataPromise = (async () => {
+      try {
+        const response = await gmFetchJson(
+          `https://aither.cc/api/torrents/filter?perPage=100&tmdbId=${tmdbId}`,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${AITHER_API_KEY}`
+            }
+          }
+        );
+
+        if (!response || !response.data) {
+          console.warn('GAZELL3D: Empty API response');
+          return null;
+        }
+
+        // Build a map of torrent ID -> torrent data
+        const dataMap = new Map();
+        response.data.forEach(torrent => {
+          dataMap.set(torrent.id, torrent.attributes);
+        });
+        torrentDataCache = dataMap;
+        return dataMap;
+      } catch (err) {
+        console.error('GAZELL3D: Failed to fetch torrent data', err);
+        return null;
+      }
+    })();
+
+    return torrentDataPromise;
+  };
+
+  // Format bytes to human readable
+  const formatBytes = (bytes, decimals = 2) => {
+    if (!bytes || bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+  };
+
+  // Format date string
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'Unknown';
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // BBCode parser - converts common BBCode to HTML
+  const parseBBCode = (text) => {
+    if (!text) return '';
+    let html = text;
+
+    // Escape HTML first to prevent XSS
+    html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    // Process tags multiple times to handle nesting
+    const processTags = (input) => {
+      let result = input;
+      let prevResult;
+
+      // Keep processing until no more changes (handles nested tags)
+      do {
+        prevResult = result;
+
+        // Images with size: [img=width]url[/img]
+        result = result.replace(/\[img=(\d+)\](.*?)\[\/img\]/gi, '<img src="$2" class="gz-bbcode-img" style="max-width: $1px;" loading="lazy" alt="Screenshot" />');
+
+        // Images: [img]url[/img]
+        result = result.replace(/\[img\](.*?)\[\/img\]/gi, '<img src="$1" class="gz-bbcode-img" loading="lazy" alt="Screenshot" />');
+
+        // URLs with images inside: [url=link][img...]...[/img][/url]
+        result = result.replace(/\[url=([^\]]*)\](<img[^>]*>)\[\/url\]/gi, '<a href="$1" target="_blank" rel="noopener">$2</a>');
+
+        // URLs: [url=link]text[/url]
+        result = result.replace(/\[url=([^\]]*)\]([\s\S]*?)\[\/url\]/gi, '<a href="$1" target="_blank" rel="noopener">$2</a>');
+
+        // URLs: [url]link[/url]
+        result = result.replace(/\[url\](.*?)\[\/url\]/gi, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+
+        // Bold, italic, underline, strikethrough
+        result = result.replace(/\[b\]([\s\S]*?)\[\/b\]/gi, '<strong>$1</strong>');
+        result = result.replace(/\[i\]([\s\S]*?)\[\/i\]/gi, '<em>$1</em>');
+        result = result.replace(/\[u\]([\s\S]*?)\[\/u\]/gi, '<u>$1</u>');
+        result = result.replace(/\[s\]([\s\S]*?)\[\/s\]/gi, '<s>$1</s>');
+
+        // Size: [size=N]text[/size]
+        result = result.replace(/\[size=(\d+)\]([\s\S]*?)\[\/size\]/gi, '<span style="font-size: $1px;">$2</span>');
+
+        // Color: [color=X]text[/color]
+        result = result.replace(/\[color=([#\w]+)\]([\s\S]*?)\[\/color\]/gi, '<span style="color: $1;">$2</span>');
+
+        // Center, left, right alignment
+        result = result.replace(/\[center\]([\s\S]*?)\[\/center\]/gi, '<div style="text-align: center;">$1</div>');
+        result = result.replace(/\[left\]([\s\S]*?)\[\/left\]/gi, '<div style="text-align: left;">$1</div>');
+        result = result.replace(/\[right\]([\s\S]*?)\[\/right\]/gi, '<div style="text-align: right;">$1</div>');
+
+        // Note: [note]text[/note]
+        result = result.replace(/\[note\]([\s\S]*?)\[\/note\]/gi, '<div class="gz-bbcode-note">$1</div>');
+
+        // Alert: [alert]text[/alert]
+        result = result.replace(/\[alert\]([\s\S]*?)\[\/alert\]/gi, '<div class="gz-bbcode-alert">$1</div>');
+
+        // Quote: [quote=author]text[/quote] and [quote]text[/quote]
+        result = result.replace(/\[quote=([^\]]*)\]([\s\S]*?)\[\/quote\]/gi, '<blockquote class="gz-bbcode-quote"><cite>$1</cite>$2</blockquote>');
+        result = result.replace(/\[quote\]([\s\S]*?)\[\/quote\]/gi, '<blockquote class="gz-bbcode-quote">$1</blockquote>');
+
+        // Code: [code]text[/code]
+        result = result.replace(/\[code\]([\s\S]*?)\[\/code\]/gi, '<pre class="gz-bbcode-code">$1</pre>');
+
+        // Spoiler: [spoiler=title]text[/spoiler] and [spoiler]text[/spoiler]
+        result = result.replace(/\[spoiler=([^\]]*)\]([\s\S]*?)\[\/spoiler\]/gi, '<details class="gz-bbcode-spoiler"><summary>$1</summary><div class="gz-bbcode-spoiler-content">$2</div></details>');
+        result = result.replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi, '<details class="gz-bbcode-spoiler"><summary>Spoiler</summary><div class="gz-bbcode-spoiler-content">$1</div></details>');
+
+        // Hide: [hide]text[/hide]
+        result = result.replace(/\[hide\]([\s\S]*?)\[\/hide\]/gi, '<details class="gz-bbcode-spoiler"><summary>Hidden Content</summary><div class="gz-bbcode-spoiler-content">$1</div></details>');
+
+        // Comparison: [comparison=title]...[/comparison]
+        result = result.replace(/\[comparison=([^\]]*)\]([\s\S]*?)\[\/comparison\]/gi, '<details class="gz-bbcode-comparison"><summary>$1</summary><div class="gz-bbcode-spoiler-content">$2</div></details>');
+
+      } while (result !== prevResult);
+
+      return result;
+    };
+
+    html = processTags(html);
+
+    // Lists: [list] and [*] - handle after other tags
+    // First convert [*] items
+    html = html.replace(/\[\*\]\s*/g, '<li>');
+    // Then wrap [list]...[/list] content
+    html = html.replace(/\[list\]([\s\S]*?)\[\/list\]/gi, '<ul class="gz-bbcode-list">$1</ul>');
+    // Close unclosed <li> tags (simple approach - add closing before next <li> or </ul>)
+    html = html.replace(/<li>([\s\S]*?)(?=<li>|<\/ul>)/gi, '<li>$1</li>');
+
+    // Line breaks - but not inside pre/code blocks
+    // Simple approach: convert \n to <br> 
+    html = html.replace(/\n/g, '<br>');
+
+    // Clean up excessive <br> after block elements
+    html = html.replace(/(<\/div>)<br>/gi, '$1');
+    html = html.replace(/(<\/ul>)<br>/gi, '$1');
+    html = html.replace(/(<\/li>)<br>/gi, '$1');
+    html = html.replace(/(<\/details>)<br>/gi, '$1');
+    html = html.replace(/(<\/blockquote>)<br>/gi, '$1');
+    html = html.replace(/<br>(<\/)/gi, '$1');
+
+    return html;
+  };
+
+  // MediaInfo parser - extracts key info into a summary
+  const parseMediaInfo = (raw) => {
+    if (!raw) return { summary: null, raw: '' };
+
+    const lines = raw.split('\n');
+    const info = {
+      format: '',
+      duration: '',
+      fileSize: '',
+      video: [],
+      audio: [],
+      subtitles: []
+    };
+
+    let currentSection = '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      // Detect section headers
+      if (trimmed === 'General' || trimmed.startsWith('General')) {
+        currentSection = 'general';
+      } else if (trimmed === 'Video' || trimmed.startsWith('Video')) {
+        currentSection = 'video';
+        info.video.push({});
+      } else if (trimmed === 'Audio' || trimmed.startsWith('Audio')) {
+        currentSection = 'audio';
+        info.audio.push({});
+      } else if (trimmed === 'Text' || trimmed.startsWith('Text')) {
+        currentSection = 'text';
+        info.subtitles.push({});
+      } else if (trimmed.includes(':')) {
+        const [key, ...valueParts] = trimmed.split(':');
+        const value = valueParts.join(':').trim();
+        const keyLower = key.trim().toLowerCase();
+
+        if (currentSection === 'general') {
+          if (keyLower === 'format') info.format = value;
+          if (keyLower === 'duration') info.duration = value;
+          if (keyLower === 'file size') info.fileSize = value;
+        } else if (currentSection === 'video' && info.video.length > 0) {
+          const v = info.video[info.video.length - 1];
+          if (keyLower === 'format') v.format = value;
+          if (keyLower === 'width') v.width = value;
+          if (keyLower === 'height') v.height = value;
+          if (keyLower === 'bit depth') v.bitDepth = value;
+          if (keyLower === 'frame rate') v.frameRate = value;
+          if (keyLower === 'hdr format') v.hdr = value;
+        } else if (currentSection === 'audio' && info.audio.length > 0) {
+          const a = info.audio[info.audio.length - 1];
+          if (keyLower === 'format') a.format = value;
+          if (keyLower === 'commercial name') a.name = value;
+          if (keyLower === 'channel(s)') a.channels = value;
+          if (keyLower === 'language') a.language = value;
+          if (keyLower === 'bit rate') a.bitrate = value;
+        } else if (currentSection === 'text' && info.subtitles.length > 0) {
+          const s = info.subtitles[info.subtitles.length - 1];
+          if (keyLower === 'format') s.format = value;
+          if (keyLower === 'language') s.language = value;
+          if (keyLower === 'title') s.title = value;
+        }
+      }
+    }
+
+    return { summary: info, raw };
+  };
+
+  // BDInfo parser - handles BDInfo format which is different from MediaInfo
+  const parseBDInfo = (raw) => {
+    if (!raw) return { summary: null, raw: '' };
+
+    const lines = raw.split('\n');
+    const info = {
+      discTitle: '',
+      discLabel: '',
+      discSize: '',
+      length: '',
+      totalBitrate: '',
+      video: [],
+      audio: [],
+      subtitles: []
+    };
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      // Parse key: value lines
+      if (trimmed.includes(':')) {
+        const colonIdx = trimmed.indexOf(':');
+        const key = trimmed.substring(0, colonIdx).trim().toLowerCase();
+        const value = trimmed.substring(colonIdx + 1).trim();
+
+        if (key === 'disc title') info.discTitle = value;
+        else if (key === 'disc label') info.discLabel = value;
+        else if (key === 'disc size') info.discSize = value;
+        else if (key === 'length') info.length = value;
+        else if (key === 'total bitrate') info.totalBitrate = value;
+        else if (key === 'video') {
+          // Video: MPEG-4 AVC Video / 35949 kbps / 1080p / 23.976 fps / 16:9 / High Profile 4.1
+          const parts = value.split('/').map(p => p.trim());
+          info.video.push({
+            format: parts[0] || '',
+            bitrate: parts[1] || '',
+            resolution: parts[2] || '',
+            frameRate: parts[3] || '',
+            aspectRatio: parts[4] || '',
+            profile: parts[5] || ''
+          });
+        } else if (key === 'audio') {
+          // Audio: Japanese / LPCM Audio / 2.0 / 48 kHz / 2304 kbps / 24-bit
+          const parts = value.split('/').map(p => p.trim());
+          info.audio.push({
+            language: parts[0] || '',
+            format: parts[1] || '',
+            channels: parts[2] || '',
+            sampleRate: parts[3] || '',
+            bitrate: parts[4] || '',
+            bitDepth: parts[5] || ''
+          });
+        } else if (key === 'subtitle') {
+          // Subtitle: English / 50.053 kbps
+          const parts = value.split('/').map(p => p.trim());
+          info.subtitles.push({
+            language: parts[0] || '',
+            bitrate: parts[1] || ''
+          });
+        }
+      }
+    }
+
+    return { summary: info, raw };
+  };
+
+  // Render BDInfo summary as HTML
+  const renderBDInfoSummary = (info) => {
+    const container = create('div', 'gz-mediainfo-summary');
+
+    // General info
+    if (info.discTitle || info.length || info.totalBitrate) {
+      const general = create('div', 'gz-mediainfo-section');
+      let details = [];
+      if (info.discTitle) details.push(info.discTitle);
+      if (info.length) details.push(info.length);
+      if (info.totalBitrate) details.push(info.totalBitrate);
+      general.innerHTML = `
+        <div class="gz-mediainfo-label">Disc</div>
+        <div class="gz-mediainfo-value">${details.join(' • ')}</div>
+      `;
+      container.appendChild(general);
+    }
+
+    // Video
+    if (info.video.length > 0) {
+      info.video.forEach((v, i) => {
+        const videoDiv = create('div', 'gz-mediainfo-section');
+        const details = [v.format, v.resolution, v.frameRate, v.bitrate].filter(Boolean).join(' • ');
+        videoDiv.innerHTML = `
+          <div class="gz-mediainfo-label">Video${info.video.length > 1 ? ` #${i + 1}` : ''}</div>
+          <div class="gz-mediainfo-value">${details || 'Unknown'}</div>
+        `;
+        container.appendChild(videoDiv);
+      });
+    }
+
+    // Audio
+    if (info.audio.length > 0) {
+      info.audio.forEach((a, i) => {
+        const audioDiv = create('div', 'gz-mediainfo-section');
+        const details = [a.language, a.format, a.channels, a.bitrate].filter(Boolean).join(' • ');
+        audioDiv.innerHTML = `
+          <div class="gz-mediainfo-label">Audio${info.audio.length > 1 ? ` #${i + 1}` : ''}</div>
+          <div class="gz-mediainfo-value">${details || 'Unknown'}</div>
+        `;
+        container.appendChild(audioDiv);
+      });
+    }
+
+    // Subtitles
+    if (info.subtitles.length > 0) {
+      const subDiv = create('div', 'gz-mediainfo-section');
+      const subList = info.subtitles.map(s => s.language || 'Unknown').join(', ');
+      subDiv.innerHTML = `
+        <div class="gz-mediainfo-label">Subtitles (${info.subtitles.length})</div>
+        <div class="gz-mediainfo-value">${subList}</div>
+      `;
+      container.appendChild(subDiv);
+    }
+
+    return container;
+  };
+
+  // Render parsed MediaInfo as HTML
+  const renderMediaInfoSummary = (info) => {
+    const container = create('div', 'gz-mediainfo-summary');
+
+    // General info
+    if (info.format || info.duration || info.fileSize) {
+      const general = create('div', 'gz-mediainfo-section');
+      general.innerHTML = `
+        <div class="gz-mediainfo-label">General</div>
+        <div class="gz-mediainfo-value">
+          ${info.format ? `<span>${info.format}</span>` : ''}
+          ${info.duration ? `<span>• ${info.duration}</span>` : ''}
+          ${info.fileSize ? `<span>• ${info.fileSize}</span>` : ''}
+        </div>
+      `;
+      container.appendChild(general);
+    }
+
+    // Video
+    if (info.video.length > 0) {
+      info.video.forEach((v, i) => {
+        const videoDiv = create('div', 'gz-mediainfo-section');
+        const res = v.width && v.height ? `${v.width} × ${v.height}` : '';
+        const details = [v.format, res, v.bitDepth, v.frameRate, v.hdr].filter(Boolean).join(' • ');
+        videoDiv.innerHTML = `
+          <div class="gz-mediainfo-label">Video${info.video.length > 1 ? ` #${i + 1}` : ''}</div>
+          <div class="gz-mediainfo-value">${details || 'Unknown'}</div>
+        `;
+        container.appendChild(videoDiv);
+      });
+    }
+
+    // Audio
+    if (info.audio.length > 0) {
+      info.audio.forEach((a, i) => {
+        const audioDiv = create('div', 'gz-mediainfo-section');
+        const name = a.name || a.format || 'Unknown';
+        const details = [name, a.channels, a.language, a.bitrate].filter(Boolean).join(' • ');
+        audioDiv.innerHTML = `
+          <div class="gz-mediainfo-label">Audio${info.audio.length > 1 ? ` #${i + 1}` : ''}</div>
+          <div class="gz-mediainfo-value">${details}</div>
+        `;
+        container.appendChild(audioDiv);
+      });
+    }
+
+    // Subtitles
+    if (info.subtitles.length > 0) {
+      const subDiv = create('div', 'gz-mediainfo-section');
+      const subList = info.subtitles.map(s => {
+        const parts = [s.language, s.title, s.format].filter(Boolean);
+        return parts.length > 0 ? parts.join(' ') : 'Unknown';
+      }).join(', ');
+      subDiv.innerHTML = `
+        <div class="gz-mediainfo-label">Subtitles (${info.subtitles.length})</div>
+        <div class="gz-mediainfo-value">${subList}</div>
+      `;
+      container.appendChild(subDiv);
+    }
+
+    return container;
+  };
+
+  // Render the dropdown content for a torrent
+  const renderTorrentDropdown = (torrentData, colSpan) => {
+    const container = create('div', 'gz-dropdown-container');
+
+    // Header: Uploaded by X on Date
+    const header = create('div', 'gz-dropdown-header');
+    const uploader = torrentData.uploader || 'Anonymous';
+    const uploadDate = formatDate(torrentData.created_at);
+    header.innerHTML = `Uploaded by <strong>${uploader}</strong> on <span>${uploadDate}</span>`;
+    container.appendChild(header);
+
+    // Tabs
+    const tabs = create('div', 'gz-dropdown-tabs');
+    const panels = create('div', 'gz-dropdown-panels');
+
+    // Determine which tabs to show
+    const tabsConfig = [
+      { id: 'description', label: 'Description', hasContent: true },
+      { id: 'filelist', label: 'File List', hasContent: torrentData.files && torrentData.files.length > 0 }
+    ];
+
+    // Mediainfo / Bdinfo - show whichever is not empty, prefer mediainfo if both exist
+    const hasMediainfo = torrentData.media_info && torrentData.media_info.trim();
+    const hasBdinfo = torrentData.bd_info && torrentData.bd_info.trim();
+    if (hasMediainfo) {
+      tabsConfig.push({ id: 'mediainfo', label: 'Mediainfo', hasContent: true, content: torrentData.media_info });
+    } else if (hasBdinfo) {
+      tabsConfig.push({ id: 'bdinfo', label: 'Bdinfo', hasContent: true, content: torrentData.bd_info });
+    }
+
+    // Create tabs and panels
+    tabsConfig.forEach((config, index) => {
+      if (!config.hasContent && config.id !== 'description') return;
+
+      const tab = create('button', 'gz-dropdown-tab');
+      tab.textContent = config.label;
+      tab.dataset.tab = config.id;
+      if (index === 0) tab.classList.add('active');
+
+      const panel = create('div', 'gz-dropdown-panel');
+      panel.dataset.panel = config.id;
+      if (index === 0) panel.classList.add('active');
+
+      // Populate panel content
+      if (config.id === 'description') {
+        panel.classList.add('gz-dropdown-description');
+        panel.innerHTML = parseBBCode(torrentData.description || '');
+      } else if (config.id === 'filelist') {
+        panel.classList.add('gz-dropdown-filelist');
+
+        // Show root folder name if available
+        if (torrentData.folder) {
+          const folderInfo = create('div', 'gz-filelist-root-info');
+          folderInfo.innerHTML = `<strong>Folder:</strong> ${torrentData.folder}`;
+          panel.appendChild(folderInfo);
+        }
+
+        // Natural sort function
+        const naturalSort = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+
+        // Build a nested tree structure
+        const buildTree = (files) => {
+          const root = { folders: {}, files: [] };
+
+          files.forEach(file => {
+            const filePath = file.name || file;
+            const parts = filePath.split('/');
+            let current = root;
+
+            // Navigate/create folder structure
+            for (let i = 0; i < parts.length - 1; i++) {
+              const folderName = parts[i];
+              if (!current.folders[folderName]) {
+                current.folders[folderName] = { folders: {}, files: [] };
+              }
+              current = current.folders[folderName];
+            }
+
+            // Add file to the deepest folder
+            current.files.push({
+              name: parts[parts.length - 1],
+              size: file.size
+            });
+          });
+
+          return root;
+        };
+
+        // Count all files recursively in a folder
+        const countFiles = (node) => {
+          let count = node.files.length;
+          Object.values(node.folders).forEach(subfolder => {
+            count += countFiles(subfolder);
+          });
+          return count;
+        };
+
+        // Recursively render the tree
+        let folderIdCounter = 0;
+        const renderTree = (node, depth = 0, parentId = null) => {
+          const rows = [];
+          const indentPx = depth * 28; // Indentation in pixels (bigger for visibility)
+
+          // Get sorted folder names and file names
+          const folderNames = Object.keys(node.folders).sort(naturalSort);
+          const sortedFiles = [...node.files].sort((a, b) => naturalSort(a.name, b.name));
+
+          // Render folders first
+          folderNames.forEach(folderName => {
+            const folder = node.folders[folderName];
+            const fileCount = countFiles(folder);
+            const folderId = `f${++folderIdCounter}`;
+            const isHidden = parentId !== null;
+
+            // Folder row (clickable)
+            rows.push(`
+              <tr class="gz-filelist-folder-row" data-folder-id="${folderId}" ${parentId ? `data-parent="${parentId}"` : ''} data-depth="${depth}" ${isHidden ? 'style="display:none;"' : ''}>
+                <td>
+                  <span class="gz-tree-indent" style="display:inline-block; width:${indentPx}px; min-width:${indentPx}px;"></span>
+                  <span class="gz-folder-toggle">▶</span>
+                  <span class="gz-folder-icon">📁</span>
+                  <span class="gz-folder-name">${folderName}</span>
+                  <span class="gz-folder-count">(${fileCount} files)</span>
+                </td>
+                <td></td>
+              </tr>
+            `);
+
+            // Nested content (all have this folder as parent)
+            const nestedRows = renderTree(folder, depth + 1, folderId);
+            rows.push(...nestedRows);
+          });
+
+          // Render files
+          sortedFiles.forEach(file => {
+            const isHidden = parentId !== null;
+
+            rows.push(`
+              <tr class="gz-filelist-file-row" ${parentId ? `data-parent="${parentId}"` : ''} data-depth="${depth}" ${isHidden ? 'style="display:none;"' : ''}>
+                <td>
+                  <span class="gz-tree-indent" style="display:inline-block; width:${indentPx}px; min-width:${indentPx}px;"></span>
+                  ${file.name}
+                </td>
+                <td>${file.size ? formatBytes(file.size) : ''}</td>
+              </tr>
+            `);
+          });
+
+          return rows;
+        };
+
+        const files = torrentData.files || [];
+        const tree = buildTree(files);
+        const treeRows = renderTree(tree);
+
+        const table = create('table');
+        table.innerHTML = `
+          <thead>
+            <tr>
+              <th>File Name</th>
+              <th>Size</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${treeRows.join('')}
+          </tbody>
+        `;
+
+        // Add click handlers for folder expansion
+        table.addEventListener('click', (e) => {
+          const folderRow = e.target.closest('.gz-filelist-folder-row');
+          if (!folderRow) return;
+
+          e.stopPropagation();
+
+          const folderId = folderRow.dataset.folderId;
+          const toggle = folderRow.querySelector('.gz-folder-toggle');
+          const isExpanded = toggle.textContent === '▼';
+
+          if (isExpanded) {
+            // Collapse: hide all nested rows recursively
+            const hideRecursive = (parentId) => {
+              table.querySelectorAll(`tr[data-parent="${parentId}"]`).forEach(row => {
+                row.style.display = 'none';
+                // Also collapse any expanded subfolders
+                if (row.classList.contains('gz-filelist-folder-row')) {
+                  const nestedToggle = row.querySelector('.gz-folder-toggle');
+                  if (nestedToggle) nestedToggle.textContent = '▶';
+                  hideRecursive(row.dataset.folderId);
+                }
+              });
+            };
+            hideRecursive(folderId);
+            toggle.textContent = '▶';
+          } else {
+            // Expand: show direct children only
+            table.querySelectorAll(`tr[data-parent="${folderId}"]`).forEach(row => {
+              row.style.display = '';
+            });
+            toggle.textContent = '▼';
+          }
+        });
+
+        // Debug: Log tree structure
+        const allRows = table.querySelectorAll('tbody tr');
+        const hiddenRows = Array.from(allRows).filter(r => r.style.display === 'none');
+        console.log('GAZELL3D: File tree rendered. Total rows:', allRows.length, 'Hidden:', hiddenRows.length);
+
+        panel.appendChild(table);
+      } else if (config.id === 'mediainfo' || config.id === 'bdinfo') {
+        panel.classList.add('gz-dropdown-mediainfo');
+
+        // Parse and display summary based on type
+        if (config.id === 'bdinfo') {
+          const parsed = parseBDInfo(config.content);
+          if (parsed.summary) {
+            panel.appendChild(renderBDInfoSummary(parsed.summary));
+          }
+        } else {
+          const parsed = parseMediaInfo(config.content);
+          if (parsed.summary) {
+            panel.appendChild(renderMediaInfoSummary(parsed.summary));
+          }
+        }
+
+        // Add expandable raw content
+        const details = create('details', 'gz-mediainfo-raw-container');
+        const summary = create('summary');
+        summary.textContent = config.id === 'bdinfo' ? 'Show Full BDInfo' : 'Show Full MediaInfo';
+        details.appendChild(summary);
+
+        const pre = create('pre', 'gz-mediainfo-raw');
+        pre.textContent = config.content;
+        details.appendChild(pre);
+
+        panel.appendChild(details);
+      }
+
+      tab.addEventListener('click', () => {
+        // Remove active from all tabs and panels
+        tabs.querySelectorAll('.gz-dropdown-tab').forEach(t => t.classList.remove('active'));
+        panels.querySelectorAll('.gz-dropdown-panel').forEach(p => p.classList.remove('active'));
+        // Add active to clicked tab and corresponding panel
+        tab.classList.add('active');
+        panel.classList.add('active');
+      });
+
+      tabs.appendChild(tab);
+      panels.appendChild(panel);
+    });
+
+    container.appendChild(tabs);
+    container.appendChild(panels);
+
+    return container;
+  };
+
+  // Create a loading dropdown row
+  const createLoadingDropdownRow = (colSpan) => {
+    const dropdownRow = create('tr', 'gz-dropdown-row');
+    const td = create('td');
+    td.setAttribute('colspan', colSpan);
+    td.innerHTML = '<div class="gz-dropdown-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+    dropdownRow.appendChild(td);
+    return dropdownRow;
+  };
+
+  // Create an error dropdown row
+  const createErrorDropdownRow = (colSpan, message) => {
+    const dropdownRow = create('tr', 'gz-dropdown-row');
+    const td = create('td');
+    td.setAttribute('colspan', colSpan);
+    td.innerHTML = `<div class="gz-dropdown-error">${message}</div>`;
+    dropdownRow.appendChild(td);
+    return dropdownRow;
+  };
+
   const gazellifyTorrentLayout = (article) => {
     const section = $(SELECTORS.torrentGroup, article);
     if (!section) return;
@@ -1515,6 +2618,63 @@
         const newLink = nameLink.cloneNode(true);
         newLink.className = 'torrent-name-link';
 
+        // Extract torrent ID from URL for dropdown feature
+        const torrentUrl = nameLink.href || '';
+        const torrentIdMatch = torrentUrl.match(/\/torrents\/(\d+)/);
+        const torrentId = torrentIdMatch ? torrentIdMatch[1] : null;
+
+        // Add dropdown functionality if enabled
+        if (CONFIG.enableTorrentDropdowns && torrentId) {
+          newLink.classList.add('gz-clickable');
+          newLink.dataset.torrentId = torrentId;
+
+          newLink.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const colSpan = CONFIG.enableGazelleButtons ? 7 : 6;
+            const existingDropdown = newRow.nextElementSibling;
+
+            // Toggle existing dropdown
+            if (existingDropdown && existingDropdown.classList.contains('gz-dropdown-row')) {
+              existingDropdown.remove();
+              return;
+            }
+
+            // Create loading state
+            const loadingRow = createLoadingDropdownRow(colSpan);
+            newRow.insertAdjacentElement('afterend', loadingRow);
+
+            // Fetch torrent data
+            const tmdbId = getTmdbIdFromPage();
+            if (!tmdbId) {
+              loadingRow.replaceWith(createErrorDropdownRow(colSpan, 'Could not detect TMDB ID'));
+              return;
+            }
+
+            const torrentDataMap = await fetchTorrentsByTmdb(tmdbId);
+            if (!torrentDataMap) {
+              loadingRow.replaceWith(createErrorDropdownRow(colSpan, 'Failed to fetch torrent data. Check API key.'));
+              return;
+            }
+
+            const torrentData = torrentDataMap.get(torrentId);
+            if (!torrentData) {
+              loadingRow.replaceWith(createErrorDropdownRow(colSpan, 'Torrent data not found in API response'));
+              return;
+            }
+
+            // Render dropdown
+            const dropdownRow = create('tr', 'gz-dropdown-row');
+            const td = create('td');
+            td.setAttribute('colspan', colSpan);
+            td.appendChild(renderTorrentDropdown(torrentData, colSpan));
+            dropdownRow.appendChild(td);
+
+            loadingRow.replaceWith(dropdownRow);
+          });
+        }
+
         // Appending Order: Name then Icons (Icons on the right)
         tdName.appendChild(newLink);
         tdName.appendChild(iconSpan);
@@ -1537,19 +2697,31 @@
             }
           }
 
-          // Bookmark
-          const bookmarkBtn = row.querySelector('.torrent-search--grouped__bookmark button');
-          if (bookmarkBtn) {
-            const bmClone = bookmarkBtn.cloneNode(true);
-            bmClone.textContent = 'BM';
-            bmClone.title = 'Bookmark';
-            bmClone.classList.remove('form__button');
-            bmClone.style.background = 'none';
-            bmClone.style.border = 'none';
-            bmClone.style.cursor = 'pointer';
-            bmClone.style.padding = '0';
-            bmClone.style.color = 'inherit';
-            actions.push(bmClone);
+          // Bookmark or Torrent Page link (depending on dropdown mode)
+          if (CONFIG.enableTorrentDropdowns && torrentUrl) {
+            // When dropdowns are enabled, show TP (Torrent Page) link instead of bookmark
+            const tp = create('a');
+            tp.href = torrentUrl;
+            tp.textContent = 'TP';
+            tp.title = 'Torrent Page';
+            tp.target = '_blank';
+            tp.rel = 'noopener';
+            actions.push(tp);
+          } else {
+            // Normal bookmark button
+            const bookmarkBtn = row.querySelector('.torrent-search--grouped__bookmark button');
+            if (bookmarkBtn) {
+              const bmClone = bookmarkBtn.cloneNode(true);
+              bmClone.textContent = 'BM';
+              bmClone.title = 'Bookmark';
+              bmClone.classList.remove('form__button');
+              bmClone.style.background = 'none';
+              bmClone.style.border = 'none';
+              bmClone.style.cursor = 'pointer';
+              bmClone.style.padding = '0';
+              bmClone.style.color = 'inherit';
+              actions.push(bmClone);
+            }
           }
 
           // Download
