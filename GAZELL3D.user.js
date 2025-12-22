@@ -522,6 +522,7 @@
       margin-bottom: 12px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.1);
       padding-bottom: 0;
+      align-items: center;
     }
 
     .gz-dropdown-tab {
@@ -548,10 +549,32 @@
 
     .gz-dropdown-panel {
       display: none;
+      position: relative;
     }
 
     .gz-dropdown-panel.active {
       display: block;
+    }
+
+    .gz-panel-copy-btn {
+      margin-left: auto;
+      padding: 4px 12px;
+      font-size: 0.85em;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      color: rgba(255, 255, 255, 0.5);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .gz-panel-copy-btn:hover {
+      color: rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .gz-panel-copy-btn.copied {
+      color: #76dba6;
     }
 
     .gz-dropdown-description {
@@ -571,6 +594,11 @@
     .gz-dropdown-filelist {
       max-height: 500px;
       overflow-y: auto;
+    }
+
+    .gz-dropdown-mediainfo {
+      max-height: 600px;
+      overflow: auto;
     }
 
     .gz-dropdown-filelist table {
@@ -594,11 +622,6 @@
     .gz-dropdown-filelist td:last-child {
       text-align: right;
       white-space: nowrap;
-    }
-
-    .gz-dropdown-mediainfo {
-      max-height: 600px;
-      overflow: auto;
     }
 
     .gz-dropdown-mediainfo pre {
@@ -720,6 +743,38 @@
       padding-left: 4px;
     }
 
+    /* BBCode Heading Styles */
+    .gz-bbcode-heading {
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.95);
+      margin: 12px 0 8px;
+      line-height: 1.3;
+    }
+
+    .gz-bbcode-h1 {
+      font-size: 1.5em;
+    }
+
+    .gz-bbcode-h2 {
+      font-size: 1.35em;
+    }
+
+    .gz-bbcode-h3 {
+      font-size: 1.2em;
+    }
+
+    .gz-bbcode-h4 {
+      font-size: 1.1em;
+    }
+
+    .gz-bbcode-h5 {
+      font-size: 1em;
+    }
+
+    .gz-bbcode-h6 {
+      font-size: 0.9em;
+    }
+
     /* File List Tree Styles */
     .gz-filelist-root-info {
       margin-bottom: 10px;
@@ -784,7 +839,8 @@
       flex-direction: column;
       gap: 16px;
       padding: 16px;
-      background: rgba(20, 25, 35, 0.6);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 8px;
       margin-bottom: 12px;
       font-size: 0.9em;
@@ -795,8 +851,55 @@
       font-size: 1.05em;
       color: rgba(118, 219, 166, 0.95);
       word-break: break-all;
-      padding-bottom: 12px;
+      padding: 12px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      cursor: pointer;
+      transition: background 0.15s ease;
+      margin: -16px -16px 0 -16px;
+      border-radius: 8px 8px 0 0;
+    }
+
+    .gz-mediainfo-filename:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .gz-mediainfo-filename::before {
+      content: 'Show ';
+      font-weight: 400;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .gz-mediainfo-filename.expanded::before {
+      content: 'Hide ';
+    }
+
+    .gz-mediainfo-raw-inline {
+      display: none;
+      margin: 12px -16px;
+      padding: 12px 16px;
+      background: rgba(0, 0, 0, 0.25);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      max-height: 400px;
+      overflow: auto;
+    }
+
+    .gz-mediainfo-raw-inline.visible {
+      display: block;
+    }
+
+    .gz-mediainfo-raw-inline pre {
+      margin: 0;
+      font-size: 0.8em;
+      font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .gz-mediainfo-summary-content {
+      padding-top: 16px;
     }
 
     .gz-mediainfo-columns {
@@ -842,6 +945,7 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
       color: rgba(255, 255, 255, 0.5);
+      margin-top: 16px;
       margin-bottom: 8px;
     }
 
@@ -2007,6 +2111,15 @@
         // URLs: [url]link[/url]
         result = result.replace(/\[url\](.*?)\[\/url\]/gi, '<a href="$1" target="_blank" rel="noopener">$1</a>');
 
+        // Headings: [h]text[/h] and [h1] through [h6]
+        result = result.replace(/\[h\]([\s\S]*?)\[\/h\]/gi, '<div class="gz-bbcode-heading gz-bbcode-h1">$1</div>');
+        result = result.replace(/\[h1\]([\s\S]*?)\[\/h1\]/gi, '<div class="gz-bbcode-heading gz-bbcode-h1">$1</div>');
+        result = result.replace(/\[h2\]([\s\S]*?)\[\/h2\]/gi, '<div class="gz-bbcode-heading gz-bbcode-h2">$1</div>');
+        result = result.replace(/\[h3\]([\s\S]*?)\[\/h3\]/gi, '<div class="gz-bbcode-heading gz-bbcode-h3">$1</div>');
+        result = result.replace(/\[h4\]([\s\S]*?)\[\/h4\]/gi, '<div class="gz-bbcode-heading gz-bbcode-h4">$1</div>');
+        result = result.replace(/\[h5\]([\s\S]*?)\[\/h5\]/gi, '<div class="gz-bbcode-heading gz-bbcode-h5">$1</div>');
+        result = result.replace(/\[h6\]([\s\S]*?)\[\/h6\]/gi, '<div class="gz-bbcode-heading gz-bbcode-h6">$1</div>');
+
         // Bold, italic, underline, strikethrough
         result = result.replace(/\[b\]([\s\S]*?)\[\/b\]/gi, '<strong>$1</strong>');
         result = result.replace(/\[i\]([\s\S]*?)\[\/i\]/gi, '<em>$1</em>');
@@ -2231,76 +2344,240 @@
     return { summary: info, raw };
   };
 
-  // Render BDInfo summary as HTML
-  const renderBDInfoSummary = (info) => {
+  // Render BDInfo summary as HTML (matches MediaInfo styling)
+  const renderBDInfoSummary = (info, rawContent = '') => {
     const container = create('div', 'gz-mediainfo-summary');
 
-    // General info
-    if (info.discTitle || info.length || info.totalBitrate) {
-      const general = create('div', 'gz-mediainfo-section');
-      let details = [];
-      if (info.discTitle) details.push(info.discTitle);
-      if (info.length) details.push(info.length);
-      if (info.totalBitrate) details.push(info.totalBitrate);
-      general.innerHTML = `
-        <div class="gz-mediainfo-label">Disc</div>
-        <div class="gz-mediainfo-value">${details.join(' • ')}</div>
-      `;
-      container.appendChild(general);
+    // Disc title/label header (clickable to show/hide raw content)
+    const titleStr = info.discTitle || info.discLabel || 'BDInfo';
+
+    const title = create('div', 'gz-mediainfo-filename');
+    title.textContent = titleStr;
+    container.appendChild(title);
+
+    // Raw content section (hidden by default, appears between header and summary)
+    const rawSection = create('div', 'gz-mediainfo-raw-inline');
+    const rawPre = create('pre');
+    rawPre.textContent = rawContent;
+    rawSection.appendChild(rawPre);
+    container.appendChild(rawSection);
+
+    // Click handler to toggle raw content visibility
+    title.addEventListener('click', () => {
+      title.classList.toggle('expanded');
+      rawSection.classList.toggle('visible');
+    });
+
+    // Summary content wrapper
+    const summaryContent = create('div', 'gz-mediainfo-summary-content');
+
+    // Columns container (Disc Info + Video side by side)
+    const hasGeneral = info.discSize || info.length || info.totalBitrate;
+    const hasVideo = info.video.length > 0;
+
+    if (hasGeneral || hasVideo) {
+      const columns = create('div', 'gz-mediainfo-columns');
+
+      // Disc Info column (like General in MediaInfo)
+      if (hasGeneral) {
+        const discCol = create('div', 'gz-mediainfo-column');
+        discCol.innerHTML = `<div class="gz-mediainfo-column-title">Disc Info</div>`;
+
+        if (info.discSize) {
+          discCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Size</span>
+              <span class="gz-mediainfo-row-value">${info.discSize}</span>
+            </div>`;
+        }
+        if (info.length) {
+          discCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Length</span>
+              <span class="gz-mediainfo-row-value">${info.length}</span>
+            </div>`;
+        }
+        if (info.totalBitrate) {
+          discCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Bitrate</span>
+              <span class="gz-mediainfo-row-value">${info.totalBitrate}</span>
+            </div>`;
+        }
+        columns.appendChild(discCol);
+      }
+
+      // Video column
+      if (hasVideo) {
+        const v = info.video[0]; // Use first video track
+        const videoCol = create('div', 'gz-mediainfo-column');
+        videoCol.innerHTML = `<div class="gz-mediainfo-column-title">Video</div>`;
+
+        if (v.format) {
+          videoCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Format</span>
+              <span class="gz-mediainfo-row-value">${v.format}</span>
+            </div>`;
+        }
+        if (v.resolution) {
+          videoCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Resolution</span>
+              <span class="gz-mediainfo-row-value">${v.resolution}</span>
+            </div>`;
+        }
+        if (v.aspectRatio) {
+          videoCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Aspect ratio</span>
+              <span class="gz-mediainfo-row-value">${v.aspectRatio}</span>
+            </div>`;
+        }
+        if (v.frameRate) {
+          videoCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Frame rate</span>
+              <span class="gz-mediainfo-row-value">${v.frameRate}</span>
+            </div>`;
+        }
+        if (v.bitrate) {
+          videoCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Bit rate</span>
+              <span class="gz-mediainfo-row-value">${v.bitrate}</span>
+            </div>`;
+        }
+        if (v.profile) {
+          videoCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Profile</span>
+              <span class="gz-mediainfo-row-value">${v.profile}</span>
+            </div>`;
+        }
+
+        columns.appendChild(videoCol);
+      }
+
+      summaryContent.appendChild(columns);
     }
 
-    // Video
-    if (info.video.length > 0) {
-      info.video.forEach((v, i) => {
-        const videoDiv = create('div', 'gz-mediainfo-section');
-        const details = [v.format, v.resolution, v.frameRate, v.bitrate].filter(Boolean).join(' • ');
-        videoDiv.innerHTML = `
-          <div class="gz-mediainfo-label">Video${info.video.length > 1 ? ` #${i + 1}` : ''}</div>
-          <div class="gz-mediainfo-value">${details || 'Unknown'}</div>
-        `;
-        container.appendChild(videoDiv);
-      });
-    }
-
-    // Audio
+    // Audio section (numbered tracks like MediaInfo)
     if (info.audio.length > 0) {
+      const audioSection = create('div', 'gz-mediainfo-audio-section');
+      audioSection.innerHTML = `<div class="gz-mediainfo-section-title">Audio</div>`;
+
+      const audioList = create('div', 'gz-mediainfo-audio-list');
       info.audio.forEach((a, i) => {
-        const audioDiv = create('div', 'gz-mediainfo-section');
-        const details = [a.language, a.format, a.channels, a.bitrate].filter(Boolean).join(' • ');
-        audioDiv.innerHTML = `
-          <div class="gz-mediainfo-label">Audio${info.audio.length > 1 ? ` #${i + 1}` : ''}</div>
-          <div class="gz-mediainfo-value">${details || 'Unknown'}</div>
+        const audioItem = create('div', 'gz-mediainfo-audio-item');
+        const num = `${i + 1}.`;
+        const lang = a.language || 'Unknown';
+        const format = a.format || 'Unknown';
+
+        // Parse channels to a cleaner format
+        let channels = a.channels || '';
+        const channelMatch = channels.match(/(\d+(?:\.\d+)?)/);
+        if (channelMatch) {
+          channels = `${channelMatch[1]}ch`;
+        }
+
+        // Format bitrate (remove 'kbps' redundancy if needed)
+        const bitrate = a.bitrate || '';
+        const sampleRate = a.sampleRate || '';
+        const bitDepth = a.bitDepth || '';
+
+        // Build the detail string
+        const detailParts = [lang, format, channels, bitrate].filter(Boolean);
+
+        // Add extended info if available
+        const extendedParts = [sampleRate, bitDepth].filter(Boolean);
+        const extendedInfo = extendedParts.length > 0 ? ` (${extendedParts.join(' / ')})` : '';
+
+        audioItem.innerHTML = `
+          <span class="gz-mediainfo-audio-num">${num}</span>
+          <span class="gz-mediainfo-audio-details">${detailParts.join(' / ')}<span class="gz-mediainfo-audio-title">${extendedInfo}</span></span>
         `;
-        container.appendChild(audioDiv);
+        audioList.appendChild(audioItem);
       });
+
+      audioSection.appendChild(audioList);
+      summaryContent.appendChild(audioSection);
     }
 
-    // Subtitles
+    // Subtitles section
     if (info.subtitles.length > 0) {
-      const subDiv = create('div', 'gz-mediainfo-section');
-      const subList = info.subtitles.map(s => s.language || 'Unknown').join(', ');
-      subDiv.innerHTML = `
-        <div class="gz-mediainfo-label">Subtitles (${info.subtitles.length})</div>
-        <div class="gz-mediainfo-value">${subList}</div>
-      `;
-      container.appendChild(subDiv);
+      const subSection = create('div', 'gz-mediainfo-subtitles-section');
+      subSection.innerHTML = `<div class="gz-mediainfo-section-title">Subtitles</div>`;
+
+      const subList = create('div', 'gz-mediainfo-subtitles-list');
+
+      // Group subtitles by language
+      const subtitleMap = new Map();
+      info.subtitles.forEach(s => {
+        const lang = s.language || 'Unknown';
+        const key = lang.toLowerCase();
+        if (!subtitleMap.has(key)) {
+          subtitleMap.set(key, { language: lang, count: 0 });
+        }
+        subtitleMap.get(key).count++;
+      });
+
+      // Render each unique language
+      const uniqueLanguages = Array.from(subtitleMap.values());
+      uniqueLanguages.forEach((sub, index) => {
+        const item = create('span', 'gz-mediainfo-subtitle-item');
+        let text = sub.language;
+
+        // Add count if more than 1
+        if (sub.count > 1) {
+          text += ` (${sub.count})`;
+        }
+
+        // Add separator except for last item
+        if (index < uniqueLanguages.length - 1) {
+          text += ',';
+        }
+
+        item.innerHTML = text;
+        subList.appendChild(item);
+      });
+
+      subSection.appendChild(subList);
+      summaryContent.appendChild(subSection);
     }
 
+    container.appendChild(summaryContent);
     return container;
   };
 
   // Render parsed MediaInfo as HTML
-  const renderMediaInfoSummary = (info) => {
+  const renderMediaInfoSummary = (info, rawContent = '') => {
     const container = create('div', 'gz-mediainfo-summary');
 
-    // Filename header
-    if (info.completeName) {
-      const filename = create('div', 'gz-mediainfo-filename');
-      // Extract just the filename from the path
-      const name = info.completeName.split(/[/\\]/).pop() || info.completeName;
-      filename.textContent = name;
-      container.appendChild(filename);
-    }
+    // Filename header (clickable to show/hide raw content)
+    const filenameStr = info.completeName
+      ? (info.completeName.split(/[/\\]/).pop() || info.completeName)
+      : 'MediaInfo';
+
+    const filename = create('div', 'gz-mediainfo-filename');
+    filename.textContent = filenameStr;
+    container.appendChild(filename);
+
+    // Raw content section (hidden by default, appears between header and summary)
+    const rawSection = create('div', 'gz-mediainfo-raw-inline');
+    const rawPre = create('pre');
+    rawPre.textContent = rawContent;
+    rawSection.appendChild(rawPre);
+    container.appendChild(rawSection);
+
+    // Click handler to toggle raw content visibility
+    filename.addEventListener('click', () => {
+      filename.classList.toggle('expanded');
+      rawSection.classList.toggle('visible');
+    });
+
+    // Summary content wrapper
+    const summaryContent = create('div', 'gz-mediainfo-summary-content');
 
     // Columns container (General + Video side by side)
     const hasGeneral = info.format || info.duration || info.overallBitrate || info.fileSize;
@@ -2404,7 +2681,7 @@
         columns.appendChild(videoCol);
       }
 
-      container.appendChild(columns);
+      summaryContent.appendChild(columns);
     }
 
     // Audio section
@@ -2446,7 +2723,7 @@
       });
 
       audioSection.appendChild(audioList);
-      container.appendChild(audioSection);
+      summaryContent.appendChild(audioSection);
     }
 
     // Subtitles section
@@ -2499,7 +2776,7 @@
       });
 
       subSection.appendChild(subList);
-      container.appendChild(subSection);
+      summaryContent.appendChild(subSection);
     }
 
     // Encode Settings section
@@ -2510,9 +2787,10 @@
       const settingsBlock = create('div', 'gz-mediainfo-encode-settings');
       settingsBlock.textContent = info.encodingSettings;
       encodeSection.appendChild(settingsBlock);
-      container.appendChild(encodeSection);
+      summaryContent.appendChild(encodeSection);
     }
 
+    container.appendChild(summaryContent);
     return container;
   };
 
@@ -2535,16 +2813,16 @@
     // Determine which tabs to show
     const tabsConfig = [
       { id: 'description', label: 'Description', hasContent: true },
-      { id: 'filelist', label: 'File List', hasContent: torrentData.files && torrentData.files.length > 0 }
+      { id: 'filelist', label: 'Files', hasContent: torrentData.files && torrentData.files.length > 0 }
     ];
 
     // Mediainfo / Bdinfo - show whichever is not empty, prefer mediainfo if both exist
     const hasMediainfo = torrentData.media_info && torrentData.media_info.trim();
     const hasBdinfo = torrentData.bd_info && torrentData.bd_info.trim();
     if (hasMediainfo) {
-      tabsConfig.push({ id: 'mediainfo', label: 'Mediainfo', hasContent: true, content: torrentData.media_info });
+      tabsConfig.push({ id: 'mediainfo', label: 'MediaInfo', hasContent: true, content: torrentData.media_info });
     } else if (hasBdinfo) {
-      tabsConfig.push({ id: 'bdinfo', label: 'Bdinfo', hasContent: true, content: torrentData.bd_info });
+      tabsConfig.push({ id: 'bdinfo', label: 'BDInfo', hasContent: true, content: torrentData.bd_info });
     }
 
     // Create tabs and panels
@@ -2560,12 +2838,31 @@
       panel.dataset.panel = config.id;
       if (index === 0) panel.classList.add('active');
 
+      // Store raw content for copying
+      let rawCopyContent = '';
+
       // Populate panel content
       if (config.id === 'description') {
         panel.classList.add('gz-dropdown-description');
-        panel.innerHTML = parseBBCode(torrentData.description || '');
+        rawCopyContent = torrentData.description || '';
+        panel.innerHTML = parseBBCode(rawCopyContent);
       } else if (config.id === 'filelist') {
         panel.classList.add('gz-dropdown-filelist');
+
+        // Build raw file list content for copying
+        const fileLines = [];
+        if (torrentData.folder) {
+          fileLines.push(`Folder: ${torrentData.folder}`);
+          fileLines.push('');
+        }
+        if (torrentData.files) {
+          torrentData.files.forEach(file => {
+            const fileName = file.name || file;
+            const fileSize = file.size ? ` (${formatBytes(file.size)})` : '';
+            fileLines.push(`${fileName}${fileSize}`);
+          });
+        }
+        rawCopyContent = fileLines.join('\n');
 
         // Show root folder name if available
         if (torrentData.folder) {
@@ -2645,22 +2942,21 @@
               </tr>
             `);
 
-            // Nested content (all have this folder as parent)
-            const nestedRows = renderTree(folder, depth + 1, folderId);
-            rows.push(...nestedRows);
+            // Recursively render subfolders and files
+            rows.push(...renderTree(folder, depth + 1, folderId));
           });
 
           // Render files
+          const fileIndentPx = indentPx + 28; // Files are indented one level more than the current folder
           sortedFiles.forEach(file => {
             const isHidden = parentId !== null;
-
             rows.push(`
               <tr class="gz-filelist-file-row" ${parentId ? `data-parent="${parentId}"` : ''} data-depth="${depth}" ${isHidden ? 'style="display:none;"' : ''}>
                 <td>
-                  <span class="gz-tree-indent" style="display:inline-block; width:${indentPx}px; min-width:${indentPx}px;"></span>
+                  <span class="gz-tree-indent" style="display:inline-block; width:${fileIndentPx}px; min-width:${fileIndentPx}px;"></span>
                   ${file.name}
                 </td>
-                <td>${file.size ? formatBytes(file.size) : ''}</td>
+                <td>${formatBytes(file.size)}</td>
               </tr>
             `);
           });
@@ -2668,56 +2964,50 @@
           return rows;
         };
 
-        const files = torrentData.files || [];
-        const tree = buildTree(files);
-        const treeRows = renderTree(tree);
-
+        // Create table
         const table = create('table');
         table.innerHTML = `
           <thead>
             <tr>
-              <th>File Name</th>
-              <th>Size</th>
+              <th>Name</th>
+              <th style="text-align: right; width: 100px;">Size</th>
             </tr>
           </thead>
           <tbody>
-            ${treeRows.join('')}
+            ${torrentData.files ? renderTree(buildTree(torrentData.files)).join('') : '<tr><td colspan="2">No files found</td></tr>'}
           </tbody>
         `;
 
         // Add click handlers for folder expansion
-        table.addEventListener('click', (e) => {
-          const folderRow = e.target.closest('.gz-filelist-folder-row');
-          if (!folderRow) return;
+        table.querySelectorAll('.gz-filelist-folder-row').forEach(folderRow => {
+          folderRow.addEventListener('click', () => {
+            const folderId = folderRow.dataset.folderId;
+            const toggle = folderRow.querySelector('.gz-folder-toggle');
+            const isExpanded = toggle.textContent === '▼';
 
-          e.stopPropagation();
-
-          const folderId = folderRow.dataset.folderId;
-          const toggle = folderRow.querySelector('.gz-folder-toggle');
-          const isExpanded = toggle.textContent === '▼';
-
-          if (isExpanded) {
-            // Collapse: hide all nested rows recursively
-            const hideRecursive = (parentId) => {
-              table.querySelectorAll(`tr[data-parent="${parentId}"]`).forEach(row => {
-                row.style.display = 'none';
-                // Also collapse any expanded subfolders
-                if (row.classList.contains('gz-filelist-folder-row')) {
-                  const nestedToggle = row.querySelector('.gz-folder-toggle');
-                  if (nestedToggle) nestedToggle.textContent = '▶';
-                  hideRecursive(row.dataset.folderId);
-                }
+            if (isExpanded) {
+              // Collapse: hide all nested rows recursively
+              const hideRecursive = (parentId) => {
+                table.querySelectorAll(`tr[data-parent="${parentId}"]`).forEach(row => {
+                  row.style.display = 'none';
+                  // Also collapse any expanded subfolders
+                  if (row.classList.contains('gz-filelist-folder-row')) {
+                    const nestedToggle = row.querySelector('.gz-folder-toggle');
+                    if (nestedToggle) nestedToggle.textContent = '▶';
+                    hideRecursive(row.dataset.folderId);
+                  }
+                });
+              };
+              hideRecursive(folderId);
+              toggle.textContent = '▶';
+            } else {
+              // Expand: show direct children only
+              table.querySelectorAll(`tr[data-parent="${folderId}"]`).forEach(row => {
+                row.style.display = '';
               });
-            };
-            hideRecursive(folderId);
-            toggle.textContent = '▶';
-          } else {
-            // Expand: show direct children only
-            table.querySelectorAll(`tr[data-parent="${folderId}"]`).forEach(row => {
-              row.style.display = '';
-            });
-            toggle.textContent = '▼';
-          }
+              toggle.textContent = '▼';
+            }
+          });
         });
 
         // Debug: Log tree structure
@@ -2728,32 +3018,24 @@
         panel.appendChild(table);
       } else if (config.id === 'mediainfo' || config.id === 'bdinfo') {
         panel.classList.add('gz-dropdown-mediainfo');
+        rawCopyContent = config.content;
 
         // Parse and display summary based on type
         if (config.id === 'bdinfo') {
           const parsed = parseBDInfo(config.content);
           if (parsed.summary) {
-            panel.appendChild(renderBDInfoSummary(parsed.summary));
+            panel.appendChild(renderBDInfoSummary(parsed.summary, config.content));
           }
         } else {
           const parsed = parseMediaInfo(config.content);
           if (parsed.summary) {
-            panel.appendChild(renderMediaInfoSummary(parsed.summary));
+            panel.appendChild(renderMediaInfoSummary(parsed.summary, config.content));
           }
         }
-
-        // Add expandable raw content
-        const details = create('details', 'gz-mediainfo-raw-container');
-        const summary = create('summary');
-        summary.textContent = config.id === 'bdinfo' ? 'Show Full BDInfo' : 'Show Full MediaInfo';
-        details.appendChild(summary);
-
-        const pre = create('pre', 'gz-mediainfo-raw');
-        pre.textContent = config.content;
-        details.appendChild(pre);
-
-        panel.appendChild(details);
       }
+
+      // Store raw content on the panel for later
+      panel.dataset.rawContent = rawCopyContent || '';
 
       tab.addEventListener('click', () => {
         // Remove active from all tabs and panels
@@ -2767,6 +3049,33 @@
       tabs.appendChild(tab);
       panels.appendChild(panel);
     });
+
+    // Add single copy button to tabs row
+    const copyBtn = create('button', 'gz-panel-copy-btn');
+    copyBtn.textContent = 'Copy';
+    copyBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const activePanel = panels.querySelector('.gz-dropdown-panel.active');
+      const rawContent = activePanel?.dataset.rawContent || '';
+      if (!rawContent) return;
+
+      try {
+        await navigator.clipboard.writeText(rawContent);
+        copyBtn.textContent = 'Copied!';
+        copyBtn.classList.add('copied');
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy';
+          copyBtn.classList.remove('copied');
+        }, 2000);
+      } catch (err) {
+        console.error('GAZELL3D: Failed to copy:', err);
+        copyBtn.textContent = 'Failed';
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy';
+        }, 2000);
+      }
+    });
+    tabs.appendChild(copyBtn);
 
     container.appendChild(tabs);
     container.appendChild(panels);
