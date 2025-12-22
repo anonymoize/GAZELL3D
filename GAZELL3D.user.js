@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.7.2
+// @version      1.7.3
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -1020,7 +1020,7 @@
     .gz-mediainfo-filename {
       font-weight: 700;
       font-size: 1.05em;
-      color: rgba(118, 219, 166, 0.95);
+      color: rgba(255, 255, 255, 0.6);
       word-break: break-all;
       padding: 12px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -1154,10 +1154,41 @@
       line-height: 1.6;
     }
 
+    .gz-mediainfo-subtitles-list--detailed {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
     .gz-mediainfo-subtitle-item {
       display: inline-flex;
       align-items: center;
       gap: 4px;
+    }
+
+    .gz-mediainfo-subtitle-item--detailed {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .gz-mediainfo-subtitle-num {
+      color: rgba(255, 255, 255, 0.5);
+      font-weight: 600;
+      min-width: 28px;
+    }
+
+    .gz-mediainfo-subtitle-details {
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .gz-mediainfo-subtitle-title {
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .gz-mediainfo-subtitle-flags {
+      color: rgba(219, 166, 118, 0.9);
+      font-size: 0.9em;
     }
 
     .gz-mediainfo-subtitle-forced {
@@ -2924,50 +2955,37 @@
       summaryContent.appendChild(audioSection);
     }
 
-    // Subtitles section
+    // Subtitles section - show each track individually with details
     if (info.subtitles.length > 0) {
       const subSection = create('div', 'gz-mediainfo-subtitles-section');
       subSection.innerHTML = `<div class="gz-mediainfo-section-title">Subtitles</div>`;
 
-      const subList = create('div', 'gz-mediainfo-subtitles-list');
+      const subList = create('div', 'gz-mediainfo-subtitles-list gz-mediainfo-subtitles-list--detailed');
 
-      // Group subtitles by language, keeping track of formats and flags
-      const subtitleMap = new Map();
-      info.subtitles.forEach(s => {
+      // Render each subtitle track individually
+      info.subtitles.forEach((s, index) => {
+        const item = create('div', 'gz-mediainfo-subtitle-item gz-mediainfo-subtitle-item--detailed');
+
+        const trackNum = `#${index + 1}:`;
         const lang = s.language || 'Unknown';
-        const key = lang.toLowerCase();
-        if (!subtitleMap.has(key)) {
-          subtitleMap.set(key, { language: lang, formats: new Set(), titles: [], forced: false, sdh: false });
-        }
-        const entry = subtitleMap.get(key);
-        if (s.format) entry.formats.add(s.format);
-        if (s.forced) entry.forced = true;
-        if (s.title) {
-          // Check for SDH in title
-          if (/\bSDH\b/i.test(s.title)) entry.sdh = true;
-          // Check for Forced in title if not already flagged
-          if (/\bForced\b/i.test(s.title)) entry.forced = true;
-          entry.titles.push(s.title);
-        }
-      });
+        const format = s.format || '';
+        const title = s.title || '';
 
-      // Render each unique language
-      const uniqueLanguages = Array.from(subtitleMap.values());
-      uniqueLanguages.forEach((sub, index) => {
-        const item = create('span', 'gz-mediainfo-subtitle-item');
-        let text = sub.language;
+        // Build flags array
+        const flags = [];
+        if (s.forced) flags.push('forced');
+        if (s.default) flags.push('default');
 
-        // Add SDH or Forced indicators
-        if (sub.forced) {
-          text += ' <span class="gz-mediainfo-subtitle-forced">Forced</span>';
-        } else if (sub.sdh) {
-          text += ' <span class="gz-mediainfo-subtitle-forced">SDH</span>';
+        // Build the display text
+        let text = `<span class="gz-mediainfo-subtitle-num">${trackNum}</span>`;
+        text += `<span class="gz-mediainfo-subtitle-details">`;
+        text += `${lang}`;
+        if (format) text += ` ${format}`;
+        if (title) text += ` <span class="gz-mediainfo-subtitle-title">[${title}]</span>`;
+        if (flags.length > 0) {
+          text += ` <span class="gz-mediainfo-subtitle-flags">(${flags.join(', ')})</span>`;
         }
-
-        // Add separator except for last item
-        if (index < uniqueLanguages.length - 1) {
-          text += ',';
-        }
+        text += `</span>`;
 
         item.innerHTML = text;
         subList.appendChild(item);
