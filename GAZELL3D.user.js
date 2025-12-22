@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.6.0
+// @version      1.6.1
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -782,13 +782,130 @@
     .gz-mediainfo-summary {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      padding: 12px;
-      background: rgba(255, 255, 255, 0.02);
-      border-radius: 6px;
+      gap: 16px;
+      padding: 16px;
+      background: rgba(20, 25, 35, 0.6);
+      border-radius: 8px;
       margin-bottom: 12px;
+      font-size: 0.9em;
     }
 
+    .gz-mediainfo-filename {
+      font-weight: 700;
+      font-size: 1.05em;
+      color: rgba(118, 219, 166, 0.95);
+      word-break: break-all;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .gz-mediainfo-columns {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 24px;
+    }
+
+    .gz-mediainfo-column {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .gz-mediainfo-column-title {
+      font-weight: 700;
+      font-size: 0.85em;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 4px;
+    }
+
+    .gz-mediainfo-row {
+      display: flex;
+      gap: 8px;
+      line-height: 1.5;
+    }
+
+    .gz-mediainfo-row-label {
+      color: rgba(255, 255, 255, 0.6);
+      min-width: 70px;
+      flex-shrink: 0;
+    }
+
+    .gz-mediainfo-row-value {
+      color: rgba(255, 255, 255, 0.95);
+    }
+
+    .gz-mediainfo-section-title {
+      font-weight: 700;
+      font-size: 0.85em;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 8px;
+    }
+
+    .gz-mediainfo-audio-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .gz-mediainfo-audio-item {
+      display: flex;
+      gap: 8px;
+      line-height: 1.5;
+    }
+
+    .gz-mediainfo-audio-num {
+      color: rgba(255, 255, 255, 0.5);
+      min-width: 20px;
+      flex-shrink: 0;
+    }
+
+    .gz-mediainfo-audio-details {
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .gz-mediainfo-audio-title {
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .gz-mediainfo-subtitles-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      color: rgba(255, 255, 255, 0.85);
+      line-height: 1.6;
+    }
+
+    .gz-mediainfo-subtitle-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .gz-mediainfo-subtitle-forced {
+      color: rgba(219, 166, 118, 0.9);
+      font-size: 0.85em;
+      font-weight: 600;
+    }
+
+    .gz-mediainfo-encode-settings {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+      font-size: 0.8em;
+      line-height: 1.5;
+      color: rgba(255, 255, 255, 0.8);
+      word-break: break-all;
+      white-space: pre-wrap;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    /* Legacy section styles for backwards compatibility */
     .gz-mediainfo-section {
       display: flex;
       gap: 12px;
@@ -1966,12 +2083,15 @@
 
     const lines = raw.split('\n');
     const info = {
+      completeName: '',
       format: '',
       duration: '',
       fileSize: '',
+      overallBitrate: '',
       video: [],
       audio: [],
-      subtitles: []
+      subtitles: [],
+      encodingSettings: ''
     };
 
     let currentSection = '';
@@ -1980,35 +2100,47 @@
       const trimmed = line.trim();
       if (!trimmed) continue;
 
-      // Detect section headers
-      if (trimmed === 'General' || trimmed.startsWith('General')) {
+      // Detect section headers (handle both "Video" and "Video #1" formats)
+      if (/^General$/i.test(trimmed) || /^General\s/i.test(trimmed)) {
         currentSection = 'general';
-      } else if (trimmed === 'Video' || trimmed.startsWith('Video')) {
+      } else if (/^Video(?:\s|$)/i.test(trimmed)) {
         currentSection = 'video';
         info.video.push({});
-      } else if (trimmed === 'Audio' || trimmed.startsWith('Audio')) {
+      } else if (/^Audio(?:\s|$)/i.test(trimmed)) {
         currentSection = 'audio';
         info.audio.push({});
-      } else if (trimmed === 'Text' || trimmed.startsWith('Text')) {
+      } else if (/^Text(?:\s|$)/i.test(trimmed)) {
         currentSection = 'text';
         info.subtitles.push({});
+      } else if (/^Menu(?:\s|$)/i.test(trimmed)) {
+        currentSection = 'menu';
       } else if (trimmed.includes(':')) {
-        const [key, ...valueParts] = trimmed.split(':');
-        const value = valueParts.join(':').trim();
-        const keyLower = key.trim().toLowerCase();
+        // Parse key: value pairs, accounting for multi-colon values
+        const colonIdx = trimmed.indexOf(':');
+        const key = trimmed.substring(0, colonIdx).trim();
+        const value = trimmed.substring(colonIdx + 1).trim();
+        const keyLower = key.toLowerCase();
 
         if (currentSection === 'general') {
+          if (keyLower === 'complete name') info.completeName = value;
           if (keyLower === 'format') info.format = value;
           if (keyLower === 'duration') info.duration = value;
           if (keyLower === 'file size') info.fileSize = value;
+          if (keyLower === 'overall bit rate') info.overallBitrate = value;
         } else if (currentSection === 'video' && info.video.length > 0) {
           const v = info.video[info.video.length - 1];
           if (keyLower === 'format') v.format = value;
           if (keyLower === 'width') v.width = value;
           if (keyLower === 'height') v.height = value;
+          if (keyLower === 'display aspect ratio') v.aspectRatio = value;
           if (keyLower === 'bit depth') v.bitDepth = value;
           if (keyLower === 'frame rate') v.frameRate = value;
+          if (keyLower === 'bit rate') v.bitrate = value;
           if (keyLower === 'hdr format') v.hdr = value;
+          if (keyLower === 'encoding settings') {
+            v.encodingSettings = value;
+            info.encodingSettings = value;
+          }
         } else if (currentSection === 'audio' && info.audio.length > 0) {
           const a = info.audio[info.audio.length - 1];
           if (keyLower === 'format') a.format = value;
@@ -2016,17 +2148,21 @@
           if (keyLower === 'channel(s)') a.channels = value;
           if (keyLower === 'language') a.language = value;
           if (keyLower === 'bit rate') a.bitrate = value;
+          if (keyLower === 'title') a.title = value;
         } else if (currentSection === 'text' && info.subtitles.length > 0) {
           const s = info.subtitles[info.subtitles.length - 1];
           if (keyLower === 'format') s.format = value;
           if (keyLower === 'language') s.language = value;
           if (keyLower === 'title') s.title = value;
+          if (keyLower === 'forced') s.forced = value.toLowerCase() === 'yes';
+          if (keyLower === 'default') s.default = value.toLowerCase() === 'yes';
         }
       }
     }
 
     return { summary: info, raw };
   };
+
 
   // BDInfo parser - handles BDInfo format which is different from MediaInfo
   const parseBDInfo = (raw) => {
@@ -2157,64 +2293,229 @@
   const renderMediaInfoSummary = (info) => {
     const container = create('div', 'gz-mediainfo-summary');
 
-    // General info
-    if (info.format || info.duration || info.fileSize) {
-      const general = create('div', 'gz-mediainfo-section');
-      general.innerHTML = `
-        <div class="gz-mediainfo-label">General</div>
-        <div class="gz-mediainfo-value">
-          ${info.format ? `<span>${info.format}</span>` : ''}
-          ${info.duration ? `<span>• ${info.duration}</span>` : ''}
-          ${info.fileSize ? `<span>• ${info.fileSize}</span>` : ''}
-        </div>
-      `;
-      container.appendChild(general);
+    // Filename header
+    if (info.completeName) {
+      const filename = create('div', 'gz-mediainfo-filename');
+      // Extract just the filename from the path
+      const name = info.completeName.split(/[/\\]/).pop() || info.completeName;
+      filename.textContent = name;
+      container.appendChild(filename);
     }
 
-    // Video
-    if (info.video.length > 0) {
-      info.video.forEach((v, i) => {
-        const videoDiv = create('div', 'gz-mediainfo-section');
-        const res = v.width && v.height ? `${v.width} × ${v.height}` : '';
-        const details = [v.format, res, v.bitDepth, v.frameRate, v.hdr].filter(Boolean).join(' • ');
-        videoDiv.innerHTML = `
-          <div class="gz-mediainfo-label">Video${info.video.length > 1 ? ` #${i + 1}` : ''}</div>
-          <div class="gz-mediainfo-value">${details || 'Unknown'}</div>
-        `;
-        container.appendChild(videoDiv);
-      });
+    // Columns container (General + Video side by side)
+    const hasGeneral = info.format || info.duration || info.overallBitrate || info.fileSize;
+    const hasVideo = info.video.length > 0;
+
+    if (hasGeneral || hasVideo) {
+      const columns = create('div', 'gz-mediainfo-columns');
+
+      // General column
+      if (hasGeneral) {
+        const generalCol = create('div', 'gz-mediainfo-column');
+        generalCol.innerHTML = `<div class="gz-mediainfo-column-title">General</div>`;
+
+        if (info.format) {
+          generalCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Format</span>
+              <span class="gz-mediainfo-row-value">${info.format}</span>
+            </div>`;
+        }
+        if (info.duration) {
+          generalCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Duration</span>
+              <span class="gz-mediainfo-row-value">${info.duration}</span>
+            </div>`;
+        }
+        if (info.overallBitrate) {
+          generalCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Bitrate</span>
+              <span class="gz-mediainfo-row-value">${info.overallBitrate}</span>
+            </div>`;
+        }
+        if (info.fileSize) {
+          generalCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Size</span>
+              <span class="gz-mediainfo-row-value">${info.fileSize}</span>
+            </div>`;
+        }
+        columns.appendChild(generalCol);
+      }
+
+      // Video column
+      if (hasVideo) {
+        const v = info.video[0]; // Use first video track
+        const videoCol = create('div', 'gz-mediainfo-column');
+        videoCol.innerHTML = `<div class="gz-mediainfo-column-title">Video</div>`;
+
+        const formatStr = v.format ? `${v.format}${v.bitDepth ? ` (${v.bitDepth})` : ''}` : '';
+        if (formatStr) {
+          videoCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Format</span>
+              <span class="gz-mediainfo-row-value">${formatStr}</span>
+            </div>`;
+        }
+
+        const resolution = v.width && v.height ? `${v.width} × ${v.height}` : '';
+        if (resolution) {
+          videoCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Resolution</span>
+              <span class="gz-mediainfo-row-value">${resolution}</span>
+            </div>`;
+        }
+
+        if (v.aspectRatio) {
+          videoCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Aspect ratio</span>
+              <span class="gz-mediainfo-row-value">${v.aspectRatio}</span>
+            </div>`;
+        }
+
+        if (v.frameRate) {
+          videoCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Frame rate</span>
+              <span class="gz-mediainfo-row-value">${v.frameRate}</span>
+            </div>`;
+        }
+
+        if (v.bitrate) {
+          videoCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">Bit rate</span>
+              <span class="gz-mediainfo-row-value">${v.bitrate}</span>
+            </div>`;
+        }
+
+        if (v.hdr) {
+          videoCol.innerHTML += `
+            <div class="gz-mediainfo-row">
+              <span class="gz-mediainfo-row-label">HDR</span>
+              <span class="gz-mediainfo-row-value">${v.hdr}</span>
+            </div>`;
+        }
+
+        columns.appendChild(videoCol);
+      }
+
+      container.appendChild(columns);
     }
 
-    // Audio
+    // Audio section
     if (info.audio.length > 0) {
+      const audioSection = create('div', 'gz-mediainfo-audio-section');
+      audioSection.innerHTML = `<div class="gz-mediainfo-section-title">Audio</div>`;
+
+      const audioList = create('div', 'gz-mediainfo-audio-list');
       info.audio.forEach((a, i) => {
-        const audioDiv = create('div', 'gz-mediainfo-section');
-        const name = a.name || a.format || 'Unknown';
-        const details = [name, a.channels, a.language, a.bitrate].filter(Boolean).join(' • ');
-        audioDiv.innerHTML = `
-          <div class="gz-mediainfo-label">Audio${info.audio.length > 1 ? ` #${i + 1}` : ''}</div>
-          <div class="gz-mediainfo-value">${details}</div>
+        const audioItem = create('div', 'gz-mediainfo-audio-item');
+        const num = `${i + 1}.`;
+        const lang = a.language || 'Unknown';
+        const format = a.name || a.format || 'Unknown';
+
+        // Parse channels to a cleaner format (e.g., "8 channels" -> "8ch")
+        let channels = a.channels || '';
+        const channelMatch = channels.match(/(\d+)\s*channel/i);
+        if (channelMatch) {
+          const numChannels = parseInt(channelMatch[1], 10);
+          // Map common channel counts to standard formats
+          const channelMap = { 1: '1.0ch', 2: '2.0ch', 3: '2.1ch', 6: '5.1ch', 7: '6.1ch', 8: '7.1ch' };
+          channels = channelMap[numChannels] || `${numChannels}ch`;
+        }
+
+        // Format bitrate (e.g., "1 536 kb/s" -> "1536kb/s")
+        const bitrate = a.bitrate ? a.bitrate.replace(/\s+/g, '') : '';
+
+        // Build the detail string: Language / Format / Channels / Bitrate
+        const detailParts = [lang, format, channels, bitrate].filter(Boolean);
+
+        // Title/Description (for commentary tracks, etc.)
+        const title = a.title ? ` / ${a.title}` : '';
+
+        audioItem.innerHTML = `
+          <span class="gz-mediainfo-audio-num">${num}</span>
+          <span class="gz-mediainfo-audio-details">${detailParts.join(' / ')}<span class="gz-mediainfo-audio-title">${title}</span></span>
         `;
-        container.appendChild(audioDiv);
+        audioList.appendChild(audioItem);
       });
+
+      audioSection.appendChild(audioList);
+      container.appendChild(audioSection);
     }
 
-    // Subtitles
+    // Subtitles section
     if (info.subtitles.length > 0) {
-      const subDiv = create('div', 'gz-mediainfo-section');
-      const subList = info.subtitles.map(s => {
-        const parts = [s.language, s.title, s.format].filter(Boolean);
-        return parts.length > 0 ? parts.join(' ') : 'Unknown';
-      }).join(', ');
-      subDiv.innerHTML = `
-        <div class="gz-mediainfo-label">Subtitles (${info.subtitles.length})</div>
-        <div class="gz-mediainfo-value">${subList}</div>
-      `;
-      container.appendChild(subDiv);
+      const subSection = create('div', 'gz-mediainfo-subtitles-section');
+      subSection.innerHTML = `<div class="gz-mediainfo-section-title">Subtitles</div>`;
+
+      const subList = create('div', 'gz-mediainfo-subtitles-list');
+
+      // Group subtitles by language, keeping track of formats and flags
+      const subtitleMap = new Map();
+      info.subtitles.forEach(s => {
+        const lang = s.language || 'Unknown';
+        const key = lang.toLowerCase();
+        if (!subtitleMap.has(key)) {
+          subtitleMap.set(key, { language: lang, formats: new Set(), titles: [], forced: false, sdh: false });
+        }
+        const entry = subtitleMap.get(key);
+        if (s.format) entry.formats.add(s.format);
+        if (s.forced) entry.forced = true;
+        if (s.title) {
+          // Check for SDH in title
+          if (/\bSDH\b/i.test(s.title)) entry.sdh = true;
+          // Check for Forced in title if not already flagged
+          if (/\bForced\b/i.test(s.title)) entry.forced = true;
+          entry.titles.push(s.title);
+        }
+      });
+
+      // Render each unique language
+      const uniqueLanguages = Array.from(subtitleMap.values());
+      uniqueLanguages.forEach((sub, index) => {
+        const item = create('span', 'gz-mediainfo-subtitle-item');
+        let text = sub.language;
+
+        // Add SDH or Forced indicators
+        if (sub.forced) {
+          text += ' <span class="gz-mediainfo-subtitle-forced">Forced</span>';
+        } else if (sub.sdh) {
+          text += ' <span class="gz-mediainfo-subtitle-forced">SDH</span>';
+        }
+
+        // Add separator except for last item
+        if (index < uniqueLanguages.length - 1) {
+          text += ',';
+        }
+
+        item.innerHTML = text;
+        subList.appendChild(item);
+      });
+
+      subSection.appendChild(subList);
+      container.appendChild(subSection);
+    }
+
+    // Encode Settings section
+    if (info.encodingSettings) {
+      const encodeSection = create('div', 'gz-mediainfo-encode-section');
+      encodeSection.innerHTML = `<div class="gz-mediainfo-section-title">Encode Settings</div>`;
+
+      const settingsBlock = create('div', 'gz-mediainfo-encode-settings');
+      settingsBlock.textContent = info.encodingSettings;
+      encodeSection.appendChild(settingsBlock);
+      container.appendChild(encodeSection);
     }
 
     return container;
   };
+
 
   // Render the dropdown content for a torrent
   const renderTorrentDropdown = (torrentData, colSpan) => {
