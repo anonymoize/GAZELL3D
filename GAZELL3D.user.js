@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.7.4
+// @version      1.7.4.1
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -990,6 +990,14 @@
       background: rgba(255, 255, 255, 0.04) !important;
       border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
       color: rgba(255, 255, 255, 0.9) !important;
+    }
+
+    /* BBCode Horizontal Rule */
+    .gz-bbcode-hr {
+      border: none;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      margin: 16px 0;
     }
 
     /* File List Tree Styles */
@@ -2447,6 +2455,9 @@
         result = result.replace(/\[\/td\]/gi, '</td>');
         result = result.replace(/\[th\]/gi, '<th>');
         result = result.replace(/\[\/th\]/gi, '</th>');
+
+        // Horizontal rule: [hr]
+        result = result.replace(/\[hr\]/gi, '<hr class="gz-bbcode-hr">');
 
       } while (result !== prevResult);
 
