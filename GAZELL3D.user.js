@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.7.4.1
+// @version      1.7.4.2
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -20,7 +20,7 @@
     removeTorrentIcons: true,
     enableGazellifySimilar: true,
     enableGazellifyDetail: false,
-    enableGazellifySearch: true,
+    enableGazellifySearch: false,
     enableOriginalTitleTooltip: true,
     showEditButton: true,
     enableSideLayout: true,
@@ -3417,7 +3417,7 @@
 
     // 1. Detect Mode
     // TV Mode: Has 'summary[x-bind="season"]' or 'summary[x-bind="specials"]' inside details
-    const seasonDetails = Array.from(section.querySelectorAll('summary[x-bind="season"], summary[x-bind="specials"]'))
+    const seasonDetails = Array.from(section.querySelectorAll('summary[x-bind="season"], summary[x-bind="specials"], summary[x-bind="complete"]'))
       .map(summary => summary.closest('details'))
       .filter(Boolean);
 
