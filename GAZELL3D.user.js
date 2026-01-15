@@ -749,10 +749,17 @@
 
     .gz-dropdown-description {
       font-size: 0.9em;
-      line-height: 1.5;
+      line-height: 1.35;
       color: rgba(255, 255, 255, 0.85);
       max-height: 500px;
       overflow-y: auto;
+    }
+
+    /* Collapse multiple consecutive br tags to reduce excessive blank lines */
+    .gz-dropdown-description br + br {
+      display: block;
+      content: '';
+      margin-top: -0.5em;
     }
 
     .gz-dropdown-description:empty::after {
@@ -836,8 +843,8 @@
     }
 
     .gz-bbcode-quote {
-      margin: 8px 0;
-      padding: 10px 14px;
+      margin: 4px 0;
+      padding: 8px 12px;
       border-left: 3px solid rgba(118, 219, 166, 0.6);
       background: rgba(255, 255, 255, 0.03);
       border-radius: 0 4px 4px 0;
@@ -851,8 +858,8 @@
     }
 
     .gz-bbcode-code {
-      margin: 8px 0;
-      padding: 10px;
+      margin: 4px 0;
+      padding: 8px;
       background: rgba(0, 0, 0, 0.3);
       border-radius: 4px;
       font-family: 'Monaco', 'Consolas', monospace;
@@ -862,14 +869,14 @@
 
     .gz-bbcode-spoiler,
     .gz-bbcode-comparison {
-      margin: 8px 0;
+      margin: 4px 0;
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 4px;
     }
 
     .gz-bbcode-spoiler summary,
     .gz-bbcode-comparison summary {
-      padding: 8px 12px;
+      padding: 6px 10px;
       cursor: pointer;
       background: rgba(255, 255, 255, 0.03);
       font-weight: 500;
@@ -881,12 +888,12 @@
     }
 
     .gz-bbcode-spoiler-content {
-      padding: 10px 12px;
+      padding: 8px 10px;
     }
 
     .gz-bbcode-note {
-      margin: 10px 0;
-      padding: 12px 16px;
+      margin: 4px 0;
+      padding: 8px 12px;
       background: rgba(118, 219, 166, 0.08);
       border: 1px solid rgba(118, 219, 166, 0.3);
       border-radius: 6px;
@@ -894,8 +901,8 @@
     }
 
     .gz-bbcode-alert {
-      margin: 10px 0;
-      padding: 12px 16px;
+      margin: 4px 0;
+      padding: 8px 12px;
       background: rgba(219, 118, 118, 0.08);
       border: 1px solid rgba(219, 118, 118, 0.3);
       border-radius: 6px;
@@ -903,13 +910,13 @@
     }
 
     .gz-bbcode-list {
-      margin: 8px 0;
-      padding-left: 24px;
+      margin: 4px 0;
+      padding-left: 20px;
       list-style-type: disc;
     }
 
     .gz-bbcode-list li {
-      margin: 4px 0;
+      margin: 2px 0;
       padding-left: 4px;
     }
 
@@ -917,8 +924,8 @@
     .gz-bbcode-heading {
       font-weight: 700;
       color: rgba(255, 255, 255, 0.95);
-      margin: 12px 0 8px;
-      line-height: 1.3;
+      margin: 6px 0 4px;
+      line-height: 1.25;
     }
 
     .gz-bbcode-h1 {
@@ -2671,8 +2678,13 @@
     html = html.replace(/<li>([\s\S]*?)(?=<li>|<\/ul>)/gi, '<li>$1</li>');
 
     // Line breaks - but not inside pre/code blocks
-    // Simple approach: convert \n to <br> 
+    // Collapse 3+ consecutive newlines to 2 (one blank line max)
+    html = html.replace(/\n{3,}/g, '\n\n');
+    // Convert \n to <br>
     html = html.replace(/\n/g, '<br>');
+
+    // Collapse 3+ consecutive <br> tags to 2
+    html = html.replace(/(<br>){3,}/gi, '<br><br>');
 
     // Clean up excessive <br> after block elements
     html = html.replace(/(<\/div>)<br>/gi, '$1');
@@ -3951,6 +3963,12 @@
           newLink.dataset.torrentId = torrentId;
 
           newLink.addEventListener('click', async (e) => {
+            // Ctrl+click or Cmd+click opens the torrent page directly
+            if (e.ctrlKey || e.metaKey) {
+              window.open(torrentUrl, '_blank');
+              return;
+            }
+
             e.preventDefault();
             e.stopPropagation();
 
