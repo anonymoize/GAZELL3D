@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.7.4.2
+// @version      1.8.0
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -581,7 +581,7 @@
     }
 
     .gz-torrent-table .gz-col-actions {
-      width: 100px;
+      width: 150px;
       white-space: nowrap;
       padding-left: 8px !important;
     }
@@ -1305,6 +1305,202 @@
       margin-top: 8px;
       max-height: 300px;
       overflow: auto;
+    }
+
+    /* Trump Report Modal Styles */
+    .gz-trump-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+    }
+
+    .gz-trump-modal {
+      background: #1a1a2e;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 24px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .gz-trump-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .gz-trump-header h3 {
+      margin: 0;
+      font-size: 1.2em;
+      color: #fff;
+    }
+
+    .gz-trump-close {
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 1.5em;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+      transition: color 0.15s ease;
+    }
+
+    .gz-trump-close:hover {
+      color: #fff;
+    }
+
+    .gz-trump-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .gz-trump-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .gz-trump-field label {
+      font-size: 0.85em;
+      color: rgba(255, 255, 255, 0.7);
+      font-weight: 500;
+    }
+
+    .gz-trump-field .reported-torrent {
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.9em;
+      word-break: break-word;
+    }
+
+    .gz-trump-select,
+    .gz-trump-input,
+    .gz-trump-textarea {
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 0.9em;
+      font-family: inherit;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .gz-trump-select:focus,
+    .gz-trump-input:focus,
+    .gz-trump-textarea:focus {
+      outline: none;
+      border-color: rgba(118, 219, 166, 0.6);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .gz-trump-select option {
+      background: #1a1a2e;
+      color: #fff;
+    }
+
+    .gz-trump-textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+
+    .gz-trump-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      margin-top: 8px;
+    }
+
+    .gz-trump-btn {
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 0.9em;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: none;
+    }
+
+    .gz-trump-btn--cancel {
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .gz-trump-btn--cancel:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+
+    .gz-trump-btn--submit {
+      background: rgba(118, 219, 166, 0.8);
+      color: #1a1a2e;
+    }
+
+    .gz-trump-btn--submit:hover {
+      background: rgba(118, 219, 166, 1);
+    }
+
+    .gz-trump-btn--submit:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Toast Notification Styles */
+    .gz-toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 14px 20px;
+      border-radius: 8px;
+      font-size: 0.9em;
+      z-index: 10001;
+      max-width: 400px;
+      word-break: break-word;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+      animation: gz-toast-slide-in 0.3s ease;
+    }
+
+    @keyframes gz-toast-slide-in {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    .gz-toast--success {
+      background: rgba(118, 219, 166, 0.95);
+      color: #1a1a2e;
+    }
+
+    .gz-toast--error {
+      background: rgba(219, 118, 118, 0.95);
+      color: #fff;
+    }
+
+    .gz-toast--info {
+      background: rgba(118, 166, 219, 0.95);
+      color: #fff;
     }
   `;
 
@@ -3405,9 +3601,205 @@
     return dropdownRow;
   };
 
+  // ============================================
+  // Trump Report Feature
+  // ============================================
+
+  // Global registry to track all torrents on the page with their season groups
+  const trumpTorrentRegistry = {
+    torrents: new Map(), // Map<torrentId, { name, seasonGroup }>
+    clear() {
+      this.torrents.clear();
+    },
+    register(torrentId, name, seasonGroup = null) {
+      this.torrents.set(torrentId, { name, seasonGroup });
+    },
+    getEligibleTorrents(reportedTorrentId, seasonGroup, isTV) {
+      const eligible = [];
+      this.torrents.forEach((data, id) => {
+        if (id === reportedTorrentId) return; // Exclude self
+        // For TV shows, only include torrents from the same season
+        if (isTV && seasonGroup && data.seasonGroup !== seasonGroup) return;
+        eligible.push({ id, name: data.name });
+      });
+      return eligible;
+    }
+  };
+
+  // Show a toast notification
+  const showToast = (message, type = 'info', duration = 5000) => {
+    // Remove any existing toast
+    const existing = document.querySelector('.gz-toast');
+    if (existing) existing.remove();
+
+    const toast = create('div', `gz-toast gz-toast--${type}`);
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.animation = 'gz-toast-slide-in 0.3s ease reverse';
+      setTimeout(() => toast.remove(), 300);
+    }, duration);
+  };
+
+  // Submit Trump Report to API
+  const submitTrumpReport = async (payload) => {
+    const url = 'https://aither.cc/api/trumping-reports/create';
+
+    try {
+      const response = await gmFetchJson(
+        url,
+        {
+          headers: {
+            'Authorization': `Bearer ${AITHER_API_KEY}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          data: JSON.stringify(payload)
+        },
+        'POST',
+        30000
+      );
+
+      return response;
+    } catch (error) {
+      console.error('GAZELL3D: Trump report submission failed:', error);
+      throw error;
+    }
+  };
+
+  // Show Trump Report Modal
+  const showTrumpReportModal = (reportedTorrentId, reportedTorrentName, seasonGroup, isTV) => {
+    // Get eligible torrents for the dropdown
+    const eligibleTorrents = trumpTorrentRegistry.getEligibleTorrents(reportedTorrentId, seasonGroup, isTV);
+
+    if (eligibleTorrents.length === 0) {
+      showToast('No other torrents available in this season group to trump with.', 'error');
+      return;
+    }
+
+    // Create overlay
+    const overlay = create('div', 'gz-trump-overlay');
+
+    // Create modal
+    const modal = create('div', 'gz-trump-modal');
+    modal.innerHTML = `
+      <div class="gz-trump-header">
+        <h3>Submit Trump Report</h3>
+        <button class="gz-trump-close" type="button">&times;</button>
+      </div>
+      <form class="gz-trump-form">
+        <div class="gz-trump-field">
+          <label>Reported Torrent (to be trumped)</label>
+          <div class="reported-torrent">${reportedTorrentName}</div>
+        </div>
+        <div class="gz-trump-field">
+          <label for="gz-trump-torrent">Trumping Torrent (superior release)</label>
+          <select id="gz-trump-torrent" class="gz-trump-select" required>
+            <option value="">Select a torrent...</option>
+            ${eligibleTorrents.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="gz-trump-field">
+          <label for="gz-trump-message">Reason for Trump Report</label>
+          <textarea id="gz-trump-message" class="gz-trump-textarea" required placeholder="Explain why the reported torrent should be trumped by the selected torrent..."></textarea>
+        </div>
+        <div class="gz-trump-field">
+          <label for="gz-trump-screenshots-reported">Screenshots of Reported Torrent (optional)</label>
+          <input id="gz-trump-screenshots-reported" class="gz-trump-input" type="url" placeholder="https://example.com/screenshot.png" />
+        </div>
+        <div class="gz-trump-field">
+          <label for="gz-trump-screenshots-trumping">Screenshots of Trumping Torrent (optional)</label>
+          <input id="gz-trump-screenshots-trumping" class="gz-trump-input" type="url" placeholder="https://example.com/screenshot.png" />
+        </div>
+        <div class="gz-trump-buttons">
+          <button type="button" class="gz-trump-btn gz-trump-btn--cancel">Cancel</button>
+          <button type="submit" class="gz-trump-btn gz-trump-btn--submit">Submit Report</button>
+        </div>
+      </form>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // Close handlers
+    const closeModal = () => overlay.remove();
+
+    overlay.querySelector('.gz-trump-close').addEventListener('click', closeModal);
+    overlay.querySelector('.gz-trump-btn--cancel').addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeModal();
+    });
+
+    // Escape key closes modal
+    const escHandler = (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+        document.removeEventListener('keydown', escHandler);
+      }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    // Form submission
+    const form = modal.querySelector('.gz-trump-form');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const trumpingTorrentId = document.getElementById('gz-trump-torrent').value;
+      const message = document.getElementById('gz-trump-message').value.trim();
+      const screenshotsReported = document.getElementById('gz-trump-screenshots-reported').value.trim();
+      const screenshotsTrumping = document.getElementById('gz-trump-screenshots-trumping').value.trim();
+
+      if (!trumpingTorrentId || !message) {
+        showToast('Please select a torrent and provide a reason.', 'error');
+        return;
+      }
+
+      const submitBtn = modal.querySelector('.gz-trump-btn--submit');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting...';
+
+      try {
+        const payload = {
+          reported_torrent_id: parseInt(reportedTorrentId, 10),
+          trumping_torrent_id: parseInt(trumpingTorrentId, 10),
+          message: message
+        };
+
+        // Add optional screenshot fields if provided
+        if (screenshotsReported) {
+          payload.screenshots_reported_torrent = screenshotsReported;
+        }
+        if (screenshotsTrumping) {
+          payload.screenshots_trumping_torrent = screenshotsTrumping;
+        }
+
+        const response = await submitTrumpReport(payload);
+
+        closeModal();
+
+        if (response.success) {
+          showToast(`Trump report submitted successfully! ${response.message || ''}`, 'success', 7000);
+        } else {
+          showToast(`Error: ${response.message || 'Unknown error occurred'}`, 'error', 7000);
+        }
+      } catch (error) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Report';
+        showToast(`Failed to submit report: ${error.message || 'Network error'}`, 'error', 7000);
+      }
+    });
+
+    // Focus the select element
+    setTimeout(() => document.getElementById('gz-trump-torrent')?.focus(), 100);
+  };
+
   const gazellifyTorrentLayout = (article) => {
     const section = $(SELECTORS.torrentGroup, article);
     if (!section) return;
+
+    // Clear the trump torrent registry for fresh population
+    trumpTorrentRegistry.clear();
 
     // Hide the panel header ("Torrents" label) to reduce vertical gap
     const panelHeader = section.querySelector('header.panel__header');
@@ -3460,7 +3852,8 @@
     let rowIdCounter = 0;
 
     // Shared row processing logic
-    const processRows = (rows, episodeId) => {
+    // seasonGroup: identifier for the season (e.g., 'S01', 'S02') used for trump report filtering
+    const processRows = (rows, episodeId, seasonGroup = null) => {
       // Insert Group Header (Mini-header) if Season Layout
       // This replaces the Episode/Season column
       if (isSeasonLayout && episodeId) {
@@ -3540,6 +3933,17 @@
         const torrentUrl = nameLink.href || '';
         const torrentIdMatch = torrentUrl.match(/\/torrents\/(\d+)/);
         const torrentId = torrentIdMatch ? torrentIdMatch[1] : null;
+        const torrentName = getText(nameLink);
+        // Build display name with episode ID and type for better identification
+        // Format: "S01E01 [WEB-DL] Release Name" or "[WEB-DL] Release Name" for movies
+        const typePart = currentType ? `[${currentType}]` : '';
+        const episodePart = episodeId ? `${episodeId} ` : '';
+        const torrentDisplayName = `${episodePart}${typePart} ${torrentName}`.trim();
+
+        // Register torrent in the trump report registry for season-aware filtering
+        if (torrentId) {
+          trumpTorrentRegistry.register(torrentId, torrentDisplayName, seasonGroup);
+        }
 
         // Add dropdown functionality if enabled
         if (CONFIG.enableTorrentDropdowns && torrentId) {
@@ -3650,6 +4054,25 @@
             dl.textContent = 'DL';
             dl.title = 'Download';
             actions.push(dl);
+          }
+
+          // Trump Report Button
+          if (torrentId) {
+            const tr = create('button');
+            tr.textContent = 'TR';
+            tr.title = 'Trump Report';
+            tr.style.background = 'none';
+            tr.style.border = 'none';
+            tr.style.cursor = 'pointer';
+            tr.style.padding = '0';
+            tr.style.color = 'inherit';
+            tr.style.font = 'inherit';
+            tr.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              showTrumpReportModal(torrentId, torrentDisplayName, seasonGroup, isSeasonLayout);
+            });
+            actions.push(tr);
           }
 
           actions.forEach((act, idx) => {
@@ -3810,7 +4233,7 @@
             // If episodes exist, use "S01" to distinguish packs from episodes.
             // If NO episodes exist, the main Season header is enough; hide the mini-header.
             const label = hasEpisodes ? seasonPrefix : '';
-            if (table) processRows($$('tbody tr', table), label);
+            if (table) processRows($$('tbody tr', table), label, seasonPrefix);
           });
         }
 
@@ -3826,7 +4249,7 @@
             const epId = `${seasonPrefix}E${epNum}`;
 
             const table = epDetails.querySelector('table');
-            if (table) processRows($$('tbody tr', table), epId);
+            if (table) processRows($$('tbody tr', table), epId, seasonPrefix);
           });
         }
 
@@ -3836,13 +4259,13 @@
           const table = season.querySelector('table');
           if (table) {
             // Pass empty string to avoid duplicating the Season header
-            processRows($$('tbody tr', table), '');
+            processRows($$('tbody tr', table), '', seasonPrefix);
           }
         }
       });
     } else {
       // Movie Layout (Flat)
-      processRows(movieRows, '');
+      processRows(movieRows, '', null);
     }
 
     newTable.appendChild(tbody);
