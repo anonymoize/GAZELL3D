@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.9.0
+// @version      1.9.1
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -483,6 +483,11 @@
     .torrent-search--list__name:hover .gz-search-title__heading,
     .torrent-search--list__name:hover .gz-search-title__subheading {
       opacity: 1;
+    }
+
+    /* Position context for the hidden original text span (for Seadex compatibility) */
+    .torrent-search--list__name {
+      position: relative;
     }
 
     .gz-tooltip {
@@ -2402,7 +2407,16 @@
       const subEl = create('div', 'gz-search-title__subheading');
       applyUnknownHighlight(subEl, subtitle);
       wrapper.append(headingEl, subEl);
+
+      // Add a visually-hidden span with the original release name for Seadex compatibility
+      // Seadex's getReleaseByReleaseName reads innerText to match release groups
+      const hiddenOriginal = create('span', 'gz-hidden-original');
+      hiddenOriginal.textContent = raw;
+      hiddenOriginal.style.cssText = 'position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;';
+      hiddenOriginal.setAttribute('aria-hidden', 'true');
+
       link.appendChild(wrapper);
+      link.appendChild(hiddenOriginal);
       link.dataset.gzSearch = '1';
     });
   };
@@ -4143,12 +4157,17 @@
           iconSpan.innerHTML = '';
           const originalIcons = row.querySelector('.torrent-icons');
           if (originalIcons) {
-            Array.from(originalIcons.children).forEach(icon => {
+            // Create a copy of children array since we may modify the original
+            const iconsToProcess = Array.from(originalIcons.children);
+            iconsToProcess.forEach(icon => {
               // Filter text nodes but keep elements
               if (icon.nodeType !== 1) return;
 
+              // Check if this is a Seadex icon - these need special handling
+              const isSeadex = icon.hasAttribute('data-seadex');
+
               // Apply filtering logic
-              const isKeep = icon.hasAttribute('data-seadex') ||
+              const isKeep = isSeadex ||
                 icon.classList.contains('torrent-icons__torrent-trump') ||
                 icon.classList.contains('torrent-icons__personal-release') ||
                 icon.classList.contains('torrent-icons__internal');
@@ -4160,7 +4179,13 @@
               // Skip comment icon always
               if (icon.classList.contains('fa-comment-alt-plus') || icon.classList.contains('torrent-icons__comments')) return;
 
-              iconSpan.appendChild(icon.cloneNode(true));
+              // For Seadex icons: MOVE them instead of cloning to preserve event listeners
+              // The original table is hidden anyway, so this is safe
+              if (isSeadex) {
+                iconSpan.appendChild(icon);
+              } else {
+                iconSpan.appendChild(icon.cloneNode(true));
+              }
             });
           }
         };
@@ -4531,34 +4556,47 @@
     // Observe the original hidden wrapper for changes (like Async Seadex icons)
     const observer = new MutationObserver((mutations) => {
       mutations.forEach(mutation => {
-        if (mutation.type === 'childList') {
-          // Check if the mutation happened inside a .torrent-icons span
+        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+          // Only process when nodes are ADDED, not removed
+          // This prevents race conditions when we move icons (which triggers remove mutations)
           const target = mutation.target;
           if (target.matches && (target.matches('.torrent-icons') || target.closest('.torrent-icons'))) {
             const row = target.closest('tr');
             const syncId = row ? row.dataset.gzSyncId : null;
             if (syncId) {
               const newRow = newTable.querySelector(`tr[data-gz-sync-id="${syncId}"]`);
-              // Trigger icon update on the new row
               if (newRow) {
-                // We need to re-run the exact icon-copy logic.
-                // Since 'updateIcons' is scoped, we duplicate the logic here or make it accessible.
                 const iconSpan = newRow.querySelector('.gz-torrent-icons');
                 if (iconSpan) {
-                  iconSpan.innerHTML = ''; // Rebuild
-                  const originalIcons = row.querySelector('.torrent-icons');
-                  if (originalIcons) {
-                    Array.from(originalIcons.children).forEach(icon => {
-                      if (icon.nodeType !== 1) return;
-                      const isKeep = icon.hasAttribute('data-seadex') ||
-                        icon.classList.contains('torrent-icons__torrent-trump') ||
-                        icon.classList.contains('torrent-icons__personal-release') ||
-                        icon.classList.contains('torrent-icons__internal');
-                      if (CONFIG.removeTorrentIcons && !isKeep) return;
-                      if (icon.classList.contains('fa-comment-alt-plus') || icon.classList.contains('torrent-icons__comments')) return;
-                      iconSpan.appendChild(icon.cloneNode(true));
-                    });
-                  }
+                  // Process only the newly added nodes, don't rebuild everything
+                  mutation.addedNodes.forEach(node => {
+                    if (node.nodeType !== 1) return;
+
+                    // Check if this is a Seadex icon (or contains one)
+                    const isSeadexDirect = node.hasAttribute && node.hasAttribute('data-seadex');
+                    const containsSeadex = node.querySelector && node.querySelector('[data-seadex]');
+                    const seadexElement = isSeadexDirect ? node : containsSeadex;
+
+                    if (seadexElement) {
+                      // For Seadex icons: MOVE them to preserve event listeners
+                      // Find the containing li if wrapped, otherwise move the element directly
+                      const elementToMove = seadexElement.closest('li') || seadexElement;
+                      iconSpan.appendChild(elementToMove);
+                    } else {
+                      // Check if it's another "keep" icon
+                      const isKeep = node.classList && (
+                        node.classList.contains('torrent-icons__torrent-trump') ||
+                        node.classList.contains('torrent-icons__personal-release') ||
+                        node.classList.contains('torrent-icons__internal')
+                      );
+
+                      if (!CONFIG.removeTorrentIcons || isKeep) {
+                        // Skip comment icons
+                        if (node.classList && (node.classList.contains('fa-comment-alt-plus') || node.classList.contains('torrent-icons__comments'))) return;
+                        iconSpan.appendChild(node.cloneNode(true));
+                      }
+                    }
+                  });
                 }
               }
             }
@@ -4743,9 +4781,15 @@
 
     const torrentButtons = $(SELECTORS.torrentButtons, article);
 
+    // Keep .torrent__tags as a direct child of article for Seadex compatibility
+    // Seadex uses 'article > ul.torrent__tags' selector which requires direct child
+    const torrentTags = article.querySelector(':scope > ul.torrent__tags');
+
     const fragment = document.createDocumentFragment();
     Array.from(article.children).forEach((child) => {
       if (child === meta || child === torrentButtons) return;
+      // Skip torrent tags - we'll handle it specially for Seadex compatibility
+      if (child === torrentTags) return;
       fragment.appendChild(child);
     });
 
@@ -4764,6 +4808,44 @@
     // Keep torrent buttons in their original form (don't convert to inline buttons)
     if (torrentButtons) {
       left.insertBefore(torrentButtons, left.firstElementChild || null);
+    }
+
+    // For Seadex compatibility: Keep the original .torrent__tags as a hidden direct child of article
+    // Seadex will add its icon there. We'll observe it and sync any Seadex icons to our visible layout.
+    if (torrentTags) {
+      // Clone the tags to display in the layout
+      const visibleTags = torrentTags.cloneNode(true);
+      visibleTags.classList.add('gz-visible-tags');
+
+      // Insert visible tags at the beginning of the left column (or wherever appropriate)
+      left.insertBefore(visibleTags, left.firstElementChild || null);
+
+      // Hide the original but keep it for Seadex to find
+      torrentTags.style.display = 'none';
+
+      // Observe the hidden original for Seadex icons
+      const tagsObserver = new MutationObserver((mutations) => {
+        mutations.forEach(mutation => {
+          if (mutation.type === 'childList') {
+            mutation.addedNodes.forEach(node => {
+              // Check if a Seadex icon was added (it has data-seadex attribute)
+              if (node.nodeType === 1) {
+                const seadexIcon = node.querySelector ?
+                  (node.hasAttribute('data-seadex') ? node : node.querySelector('[data-seadex]')) :
+                  null;
+                if (seadexIcon || (node.hasAttribute && node.hasAttribute('data-seadex'))) {
+                  // Move the Seadex element to visible tags (preserves click handlers)
+                  const elementToMove = seadexIcon || node;
+                  // Find the corresponding li in visible tags, or append to visible tags
+                  visibleTags.appendChild(elementToMove.closest('li') || elementToMove);
+                }
+              }
+            });
+          }
+        });
+      });
+
+      tagsObserver.observe(torrentTags, { childList: true, subtree: true });
     }
 
     const card = createMetaCard(meta);
