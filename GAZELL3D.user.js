@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.9.1
+// @version      1.9.1.1
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -3699,7 +3699,9 @@
           });
 
           // Render files
-          const fileIndentPx = indentPx + 28; // Files are indented one level more than the current folder
+          // Files at root level (depth 0) should have no indent
+          // Files inside folders are already shown after expanding parent, so they use same indent as folder
+          const fileIndentPx = indentPx;
           sortedFiles.forEach(file => {
             const isHidden = parentId !== null;
             rows.push(`
