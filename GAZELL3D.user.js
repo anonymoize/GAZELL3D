@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.8.0.1
+// @version      1.9.0
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -9,6 +9,8 @@
 // @downloadURL  https://github.com/anonymoize/GAZELL3D/raw/refs/heads/main/GAZELL3D.user.js
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @connect      raw.githubusercontent.com
 // @connect      aither.cc
 // ==/UserScript==
@@ -16,7 +18,8 @@
 (function () {
   'use strict';
 
-  const CONFIG = Object.freeze({
+  // Default configuration - will be overridden by user storage
+  const DEFAULT_CONFIG = Object.freeze({
     removeTorrentIcons: true,
     enableGazellifySimilar: true,
     enableGazellifyDetail: false,
@@ -26,11 +29,58 @@
     enableSideLayout: true,
     enableGazelleButtons: true,
     enableGazelleTorrentLayout: true,
-    enableTorrentDropdowns: false,
+    enableTorrentDropdowns: true,
   });
 
-  // API key for Aither (required for dropdown feature)
-  const AITHER_API_KEY = 'YOUR_API_KEY_HERE';
+  // Load user config from storage, falling back to defaults
+  const loadUserConfig = () => {
+    try {
+      const stored = GM_getValue('gz_config', null);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return { ...DEFAULT_CONFIG, ...parsed };
+      }
+    } catch (e) {
+      console.warn('GAZELL3D: Failed to load config from storage', e);
+    }
+    return { ...DEFAULT_CONFIG };
+  };
+
+  // Save user config to storage
+  const saveUserConfig = (config) => {
+    try {
+      GM_setValue('gz_config', JSON.stringify(config));
+      return true;
+    } catch (e) {
+      console.error('GAZELL3D: Failed to save config to storage', e);
+      return false;
+    }
+  };
+
+  // Load API key from storage
+  const loadApiKey = () => {
+    try {
+      return GM_getValue('gz_api_key', '') || '';
+    } catch (e) {
+      return '';
+    }
+  };
+
+  // Save API key to storage
+  const saveApiKey = (key) => {
+    try {
+      GM_setValue('gz_api_key', key || '');
+      return true;
+    } catch (e) {
+      console.error('GAZELL3D: Failed to save API key to storage', e);
+      return false;
+    }
+  };
+
+  // Active config - loaded from storage at runtime
+  let CONFIG = loadUserConfig();
+  let AITHER_API_KEY = loadApiKey();
+
 
   // Utility for making authenticated API calls
   const gmFetchJson = (url, opts = {}, method = 'GET', timeout = 15000) => {
@@ -1508,6 +1558,184 @@
     .gz-toast--info {
       background: rgba(118, 166, 219, 0.95);
       color: #fff;
+    }
+
+    /* Config Button (Footer) */
+    .gz-config-link {
+      cursor: pointer;
+      color: inherit;
+      opacity: 0.8;
+      transition: opacity 0.15s ease;
+      font-size: 0.9em;
+      margin-top: 8px;
+      display: inline-block;
+    }
+
+    .gz-config-link:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+
+    /* Config Modal Styles */
+    .gz-config-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+    }
+
+    .gz-config-modal {
+      background: #1a1a2e;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 24px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .gz-config-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .gz-config-title {
+      font-size: 1.15em;
+      font-weight: 600;
+      color: #fff;
+      margin: 0;
+    }
+
+    .gz-config-close {
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 1.5em;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+      transition: color 0.15s ease;
+    }
+
+    .gz-config-close:hover {
+      color: #fff;
+    }
+
+    .gz-config-section {
+      margin-bottom: 20px;
+    }
+
+    .gz-config-section-title {
+      font-size: 0.85em;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 12px;
+    }
+
+    .gz-config-field {
+      margin-bottom: 14px;
+    }
+
+    .gz-config-field:last-child {
+      margin-bottom: 0;
+    }
+
+    .gz-config-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.9em;
+    }
+
+    .gz-config-label input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: rgba(118, 219, 166, 0.9);
+    }
+
+    .gz-config-input-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .gz-config-input-label {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.9em;
+    }
+
+    .gz-config-input {
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 0.9em;
+      font-family: inherit;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .gz-config-input:focus {
+      outline: none;
+      border-color: rgba(118, 219, 166, 0.6);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .gz-config-input::placeholder {
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    .gz-config-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .gz-config-btn {
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 0.9em;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: none;
+    }
+
+    .gz-config-btn--cancel {
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .gz-config-btn--cancel:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+
+    .gz-config-btn--save {
+      background: rgba(118, 219, 166, 0.8);
+      color: #1a1a2e;
+    }
+
+    .gz-config-btn--save:hover {
+      background: rgba(118, 219, 166, 1);
     }
   `;
 
@@ -4570,6 +4798,144 @@
     return false;
   };
 
+  // Config option definitions for the modal
+  const CONFIG_OPTIONS = [
+    { key: 'removeTorrentIcons', label: 'Remove torrent icons' },
+    { key: 'enableGazellifySimilar', label: 'Gazellify similar page titles' },
+    { key: 'enableGazellifyDetail', label: 'Gazellify detail page titles' },
+    { key: 'enableGazellifySearch', label: 'Gazellify search page titles' },
+    { key: 'enableOriginalTitleTooltip', label: 'Show original title tooltip' },
+    { key: 'showEditButton', label: 'Show edit button' },
+    { key: 'enableSideLayout', label: 'Enable side layout' },
+    { key: 'enableGazelleButtons', label: 'Enable Gazelle-style buttons' },
+    { key: 'enableGazelleTorrentLayout', label: 'Enable Gazelle torrent table layout' },
+    { key: 'enableTorrentDropdowns', label: 'Enable torrent dropdowns (requires API key)' },
+  ];
+
+  // Create and show config modal
+  const showConfigModal = () => {
+    // Remove any existing modal
+    const existing = document.querySelector('.gz-config-overlay');
+    if (existing) existing.remove();
+
+    const overlay = create('div', 'gz-config-overlay');
+    const modal = create('div', 'gz-config-modal');
+
+    // Header
+    const header = create('div', 'gz-config-header');
+    const title = create('h3', 'gz-config-title');
+    title.textContent = '⚙️ GAZELL3D Settings';
+    const closeBtn = create('button', 'gz-config-close');
+    closeBtn.textContent = '×';
+    closeBtn.onclick = () => overlay.remove();
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    modal.appendChild(header);
+
+    // API Key Section
+    const apiSection = create('div', 'gz-config-section');
+    const apiTitle = create('div', 'gz-config-section-title');
+    apiTitle.textContent = 'API Key';
+    apiSection.appendChild(apiTitle);
+
+    const apiField = create('div', 'gz-config-input-field');
+    const apiLabel = create('label', 'gz-config-input-label');
+    apiLabel.textContent = 'Aither API Key (required for dropdowns)';
+    apiLabel.setAttribute('for', 'gz-api-key-input');
+    const apiInput = create('input', 'gz-config-input');
+    apiInput.type = 'password';
+    apiInput.id = 'gz-api-key-input';
+    apiInput.placeholder = 'Enter your API key...';
+    apiInput.value = AITHER_API_KEY || '';
+    apiField.appendChild(apiLabel);
+    apiField.appendChild(apiInput);
+    apiSection.appendChild(apiField);
+    modal.appendChild(apiSection);
+
+    // Options Section
+    const optionsSection = create('div', 'gz-config-section');
+    const optionsTitle = create('div', 'gz-config-section-title');
+    optionsTitle.textContent = 'Options';
+    optionsSection.appendChild(optionsTitle);
+
+    const checkboxes = {};
+    CONFIG_OPTIONS.forEach(opt => {
+      const field = create('div', 'gz-config-field');
+      const label = create('label', 'gz-config-label');
+      const checkbox = create('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
+      checkboxes[opt.key] = checkbox;
+      label.appendChild(checkbox);
+      const text = document.createTextNode(opt.label);
+      label.appendChild(text);
+      field.appendChild(label);
+      optionsSection.appendChild(field);
+    });
+    modal.appendChild(optionsSection);
+
+    // Buttons
+    const buttons = create('div', 'gz-config-buttons');
+    const cancelBtn = create('button', 'gz-config-btn gz-config-btn--cancel');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = () => overlay.remove();
+
+    const saveBtn = create('button', 'gz-config-btn gz-config-btn--save');
+    saveBtn.textContent = 'Save & Reload';
+    saveBtn.onclick = () => {
+      // Save API key
+      const newApiKey = apiInput.value.trim();
+      saveApiKey(newApiKey);
+
+      // Save config options
+      const newConfig = {};
+      CONFIG_OPTIONS.forEach(opt => {
+        newConfig[opt.key] = checkboxes[opt.key].checked;
+      });
+      saveUserConfig(newConfig);
+
+      // Reload to apply changes
+      overlay.remove();
+      window.location.reload();
+    };
+
+    buttons.appendChild(cancelBtn);
+    buttons.appendChild(saveBtn);
+    modal.appendChild(buttons);
+
+    overlay.appendChild(modal);
+    overlay.onclick = (e) => {
+      if (e.target === overlay) overlay.remove();
+    };
+
+    document.body.appendChild(overlay);
+  };
+
+  // Inject config button into footer
+  const injectConfigButton = () => {
+    // Find the footer section with "Torrenting - Modernized"
+    const footerSections = document.querySelectorAll('.footer__section');
+    let targetSection = null;
+
+    for (const section of footerSections) {
+      const p = section.querySelector('p');
+      if (p && p.textContent.includes('Torrenting')) {
+        targetSection = section;
+        break;
+      }
+    }
+
+    if (!targetSection) return;
+
+    // Check if already injected
+    if (targetSection.querySelector('.gz-config-link')) return;
+
+    const configLink = create('span', 'gz-config-link');
+    configLink.textContent = '⚙️ GAZELL3D Config';
+    configLink.onclick = showConfigModal;
+    targetSection.appendChild(configLink);
+  };
+
   const initApp = async () => {
     try {
       const config = await loadConfig();
@@ -4585,6 +4951,9 @@
       if (CONFIG.enableOriginalTitleTooltip) {
         initTooltip();
       }
+
+      // Inject config button into footer
+      injectConfigButton();
 
       if (initPage()) return;
 
