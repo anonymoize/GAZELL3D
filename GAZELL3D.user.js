@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.9.1.1
+// @version      1.9.2
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -4453,8 +4453,20 @@
     };
 
     if (isSeasonLayout) {
+      // Find "Complete pack" section to merge into "Specials"
+      const completePackSection = seasonDetails.find(s => {
+        const summary = s.querySelector('summary');
+        return summary && summary.getAttribute('x-bind') === 'complete';
+      });
+
+      // Filter out "Complete pack" from normal processing - it will be merged into "Specials"
+      const filteredSeasonDetails = seasonDetails.filter(s => {
+        const summary = s.querySelector('summary');
+        return !(summary && summary.getAttribute('x-bind') === 'complete');
+      });
+
       // Sort seasons: Regular seasons first (numeric descending), then Specials (last)
-      seasonDetails.sort((a, b) => {
+      filteredSeasonDetails.sort((a, b) => {
         const ta = normalizeText(getText(a.querySelector('summary')));
         const tb = normalizeText(getText(b.querySelector('summary')));
 
@@ -4471,7 +4483,7 @@
         return nb - na;
       });
 
-      seasonDetails.forEach(season => {
+      filteredSeasonDetails.forEach(season => {
         const seasonSummary = normalizeText(getText(season.querySelector('summary')));
 
         // Determine prefix (S01 or S00 for Specials)
@@ -4492,6 +4504,14 @@
         const seasonRow = create('tr', 'gz-season-header');
         seasonRow.innerHTML = `<td colspan="${colSpan}">${seasonSummary}</td>`;
         tbody.appendChild(seasonRow);
+
+        // If this is "Specials", also process "Complete pack" rows first with S00 label
+        if (isSpecials && completePackSection) {
+          const completeTable = completePackSection.querySelector('table');
+          if (completeTable) {
+            processRows($$('tbody tr', completeTable), 'S00', 'S00');
+          }
+        }
 
         // 1. Check for Season Packs (mixed content)
         const packSummaries = Array.from(season.querySelectorAll('summary[x-bind="pack"]'));
@@ -4536,6 +4556,23 @@
           }
         }
       });
+
+      // Handle edge case: If there's a "Complete pack" but no "Specials" section,
+      // create a "Specials" header and process the complete pack under it
+      if (completePackSection && !filteredSeasonDetails.some(s => {
+        const summary = normalizeText(getText(s.querySelector('summary')));
+        return summary.toLowerCase().includes('special');
+      })) {
+        const colSpan = CONFIG.enableGazelleButtons ? 7 : 6;
+        const seasonRow = create('tr', 'gz-season-header');
+        seasonRow.innerHTML = `<td colspan="${colSpan}">Specials</td>`;
+        tbody.appendChild(seasonRow);
+
+        const completeTable = completePackSection.querySelector('table');
+        if (completeTable) {
+          processRows($$('tbody tr', completeTable), 'S00', 'S00');
+        }
+      }
     } else {
       // Movie Layout (Flat)
       processRows(movieRows, '', null);
