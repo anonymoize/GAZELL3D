@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.9.2
+// @version      1.9.3
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -103,7 +103,8 @@
     });
   };
 
-  const GAZELLIFY_SEQUENCE = Object.freeze([
+  // Default sequence order - can be customized by user
+  const DEFAULT_GAZELLIFY_SEQUENCE = Object.freeze([
     'videoCodec',
     'bitDepth',
     'resolution',
@@ -121,6 +122,67 @@
     'scene',
     'group',
   ]);
+
+  // Human-readable labels for sequence items
+  const SEQUENCE_LABELS = Object.freeze({
+    videoCodec: 'Video Codec',
+    bitDepth: 'Bit Depth',
+    resolution: 'Resolution',
+    country: 'Country',
+    service: 'Streaming Service',
+    source: 'Source',
+    seasonEpisode: 'Season/Episode',
+    language: 'Language',
+    audio: 'Audio Codec',
+    atmos: 'Atmos',
+    hdr: 'HDR',
+    hybrid: 'Hybrid',
+    cut: 'Cut (DC, Extended, etc.)',
+    repack: 'Repack/Proper',
+    scene: 'Scene',
+    group: 'Release Group',
+  });
+
+  // Load sequence config from storage (order + disabled items)
+  const loadGazellifySequence = () => {
+    try {
+      const stored = GM_getValue('gz_sequence_v2', null);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const order = parsed.order || [];
+        const disabled = new Set(parsed.disabled || []);
+
+        // Validate that all default items are present in order
+        const parsedSet = new Set(order);
+        if (order.length === DEFAULT_GAZELLIFY_SEQUENCE.length &&
+          DEFAULT_GAZELLIFY_SEQUENCE.every(item => parsedSet.has(item))) {
+          return { order, disabled };
+        }
+      }
+    } catch (e) {
+      console.warn('GAZELL3D: Failed to load sequence from storage', e);
+    }
+    return { order: [...DEFAULT_GAZELLIFY_SEQUENCE], disabled: new Set() };
+  };
+
+  // Save sequence config to storage
+  const saveGazellifySequence = (order, disabled) => {
+    try {
+      const data = {
+        order,
+        disabled: [...disabled] // Convert Set to array for JSON
+      };
+      GM_setValue('gz_sequence_v2', JSON.stringify(data));
+      return true;
+    } catch (e) {
+      console.error('GAZELL3D: Failed to save sequence to storage', e);
+      return false;
+    }
+  };
+
+  // Active sequence config - loaded from storage at runtime
+  const SEQUENCE_CONFIG = loadGazellifySequence();
+  let GAZELLIFY_SEQUENCE = SEQUENCE_CONFIG.order.filter(key => !SEQUENCE_CONFIG.disabled.has(key));
 
   const SELECTORS = Object.freeze({
     similarArticle: 'main.page__torrent-similar--index article',
@@ -1383,8 +1445,10 @@
     }
 
     .gz-trump-modal {
-      background: #1a1a2e;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(30, 30, 35, 0.95);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 12px;
       padding: 24px;
       width: 90%;
@@ -1474,7 +1538,7 @@
     }
 
     .gz-trump-select option {
-      background: #1a1a2e;
+      background: rgb(30, 30, 35);
       color: #fff;
     }
 
@@ -1511,8 +1575,8 @@
     }
 
     .gz-trump-btn--submit {
-      background: rgba(118, 219, 166, 0.8);
-      color: #1a1a2e;
+      background: rgba(118, 219, 166, 0.85);
+      color: rgb(20, 20, 25);
     }
 
     .gz-trump-btn--submit:hover {
@@ -1552,7 +1616,7 @@
 
     .gz-toast--success {
       background: rgba(118, 219, 166, 0.95);
-      color: #1a1a2e;
+      color: rgb(20, 20, 25);
     }
 
     .gz-toast--error {
@@ -1595,8 +1659,10 @@
     }
 
     .gz-config-modal {
-      background: #1a1a2e;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(30, 30, 35, 0.95);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 12px;
       padding: 24px;
       width: 90%;
@@ -1735,12 +1801,118 @@
     }
 
     .gz-config-btn--save {
-      background: rgba(118, 219, 166, 0.8);
-      color: #1a1a2e;
+      background: rgba(118, 219, 166, 0.85);
+      color: rgb(20, 20, 25);
     }
 
     .gz-config-btn--save:hover {
       background: rgba(118, 219, 166, 1);
+    }
+
+    /* Sequence Ordering (Drag & Drop) */
+    .gz-sequence-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+
+    .gz-sequence-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      cursor: grab;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+
+    .gz-sequence-item:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .gz-sequence-item:active {
+      cursor: grabbing;
+    }
+
+    .gz-sequence-item.dragging {
+      opacity: 0.5;
+      background: rgba(118, 219, 166, 0.1);
+      border-color: rgba(118, 219, 166, 0.3);
+    }
+
+    .gz-sequence-item.drag-over {
+      border-color: rgba(118, 219, 166, 0.6);
+      background: rgba(118, 219, 166, 0.15);
+    }
+
+    .gz-sequence-handle {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      opacity: 0.5;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 0.8em;
+    }
+
+    .gz-sequence-handle::before {
+      content: '⋮⋮';
+      letter-spacing: -2px;
+    }
+
+    .gz-sequence-label {
+      flex: 1;
+      font-size: 0.9em;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .gz-sequence-key {
+      font-size: 0.75em;
+      color: rgba(255, 255, 255, 0.4);
+      font-family: monospace;
+    }
+
+    .gz-sequence-reset {
+      margin-top: 8px;
+      padding: 6px 12px;
+      font-size: 0.8em;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      color: rgba(255, 255, 255, 0.6);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .gz-sequence-reset:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .gz-sequence-toggle {
+      width: 16px;
+      height: 16px;
+      accent-color: rgba(118, 219, 166, 0.9);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .gz-sequence-item.disabled {
+      opacity: 0.5;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .gz-sequence-item.disabled .gz-sequence-label {
+      text-decoration: line-through;
+      color: rgba(255, 255, 255, 0.5);
     }
   `;
 
@@ -4995,6 +5167,125 @@
     });
     modal.appendChild(optionsSection);
 
+    // Sequence Order Section
+    const sequenceSection = create('div', 'gz-config-section');
+    const sequenceTitle = create('div', 'gz-config-section-title');
+    sequenceTitle.textContent = 'Torrent Name Sequence Order';
+    sequenceSection.appendChild(sequenceTitle);
+
+    const sequenceDesc = create('div', 'gz-config-input-label');
+    sequenceDesc.textContent = 'Drag to reorder, toggle checkbox to enable/disable:';
+    sequenceDesc.style.marginBottom = '10px';
+    sequenceSection.appendChild(sequenceDesc);
+
+    const sequenceList = create('div', 'gz-sequence-list');
+    let currentSequence = [...SEQUENCE_CONFIG.order];
+    let disabledItems = new Set(SEQUENCE_CONFIG.disabled);
+
+    const createSequenceItem = (key) => {
+      const isDisabled = disabledItems.has(key);
+      const item = create('div', 'gz-sequence-item' + (isDisabled ? ' disabled' : ''));
+      item.draggable = true;
+      item.dataset.key = key;
+
+      // Toggle checkbox
+      const toggle = create('input', 'gz-sequence-toggle');
+      toggle.type = 'checkbox';
+      toggle.checked = !isDisabled;
+      toggle.title = isDisabled ? 'Enable this component' : 'Disable this component';
+      toggle.onclick = (e) => {
+        e.stopPropagation();
+        if (toggle.checked) {
+          disabledItems.delete(key);
+        } else {
+          disabledItems.add(key);
+        }
+        renderSequenceList();
+      };
+
+      const handle = create('span', 'gz-sequence-handle');
+      const label = create('span', 'gz-sequence-label');
+      label.textContent = SEQUENCE_LABELS[key] || key;
+      const keySpan = create('span', 'gz-sequence-key');
+      keySpan.textContent = key;
+
+      item.appendChild(toggle);
+      item.appendChild(handle);
+      item.appendChild(label);
+      item.appendChild(keySpan);
+
+      // Drag events
+      item.addEventListener('dragstart', (e) => {
+        item.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', key);
+      });
+
+      item.addEventListener('dragend', () => {
+        item.classList.remove('dragging');
+        document.querySelectorAll('.gz-sequence-item').forEach(el => el.classList.remove('drag-over'));
+      });
+
+      item.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const dragging = document.querySelector('.gz-sequence-item.dragging');
+        if (dragging && dragging !== item) {
+          item.classList.add('drag-over');
+        }
+      });
+
+      item.addEventListener('dragleave', () => {
+        item.classList.remove('drag-over');
+      });
+
+      item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        item.classList.remove('drag-over');
+        const draggedKey = e.dataTransfer.getData('text/plain');
+        const targetKey = item.dataset.key;
+
+        if (draggedKey && draggedKey !== targetKey) {
+          const draggedIndex = currentSequence.indexOf(draggedKey);
+          const targetIndex = currentSequence.indexOf(targetKey);
+
+          if (draggedIndex !== -1 && targetIndex !== -1) {
+            // Remove from old position
+            currentSequence.splice(draggedIndex, 1);
+            // Insert at new position
+            currentSequence.splice(targetIndex, 0, draggedKey);
+
+            // Re-render list
+            renderSequenceList();
+          }
+        }
+      });
+
+      return item;
+    };
+
+    const renderSequenceList = () => {
+      sequenceList.innerHTML = '';
+      currentSequence.forEach(key => {
+        sequenceList.appendChild(createSequenceItem(key));
+      });
+    };
+
+    renderSequenceList();
+    sequenceSection.appendChild(sequenceList);
+
+    // Reset button
+    const resetBtn = create('button', 'gz-sequence-reset');
+    resetBtn.textContent = '↺ Reset to Default';
+    resetBtn.onclick = () => {
+      currentSequence = [...DEFAULT_GAZELLIFY_SEQUENCE];
+      disabledItems = new Set();
+      renderSequenceList();
+    };
+    sequenceSection.appendChild(resetBtn);
+
+    modal.appendChild(sequenceSection);
+
     // Buttons
     const buttons = create('div', 'gz-config-buttons');
     const cancelBtn = create('button', 'gz-config-btn gz-config-btn--cancel');
@@ -5014,6 +5305,9 @@
         newConfig[opt.key] = checkboxes[opt.key].checked;
       });
       saveUserConfig(newConfig);
+
+      // Save sequence order and disabled items
+      saveGazellifySequence(currentSequence, disabledItems);
 
       // Reload to apply changes
       overlay.remove();
