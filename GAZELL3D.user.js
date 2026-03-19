@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.9.7
+// @version      1.9.7.1
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -367,7 +367,7 @@
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      justify-content: flex-start;
+      justify-content: center;
       gap: 0.4rem;
       padding: 0;
       margin: 0;
@@ -559,19 +559,24 @@
       padding: 0.25rem 0.6rem;
       background: rgba(255, 255, 255, 0.05);
       border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 4px; /* like pills/tags */
+      border-radius: 4px;
       font-size: 0.85em;
+      color: rgba(255, 255, 255, 0.8);
     }
 
     .gz-panel .work__tags li a {
-      color: rgba(255, 255, 255, 0.8);
-      text-decoration: none;
+      color: inherit !important;
+      text-decoration: none !important;
       display: inline-block;
     }
 
     .gz-panel .work__tags li a:hover {
       color: rgba(255, 255, 255, 1);
       text-decoration: none;
+    }
+
+    .gz-panel .work__tags li span {
+      color: inherit;
     }
 
     /* Header section with centered title and action links (ANT-style) */
@@ -5369,7 +5374,15 @@
       layout.parentNode.insertBefore(pageHeader, layout);
     }
 
-    appendAll(left, [torrents]);
+    // Wrap torrent table in a panelV2 with a 'Torrents' heading
+    const torrentsPanel = create('section', 'panelV2');
+    const torrentsHeader = create('header', 'panel__header');
+    const torrentsHeading = create('h2', 'panel__heading');
+    torrentsHeading.textContent = 'Torrents';
+    torrentsHeader.appendChild(torrentsHeading);
+    torrentsPanel.appendChild(torrentsHeader);
+    torrentsPanel.appendChild(torrents);
+    appendAll(left, [torrentsPanel]);
 
     const { panels, leftPanels } = createMetaPanels(meta, true);
     if (!panels.length && !leftPanels.length) return false;
