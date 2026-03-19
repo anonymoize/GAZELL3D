@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.9.6
+// @version      1.9.7
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -30,7 +30,7 @@
     enableGazelleButtons: true,
     enableGazelleTorrentLayout: true,
     enableTorrentDropdowns: true,
-    baseFontSize: 85,
+    baseFontSize: 100,
     componentColors: {
       videoCodec: '#e6e6e6',
       bitDepth: '#e6e6e6',
@@ -280,35 +280,37 @@
       width: 100%;
     }
 
-    .gz-meta-card {
+    .gz-panel {
       display: flex;
       flex-direction: column;
-      gap: 1rem;
       width: 100%;
-      padding: 1rem;
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 1rem;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      margin-bottom: 1rem;
+      overflow: hidden;
     }
 
-    .gz-meta-card .meta__backdrop {
+    .gz-panel .panel__body {
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+
+    .gz-panel .meta__backdrop {
       display: none;
     }
 
-    .gz-meta-card .meta__title-link {
+    .gz-panel .meta__title-link {
       text-align: center;
       text-decoration: none;
       color: inherit;
       transition: opacity 0.15s ease;
     }
 
-    .gz-meta-card .meta__title-link:hover {
+    .gz-panel .meta__title-link:hover {
       opacity: 0.85;
     }
 
-    .gz-meta-card .meta__title {
+    .gz-panel .meta__title {
       font-size: 1.15em;
       font-weight: 600;
       line-height: 1.3;
@@ -337,23 +339,22 @@
       opacity: 0.65;
     }
 
-    .gz-meta-card .meta__poster-link {
+    .gz-panel .meta__poster-link {
       width: 100%;
       display: block;
       align-self: stretch;
       float: none !important;
-      border-radius: 0.75rem;
+      border-radius: 0; /* Cover fills panel */
       overflow: hidden;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      box-shadow: none;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
-    .gz-meta-card .meta__poster-link:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    .gz-panel .meta__poster-link:hover {
+      box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.4);
     }
 
-    .gz-meta-card .meta__poster {
+    .gz-panel .meta__poster {
       width: 100%;
       height: auto;
       display: block;
@@ -361,20 +362,20 @@
       float: none !important;
     }
 
-    .gz-meta-card .work__tags,
-    .gz-meta-card .meta__ids {
+    .gz-panel .work__tags,
+    .gz-panel .meta__ids {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       gap: 0.4rem;
       padding: 0;
       margin: 0;
       font-size: 0.85em;
     }
 
-    .gz-meta-card .meta__ids li,
-    .gz-meta-card .work__tags li {
+    .gz-panel .meta__ids li,
+    .gz-panel .work__tags li {
       list-style: none;
       white-space: nowrap;
       flex: 0 0 auto;
@@ -383,14 +384,14 @@
       align-items: center;
     }
 
-    .gz-meta-card .meta__ids img {
+    .gz-panel .meta__ids img {
       height: 16px;
       width: auto;
       opacity: 0.8;
       transition: opacity 0.15s ease;
     }
 
-    .gz-meta-card .meta__ids a:hover img {
+    .gz-panel .meta__ids a:hover img {
       opacity: 1;
     }
 
@@ -417,102 +418,160 @@
       border-radius: 0.5rem;
     }
 
-    .gz-meta-card .meta__description {
+    .gz-panel .meta__description {
       margin: 0;
-      padding: 0.75rem;
+      padding: 0;
       border: none;
-      border-radius: 0.6rem;
-      background: rgba(255, 255, 255, 0.03);
+      background: transparent;
       font-size: 0.85em;
       line-height: 1.5;
       color: rgba(255, 255, 255, 0.8);
     }
 
-    .gz-meta-card .meta__chip-container {
+    /* Redesigned movie info layout (like Tron Legacy screenshot) */
+    .gz-movie-info-group {
       display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      width: 100%;
-      padding: 0.75rem;
-      border: none;
-      border-radius: 0.6rem;
-      background: rgba(255, 255, 255, 0.03);
-    }
-
-    .gz-meta-card .meta-chip-wrapper {
-      width: 100%;
-    }
-
-    .gz-meta-card .meta-chip {
-      padding: 0.4rem;
-      border-radius: 0.5rem;
-      transition: background 0.15s ease;
-    }
-
-    .gz-meta-card .meta-chip:hover {
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    .gz-meta-card .meta-chip__image {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      object-fit: cover;
-    }
-
-    .gz-meta-card .meta-chip__name {
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      align-items: baseline;
       font-size: 0.85em;
-      font-weight: 500;
+      line-height: 1.4;
+    }
+    
+    .gz-movie-info-group .gz-chip-heading {
+      color: rgba(255, 255, 255, 0.9);
+      font-weight: 700;
+      margin: 0;
+      margin-right: 0.25rem;
+      font-size: 1em;
+      text-transform: none;
+      letter-spacing: normal;
+      flex: 0 0 auto;
     }
 
-    .gz-meta-card .meta-chip__value {
-      font-size: 0.75em;
-      opacity: 0.7;
-      white-space: normal;
+    .gz-movie-info-group .gz-chip-heading::after {
+      content: ':';
     }
 
-    .gz-meta-card .work__tags,
-    .gz-meta-card .meta__ids {
-      padding: 0;
-      border: none;
-      border-radius: 0;
-      background: transparent;
+    .gz-movie-info-content {
+      color: rgba(255, 255, 255, 0.7);
+      flex: 1 1 auto;
+      word-wrap: break-word;
     }
 
-    .gz-meta-card .gz-meta-divider {
-      border: none;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
-      margin: 0.25rem 0 0.5rem;
-    }
-
-    .gz-meta-card .gz-chip-heading {
-      text-align: left;
-      font-size: 0.7em;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: rgba(255, 255, 255, 0.5);
-      margin: 0.25rem 0 0.35rem 0.25rem;
-      font-weight: 600;
-    }
-
-    .gz-meta-card .work__tags li::after {
-      content: none !important;
-    }
-
-    .gz-meta-card .work__tags li {
-      padding: 0.35rem 0.65rem;
-      background: rgba(255, 255, 255, 0);
-      border-radius: 0.4rem;
-      font-size: 0.95em;
-    }
-
-    .gz-meta-card .work__tags li a {
+    .gz-movie-info-content a {
       color: inherit;
       text-decoration: none;
     }
 
-    .gz-meta-card .work__tags li a:hover {
+    .gz-movie-info-content a:hover {
       text-decoration: underline;
+    }
+
+    .gz-left-panel {
+      margin-top: 0;
+    }
+
+    .gz-left-panel .panel__header {
+      cursor: default;
+    }
+
+    .gz-cast-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      padding: 0 !important;
+    }
+
+    .gz-cast-row {
+      display: flex;
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      font-size: 0.85em;
+      transition: background 0.1s;
+    }
+
+    .gz-cast-row:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .gz-cast-row:last-child {
+      border-bottom: none;
+    }
+
+    .gz-cast-actor {
+      flex: 0 0 45%;
+      text-align: right;
+      padding-right: 1.5rem;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .gz-cast-character {
+      flex: 1;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .gz-cast-actor a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .gz-cast-actor a:hover {
+      text-decoration: underline;
+      color: #fff;
+    }
+
+    .gz-cast-toggle {
+      display: flex;
+      justify-content: flex-end;
+      padding: 0.5rem 1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .gz-cast-toggle-btn {
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.6);
+      cursor: pointer;
+      font-size: 0.8em;
+      padding: 0.2rem 0;
+      transition: color 0.15s;
+    }
+
+    .gz-cast-toggle-btn:hover {
+      color: #fff;
+      text-decoration: underline;
+    }
+
+    .gz-panel .gz-meta-divider {
+      border: none;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      margin: 0.25rem 0;
+    }
+
+    .gz-panel .work__tags li::after {
+      content: none !important;
+    }
+
+    .gz-panel .work__tags li {
+      padding: 0.25rem 0.6rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 4px; /* like pills/tags */
+      font-size: 0.85em;
+    }
+
+    .gz-panel .work__tags li a {
+      color: rgba(255, 255, 255, 0.8);
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .gz-panel .work__tags li a:hover {
+      color: rgba(255, 255, 255, 1);
+      text-decoration: none;
     }
 
     /* Header section with centered title and action links (ANT-style) */
@@ -639,50 +698,23 @@
       .gz-similar-layout__column--right {
         max-width: none;
         flex: 1 1 auto;
-      }
-
-      .gz-meta-card {
+        display: flex;
         flex-direction: row;
         flex-wrap: wrap;
         gap: 1rem;
-        align-items: flex-start;
       }
 
-      .gz-meta-card .meta__poster-link {
-        flex: 0 0 12.5em;
-        max-width: 12.5em;
-      }
-
-      .gz-meta-card .meta__title-link,
-      .gz-meta-card .meta__description,
-      .gz-meta-card .work__tags,
-      .gz-meta-card .meta__ids {
-        flex: 1 1 calc(100% - 13.75em);
-        min-width: 12.5em;
-      }
-
-      .gz-meta-card .gz-meta-divider,
-      .gz-meta-card .gz-chip-heading,
-      .gz-meta-card .meta__chip-container {
-        flex: 1 1 100%;
+      .gz-panel {
+        margin-bottom: 0;
+        flex: 1 1 calc(50% - 0.5rem);
       }
     }
 
     @media (max-width: 700px) {
-      .gz-meta-card {
+      .gz-similar-layout__column--right {
         flex-direction: column;
       }
-
-      .gz-meta-card .meta__poster-link {
-        flex: 1 1 100%;
-        max-width: 17.5em;
-        align-self: center;
-      }
-
-      .gz-meta-card .meta__title-link,
-      .gz-meta-card .meta__description,
-      .gz-meta-card .work__tags,
-      .gz-meta-card .meta__ids {
+      .gz-panel {
         flex: 1 1 100%;
       }
     }
@@ -2947,52 +2979,253 @@
     return { layout, left, right };
   };
 
-  const createMetaCard = (meta) => {
-    if (!meta) return null;
+  const createMetaPanels = (meta, isSimilarPage = false) => {
+    if (!meta) return { panels: [], leftPanels: [] };
 
-    const card = create('section', 'gz-meta-card');
+    const panels = [];
+    const leftPanels = [];
 
-    const moveNode = (selector) => {
-      const node = $(selector, meta);
-      if (node) card.appendChild(node);
+    const createPanel = (title) => {
+      const panel = create('section', 'panelV2 gz-panel');
+      if (title) {
+        const header = create('header', 'panel__header');
+        const heading = create('h2', 'panel__heading');
+        heading.textContent = title;
+        header.appendChild(heading);
+        panel.appendChild(header);
+      }
+      const content = create('div', 'panel__body');
+      panel.appendChild(content);
+      return { panel, content };
     };
 
-    const addDivider = () => {
-      card.appendChild(create('hr', 'gz-meta-divider'));
-    };
+    // 1. Cover Panel
+    const poster = $('.meta__poster-link', meta);
+    const buttons = $('.torrent__buttons', meta);
+    if (poster || buttons) {
+      const { panel, content } = createPanel('Cover');
+      if (poster && !buttons) {
+        content.style.padding = '0'; // If it's just the image, remove padding for a cleaner look
+      }
+      if (poster) content.appendChild(poster);
+      if (buttons) content.appendChild(buttons);
+      panels.push(panel);
+    }
 
-    const moveChipSection = (label, title, addDividerAfter = true) => {
+    // 2. Tags Panel
+    const tags = $('.work__tags', meta);
+    if (tags) {
+      const { panel, content } = createPanel('Tags');
+      content.appendChild(tags);
+      panels.push(panel);
+    }
+
+    // 3. Links Panel
+    const metaIds = $('.meta__ids', meta);
+    if (metaIds) {
+      const { panel, content } = createPanel('Links');
+      content.appendChild(metaIds);
+      panels.push(panel);
+    }
+
+    // 4. Synopsis Panel (similar page only)
+    const description = $('.meta__description', meta);
+    if (description && isSimilarPage) {
+      const synopsisSection = create('section', 'panelV2 gz-left-panel');
+      const synopsisHeader = create('header', 'panel__header');
+      const synopsisHeading = create('h2', 'panel__heading');
+      synopsisHeading.textContent = 'Synopsis';
+      synopsisHeader.appendChild(synopsisHeading);
+      synopsisSection.appendChild(synopsisHeader);
+      const synopsisBody = create('div', 'panel__body');
+      synopsisBody.style.padding = '1rem';
+      description.style.margin = '0';
+      description.style.padding = '0';
+      description.style.border = 'none';
+      description.style.background = 'transparent';
+      description.style.fontSize = '0.9em';
+      description.style.lineHeight = '1.6';
+      synopsisBody.appendChild(description);
+      synopsisSection.appendChild(synopsisBody);
+      leftPanels.push(synopsisSection);
+    }
+
+    // 5. Movie Info Panel
+    const infoSections = [];
+    const processChipSection = (label, displayTitle) => {
       const match = $$('.meta__chip-container', meta).find(
         (section) => getText(section.querySelector('.meta__heading')).toLowerCase() === label
       );
-      if (!match) return;
+      if (!match) return false;
 
-      const heading = create('h2', 'gz-chip-heading');
-      heading.textContent = title;
-      card.appendChild(heading);
+      const chips = $$('.meta-chip', match);
+      if (chips.length > 0) {
 
-      const sectionHeading = match.querySelector('.meta__heading');
-      if (sectionHeading) sectionHeading.remove();
+        const appendItems = (items, heading) => {
+          if (!items.length) return false;
+          const row = create('div', 'gz-movie-info-group');
+          const hr = create('h3', 'gz-chip-heading');
+          hr.textContent = heading;
+          row.appendChild(hr);
 
-      card.appendChild(match);
-      if (addDividerAfter) addDivider();
+          const content = create('div', 'gz-movie-info-content');
+          items.forEach((item, idx) => {
+            if (item.url) {
+              const a = create('a', '');
+              a.href = item.url;
+              a.textContent = item.name;
+              content.appendChild(a);
+            } else {
+              content.appendChild(document.createTextNode(item.name));
+            }
+            if (idx < items.length - 1) {
+              content.appendChild(document.createTextNode(', '));
+            }
+          });
+          row.appendChild(content);
+          infoSections.push(row);
+          return true;
+        };
+
+        if (label === 'cast' && isSimilarPage) {
+          const actors = chips.map(chip => {
+            const nameEl = chip.querySelector('.meta-chip__name'); // Actor
+            const charEl = chip.querySelector('.meta-chip__value'); // Character
+            const url = chip.tagName === 'A' ? chip.href : (chip.querySelector('a') ? chip.querySelector('a').href : '');
+            return {
+              name: nameEl ? getText(nameEl) : '',
+              char: charEl ? getText(charEl) : '',
+              url
+            };
+          }).filter(a => a.name);
+
+          if (actors.length) {
+            const castSection = create('section', 'panelV2 gz-left-panel');
+            const castHeader = create('header', 'panel__header');
+            const castHeading = create('h2', 'panel__heading');
+            castHeading.textContent = displayTitle;
+            castHeader.appendChild(castHeading);
+
+            // Add show all / show less toggle
+            const CAST_DEFAULT_COUNT = 6;
+            if (actors.length > CAST_DEFAULT_COUNT) {
+              const toggleActions = create('div', 'panel__actions');
+              const toggleBtn = create('a', 'gz-cast-toggle-btn');
+              toggleBtn.textContent = 'Show All';
+              toggleBtn.href = '#';
+              toggleActions.appendChild(toggleBtn);
+              castHeader.appendChild(toggleActions);
+            }
+
+            castSection.appendChild(castHeader);
+            const castBody = create('div', 'panel__body gz-cast-grid');
+
+            actors.forEach((actor, idx) => {
+              const row = create('div', 'gz-cast-row');
+              if (idx >= CAST_DEFAULT_COUNT) {
+                row.style.display = 'none';
+                row.classList.add('gz-cast-hidden');
+              }
+              const actorName = create('div', 'gz-cast-actor');
+              if (actor.url) {
+                const a = create('a', '');
+                a.href = actor.url;
+                a.textContent = actor.name;
+                actorName.appendChild(a);
+              } else {
+                actorName.textContent = actor.name;
+              }
+              const charName = create('div', 'gz-cast-character');
+              charName.textContent = actor.char;
+              row.appendChild(actorName);
+              row.appendChild(charName);
+              castBody.appendChild(row);
+            });
+            castSection.appendChild(castBody);
+
+            // Wire up toggle
+            if (actors.length > CAST_DEFAULT_COUNT) {
+              const toggleBtn = castSection.querySelector('.gz-cast-toggle-btn');
+              let expanded = false;
+              toggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                expanded = !expanded;
+                castBody.querySelectorAll('.gz-cast-hidden').forEach(row => {
+                  row.style.display = expanded ? '' : 'none';
+                });
+                toggleBtn.textContent = expanded ? 'Show Less' : 'Show All';
+              });
+            }
+
+            leftPanels.push(castSection);
+          }
+          return true;
+        } else if (label === 'cast') {
+          // On torrent page, skip cast entirely
+          return true;
+        } else if (label === 'crew' || label === 'extra information') {
+          const grouped = {};
+          chips.forEach(chip => {
+            const nameEl = chip.querySelector('.meta-chip__name'); // Role / Company
+            const valEl = chip.querySelector('.meta-chip__value'); // Person / Genre
+            const url = chip.tagName === 'A' ? chip.href : (chip.querySelector('a') ? chip.querySelector('a').href : '');
+
+            const roleText = nameEl ? getText(nameEl) : 'Other';
+            let valText = valEl ? getText(valEl) : '';
+            if (!valText && nameEl) valText = getText(nameEl);
+
+            if (valText && roleText) {
+              if (!grouped[roleText]) grouped[roleText] = [];
+              const cleanVal = valText.replace(/\\s+/g, ' ').trim();
+              if (cleanVal && !grouped[roleText].find(i => i.name === cleanVal)) {
+                grouped[roleText].push({ name: cleanVal, url });
+              }
+            }
+          });
+
+          let added = false;
+          for (const [role, items] of Object.entries(grouped)) {
+            let roleLabel = role;
+            if (items.length > 1 && !role.toLowerCase().endsWith('s')) roleLabel += 's';
+            appendItems(items, roleLabel);
+            added = true;
+          }
+          return added;
+        } else {
+          const items = chips.map(chip => {
+            const valEl = chip.querySelector('.meta-chip__value');
+            const url = chip.tagName === 'A' ? chip.href : (chip.querySelector('a') ? chip.querySelector('a').href : '');
+            const name = valEl ? getText(valEl) : (chip.querySelector('.meta-chip__name') ? getText(chip.querySelector('.meta-chip__name')) : '');
+            return { name, url };
+          }).filter(i => i.name);
+          appendItems(items, displayTitle);
+          return true;
+        }
+      }
+      return false;
     };
 
-    [
-      '.meta__poster-link',
-      '.work__tags',
-      '.meta__ids',
-      '.torrent__buttons',
-      '.meta__description',
-    ].forEach(moveNode);
+    // Convert multiple specific roles typically found on Unit3D pages
+    processChipSection('directors', 'Directors');
+    processChipSection('writers', 'Writers');
+    processChipSection('producers', 'Producers');
+    processChipSection('composers', 'Composers');
+    processChipSection('cinematographers', 'Cinematographers');
+    // Fallback for general cast/crew chips
+    processChipSection('cast', 'Cast');
+    processChipSection('crew', 'Crew');
+    processChipSection('extra information', 'Extra Information');
 
-    addDivider();
-    moveChipSection('cast', 'CAST');
-    moveChipSection('crew', 'CREW');
-    moveChipSection('extra information', 'EXTRA INFORMATION', false);
+    if (infoSections.length > 0) {
+      const { panel, content } = createPanel('Movie Info');
+      infoSections.forEach((section, idx) => {
+        content.appendChild(section);
+      });
+      panels.push(panel);
+    }
 
     meta.remove();
-    return card;
+    return { panels, leftPanels };
   };
 
   const expandAllTorrentGroups = () => {
@@ -4611,9 +4844,9 @@
           newLink.dataset.torrentId = torrentId;
 
           newLink.addEventListener('click', async (e) => {
-            // Ctrl+click or Cmd+click opens the torrent page directly
+            // Ctrl+click or Cmd+click: let the browser handle it natively
+            // (the browser already opens <a> links in a new tab on Ctrl/Cmd+click)
             if (e.ctrlKey || e.metaKey) {
-              window.open(torrentUrl, '_blank');
               return;
             }
 
@@ -5136,11 +5369,16 @@
       layout.parentNode.insertBefore(pageHeader, layout);
     }
 
-    appendAll(left, [torrents, ...extraPanels]);
+    appendAll(left, [torrents]);
 
-    const card = createMetaCard(meta);
-    if (!card) return false;
-    right.appendChild(card);
+    const { panels, leftPanels } = createMetaPanels(meta, true);
+    if (!panels.length && !leftPanels.length) return false;
+
+    // Insert left panels (Synopsis, Cast) right after torrents, before extra panels
+    leftPanels.forEach(panel => left.appendChild(panel));
+    appendAll(left, extraPanels);
+
+    panels.forEach(panel => right.appendChild(panel));
 
     return true;
   };
@@ -5280,9 +5518,9 @@
       tagsObserver.observe(torrentTags, { childList: true, subtree: true });
     }
 
-    const card = createMetaCard(meta);
-    if (!card) return false;
-    right.appendChild(card);
+    const { panels } = createMetaPanels(meta, false);
+    if (!panels.length) return false;
+    panels.forEach(panel => right.appendChild(panel));
 
     return true;
   };
