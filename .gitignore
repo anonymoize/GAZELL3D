@@ -2,3 +2,6 @@
 *.mhtml
 *.bbcode
 *.py
+.DS_Store
+description_stuff/
+comparison_stuff/

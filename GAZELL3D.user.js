@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.9.4
+// @version      1.9.6
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -30,7 +30,26 @@
     enableGazelleButtons: true,
     enableGazelleTorrentLayout: true,
     enableTorrentDropdowns: true,
-    baseFontSize: 100,
+    baseFontSize: 85,
+    componentColors: {
+      videoCodec: '#e6e6e6',
+      bitDepth: '#e6e6e6',
+      resolution: '#00bcd4',
+      country: '#e6e6e6',
+      service: '#00a3d9',
+      source: '#b266ff',
+      remux: '#B8860B',
+      seasonEpisode: '#e6e6e6',
+      language: '#e6e6e6',
+      audio: '#1976D2',
+      atmos: '#1976D2',
+      hdr: '#388E3C',
+      hybrid: '#e6e6e6',
+      cut: '#e6e6e6',
+      repack: '#e6e6e6',
+      scene: '#C2185B',
+      group: '#e6e6e6',
+    },
   });
 
   // Load user config from storage, falling back to defaults
@@ -39,12 +58,19 @@
       const stored = GM_getValue('gz_config', null);
       if (stored) {
         const parsed = JSON.parse(stored);
-        return { ...DEFAULT_CONFIG, ...parsed };
+        return {
+          ...DEFAULT_CONFIG,
+          ...parsed,
+          componentColors: {
+            ...DEFAULT_CONFIG.componentColors,
+            ...(parsed.componentColors || {})
+          }
+        };
       }
     } catch (e) {
       console.warn('GAZELL3D: Failed to load config from storage', e);
     }
-    return { ...DEFAULT_CONFIG };
+    return JSON.parse(JSON.stringify(DEFAULT_CONFIG));
   };
 
   // Save user config to storage
@@ -104,6 +130,27 @@
     });
   };
 
+  // Utility for fetching raw HTML/text
+  const gmFetchText = (url, opts = {}, method = 'GET', timeout = 15000) => {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method,
+        timeout,
+        ...opts,
+        url: url.toString(),
+        ontimeout: () => reject(new Error(`Request timed out after ${timeout}ms`)),
+        onerror: (err) => reject(err || new Error('Failed to fetch')),
+        onload: (response) => {
+          if (response.status >= 200 && response.status < 300) {
+            resolve(response.responseText);
+          } else {
+            reject(new Error(`HTTP Error ${response.status}`));
+          }
+        }
+      });
+    });
+  };
+
   // Default sequence order - can be customized by user
   const DEFAULT_GAZELLIFY_SEQUENCE = Object.freeze([
     'videoCodec',
@@ -112,6 +159,7 @@
     'country',
     'service',
     'source',
+    'remux',
     'seasonEpisode',
     'language',
     'audio',
@@ -132,6 +180,7 @@
     country: 'Country',
     service: 'Streaming Service',
     source: 'Source',
+    remux: 'Remux',
     seasonEpisode: 'Season/Episode',
     language: 'Language',
     audio: 'Audio Codec',
@@ -778,7 +827,6 @@
       /* Prevent layout shift */
       width: 100%;
       box-sizing: border-box;
-      contain: layout style;
     }
 
     /* Ensure gazelle table doesn't shift when dropdown opens */
@@ -1915,6 +1963,70 @@
       text-decoration: line-through;
       color: rgba(255, 255, 255, 0.5);
     }
+
+    /* Native UNIT3D BBCode rendered styles */
+    .bbcode-rendered { font-size: 15px; line-height: 1.5; word-wrap: break-word; color: rgba(255, 255, 255, 0.85); margin: 0; }
+    .bbcode-rendered b, .bbcode-rendered strong { font-weight: 600; }
+    .bbcode-rendered a { background-color: transparent; color: #5dade2; text-decoration: none; }
+    .bbcode-rendered a:hover { text-decoration: underline; }
+    .bbcode-rendered hr { border-bottom: 1px solid rgba(255,255,255,0.1); height: 1px; margin: 24px 0; border: 0; background-color: rgba(255,255,255,0.1); }
+    .bbcode-rendered details { padding: 0 6px; margin-bottom: 2px; display: inline-block; max-width: 100%; border-left: 2px solid rgba(255,255,255,0.1); }
+    .bbcode-rendered details summary { cursor: pointer; display: list-item; padding: 4px; font-weight: 600; }
+    .bbcode-rendered details:not([open]) > *:not(summary) { display: none !important; }
+    .bbcode-rendered h1, .bbcode-rendered h2, .bbcode-rendered h3, .bbcode-rendered h4, .bbcode-rendered h5, .bbcode-rendered h6 { margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25; }
+    .bbcode-rendered h1 { margin: 0.67em 0; padding-bottom: 0.3em; font-size: 30px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .bbcode-rendered h2 { padding-bottom: 0.3em; font-size: 23px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .bbcode-rendered h3 { font-size: 19px; }
+    .bbcode-rendered h4 { font-size: 15px; }
+    .bbcode-rendered h5 { font-size: 13px; }
+    .bbcode-rendered h6 { font-size: 13px; color: rgba(255,255,255,0.5); }
+    .bbcode-rendered blockquote {
+        margin: 12px 2px; padding: 0.25em 0.25em 0.25em 1em; color: rgba(255,255,255,0.6);
+        border-left: 0.25em solid rgba(255,255,255,0.2); font-size: 15px; background-color: rgba(0,0,0,0.2);
+        border-radius: 3px 6px 6px 3px / 8px 6px 6px 8px;
+    }
+    .bbcode-rendered blockquote > cite { font-size: 12px; font-weight: bold; }
+    .bbcode-rendered p, .bbcode-rendered blockquote, .bbcode-rendered ul, .bbcode-rendered ol, .bbcode-rendered dl, .bbcode-rendered table,
+    .bbcode-rendered .bbcode-rendered__center, .bbcode-rendered .bbcode-rendered__left, .bbcode-rendered .bbcode-rendered__right,
+    .bbcode-rendered .bbcode-rendered__alert, .bbcode-rendered .bbcode-rendered__note, .bbcode-rendered .bbcode-rendered__clipboard {
+        margin-top: 12px; margin-bottom: 12px;
+    }
+    .bbcode-rendered ul, .bbcode-rendered ol { padding-left: 2em; }
+    .bbcode-rendered ol { list-style-type: decimal; }
+    .bbcode-rendered ol[type='a'] { list-style-type: lower-alpha; }
+    .bbcode-rendered ol[type='i'] { list-style-type: lower-roman; }
+    .bbcode-rendered li > p { margin-top: 16px; }
+    .bbcode-rendered li + li { margin-top: 0.25em; }
+    .bbcode-rendered > li, .bbcode-rendered :not(ul):not(ol) > li { list-style-position: inside; list-style-type: circle; }
+    .bbcode-rendered table { border-collapse: collapse; display: block; width: max-content; max-width: 100%; overflow: auto; }
+    .bbcode-rendered th { font-weight: 600; }
+    .bbcode-rendered th, .bbcode-rendered td { padding: 6px 13px; border: 1px solid rgba(255,255,255,0.1) !important; background-color: rgba(255,255,255,0.02); }
+    .bbcode-rendered tr { border-top: 1px solid rgba(255,255,255,0.1); }
+    .bbcode-rendered tr:nth-child(2n), .bbcode-rendered tr:nth-child(2n) td { background-color: rgba(255,255,255,0.05); }
+    .bbcode-rendered img { max-width: 100%; }
+    .bbcode-rendered code, .bbcode-rendered kbd, .bbcode-rendered pre { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+    .bbcode-rendered pre { font-size: 12px; word-wrap: normal; overflow: auto; word-break: break-word; white-space: pre-wrap; margin: 0; padding: 12px; border-radius: 6px; flex: 1; min-width: 0; }
+    .bbcode-rendered code { padding: 0.2em 0.4em; margin: 0; font-size: 13px; background-color: rgba(255,255,255,0.05); border-radius: 6px; }
+    .bbcode-rendered pre code { display: inline; padding: 0; background-color: transparent; }
+    .bbcode-rendered .bbcode-rendered__clipboard { display: flex; justify-content: space-between; background-color: rgba(0,0,0,0.25); border-radius: 6px; position: relative; overflow: auto; }
+    .bbcode-rendered__clipboard-button { display: block; background: transparent; border: none; margin: 6px; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 1.1em; padding: 4px; }
+    .bbcode-rendered__clipboard-button:hover, .bbcode-rendered__clipboard-button:focus { color: rgba(255,255,255,0.9); }
+    .bbcode-rendered__alert { border-radius: 5px; padding: 8px; border: 2px solid #e74c3c; }
+    .bbcode-rendered__alert::before { content: 'Alert: '; color: #e74c3c; display: inline-block; padding-right: 1ch; }
+    .bbcode-rendered__note { border-radius: 4px; padding: 8px; border: 2px solid #f39c12; }
+    .bbcode-rendered__note::before { content: 'Note: '; color: #f39c12; display: inline-block; padding-right: 1ch; }
+
+    /* Comparison Block */
+    .comparison__screenshots { display: flex; flex-direction: column; align-items: center; position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; overflow-y: auto; z-index: 10000; background-color: rgba(0,0,0,0.95); list-style-type: none; margin: 0 !important; padding: 0 !important; }
+    .comparison__row { display: flex; flex-direction: row; align-items: center; list-style-type: none; margin: 0; padding: unset !important; margin-left: max(0px, 50% - 50vw); }
+    .comparison__image-container { margin: unset !important; }
+    .comparison__image--hidden, .comparison__image-container--hidden { visibility: hidden; width: 0px; }
+    .comparison__figure { margin: unset !important; }
+    .comparison__image { image-rendering: crisp-edges; max-width: max-content !important; max-height: max-content !important; }
+    .comparison__figcaption { position: fixed; width: 100%; text-align: center; top: 4px; left: calc(50vw - 50%); text-shadow: -2px 0 black, 0 2px black, 2px 0 black, 0 -2px black; color: white; font-size: 18px; z-index: 10001; }
+    .comparison__text { font-weight: 700; margin-bottom: 8px; }
+    .comparison__divider { font-weight: 300; color: rgba(255,255,255,0.4); }
+    .comparison__button { font-weight: 300; background-color: transparent; color: #5dade2; border: none; cursor: pointer; text-decoration: underline; padding: 0 4px; }
   `;
 
   const READY_STATES = ['complete', 'interactive'];
@@ -1943,41 +2055,49 @@
     const value = normalizeText(source);
     if (value) element.dataset.gzOriginal = value;
   };
-  const applyUnknownHighlight = (element, text = '') => {
+  const applyUnknownHighlight = (element, items = '') => {
     if (!element) return;
-    const value = text || '';
     element.textContent = '';
 
-    const parts = value.split(' / ');
-    parts.forEach((part, index) => {
-      if (/unknown/i.test(part)) {
+    let parsedItems = Array.isArray(items) ? items : [];
+    if (!Array.isArray(items)) {
+      const str = items || '';
+      parsedItems = str.split(' / ').map(p => ({ category: 'unknown', value: p }));
+    }
+
+    parsedItems.forEach((item, index) => {
+      const { category, value } = item;
+
+      if (/unknown/i.test(value)) {
         const regex = /unknown/gi;
         let lastIndex = 0;
         let match;
-        while ((match = regex.exec(part))) {
+        while ((match = regex.exec(value))) {
           if (match.index > lastIndex) {
-            element.appendChild(document.createTextNode(part.slice(lastIndex, match.index)));
+            element.appendChild(document.createTextNode(value.slice(lastIndex, match.index)));
           }
           const span = create('span', 'gz-label--unknown');
           span.textContent = match[0];
           element.appendChild(span);
           lastIndex = regex.lastIndex;
         }
-        if (lastIndex < part.length) {
-          element.appendChild(document.createTextNode(part.slice(lastIndex)));
+        if (lastIndex < value.length) {
+          element.appendChild(document.createTextNode(value.slice(lastIndex)));
         }
       } else {
         const span = create('span');
-        span.textContent = part;
-        const style = TAG_STYLES[part];
-        if (style) {
-          if (style.color) span.style.color = style.color;
-          if (style.fontWeight) span.style.fontWeight = style.fontWeight;
+        span.textContent = value;
+        const color = CONFIG.componentColors?.[category];
+        if (color && color !== '#ffffff' && color !== '#e6e6e6') {
+          span.style.color = color;
+        }
+        if (['resolution', 'source', 'remux', 'service', 'audio', 'atmos', 'hdr', 'scene'].includes(category)) {
+          span.style.fontWeight = 'bold';
         }
         element.appendChild(span);
       }
 
-      if (index < parts.length - 1) {
+      if (index < parsedItems.length - 1) {
         const separator = create('span');
         separator.textContent = ' / ';
         separator.style.opacity = '0.65';
@@ -2029,7 +2149,7 @@
       .replace(/[^A-Za-z0-9]+/g, '')
       .toUpperCase();
   const CONFIG_URL = 'https://raw.githubusercontent.com/anonymoize/GAZELL3D/main/config.json';
-  const CACHE_KEY = 'GAZELL3D_CONFIG';
+  const CACHE_KEY = typeof GM_info !== 'undefined' ? 'GAZELL3D_CONFIG_' + GM_info.script.version : 'GAZELL3D_CONFIG_V2';
   const CACHE_EXPIRY = 24 * 60 * 60 * 1000;
 
   let SCENE_RELEASE_GROUPS = new Set();
@@ -2486,6 +2606,7 @@
     const atmos = /\bAtmos\b/i.test(baseTitle) ? 'Atmos' : '';
     const hdr = getMatchFromPatterns(HDR_PATTERNS, baseTitle);
     const hybrid = /\bHybrid\b/i.test(baseTitle) ? 'Hybrid' : '';
+    const remux = /\bRemux\b/i.test(baseTitle) ? 'Remux' : '';
     const repackProper = (() => {
       const match = /\b(REPACK(?:\d+)?|PROPER(?:\d+)?)\b/i.exec(baseTitle);
       return match ? match[1].toUpperCase() : '';
@@ -2505,6 +2626,7 @@
       country,
       service,
       source,
+      remux,
       seasonEpisode,
       language,
       audio: audioCodecWithChannels,
@@ -2522,14 +2644,13 @@
 
     return GAZELLIFY_SEQUENCE
       .filter((key) => !(shouldHideSeasonEpisode && key === 'seasonEpisode'))
-      .map((key) => partValues[key])
-      .filter(Boolean)
-      .join(' / ');
+      .map((key) => ({ category: key, value: partValues[key] }))
+      .filter((part) => Boolean(part.value));
   };
 
   const buildSearchDisplay = (text) => {
     const normalized = normalizeText(text);
-    if (!normalized) return { heading: '', subtitle: '' };
+    if (!normalized) return { heading: '', subtitle: [] };
     const yearMatch = normalized.match(/\b(19|20)\d{2}\b/);
     let headingTitle = normalized;
     let yearText = '';
@@ -2558,7 +2679,7 @@
     const heading = yearText ? `${titleText} (${yearText})` : titleText;
     const originalHeadline = headline.dataset.gzOriginal || headline.textContent || '';
     const subtitle = formatTorrentName(originalHeadline);
-    if (!subtitle) return;
+    if (!subtitle || subtitle.length === 0) return;
 
     const wrapper = create('div', 'gz-detail-title');
     const headingEl = create('div', 'gz-detail-title__heading');
@@ -2590,7 +2711,7 @@
           subtitle: formatTorrentName(raw),
         }
         : buildSearchDisplay(raw);
-      if (!heading || !subtitle) return;
+      if (!heading || !subtitle || subtitle.length === 0) return;
 
       link.textContent = '';
       const wrapper = create('div', 'gz-search-title');
@@ -2649,7 +2770,7 @@
       const formatted = formatTorrentName(sourceText, {
         typeLabel: findTorrentTypeForHeading(heading),
       });
-      if (formatted) {
+      if (formatted && formatted.length > 0) {
         applyUnknownHighlight(link, formatted);
       }
     });
@@ -2999,149 +3120,229 @@
     }
   };
 
-  // BBCode parser - converts common BBCode to HTML
+  const sanitizeUrl = (url, isImage) => {
+    let sanitized = url;
+    if (sanitized.startsWith('/')) {
+      sanitized = 'https://aither.cc' + sanitized;
+    } else if (!/^https?:\/\/|^irc:\/\/|^ftp:\/\/|^sftp:\/\/|^magnet:/i.test(sanitized)) {
+      sanitized = 'https://' + sanitized;
+    }
+    if (/^javascript:/i.test(sanitized) || /^data:/i.test(sanitized) || /^vbscript:/i.test(sanitized)) {
+      return 'Broken link';
+    }
+    return sanitized;
+  };
+
+  const handleBlockElementSpacing = (sourceObj, tagStartIndex, tagStopIndex) => {
+    let source = sourceObj.source;
+    let index = sourceObj.index;
+
+    // Remove up to 2 line breaks AFTER the tag
+    for (let i = 0; i < 2; i++) {
+      let maxIdx = source.length - 1;
+      if (tagStopIndex + 2 <= maxIdx && source.substring(tagStopIndex + 1, tagStopIndex + 3) === "\r\n") {
+        source = source.substring(0, tagStopIndex + 1) + source.substring(tagStopIndex + 3);
+      } else if (tagStopIndex + 1 <= maxIdx && source.charAt(tagStopIndex + 1) === "\n") {
+        source = source.substring(0, tagStopIndex + 1) + source.substring(tagStopIndex + 2);
+      }
+    }
+
+    // Remove up to 2 line breaks BEFORE the tag
+    if (tagStartIndex >= 2 && source.substring(tagStartIndex - 2, tagStartIndex) === "\r\n") {
+      source = source.substring(0, tagStartIndex - 2) + source.substring(tagStartIndex);
+      index -= 2;
+    } else if (tagStartIndex >= 1 && source.charAt(tagStartIndex - 1) === "\n") {
+      source = source.substring(0, tagStartIndex - 1) + source.substring(tagStartIndex);
+      index -= 1;
+    }
+
+    sourceObj.source = source;
+    sourceObj.index = index;
+  };
+
   const parseBBCode = (text) => {
     if (!text) return '';
-    let html = text;
+    let source = text;
 
-    // Escape HTML first to prevent XSS
-    html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Escape HTML first
+    source = source.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-    // Process tags multiple times to handle nesting
-    const processTags = (input) => {
-      let result = input;
-      let prevResult;
+    // Void elements
+    source = source.replace(/\[\*\]/g, '<li>');
+    source = source.replace(/\[hr\]/gi, '<hr>');
 
-      // Keep processing until no more changes (handles nested tags)
-      do {
-        prevResult = result;
+    // Links & Images
+    source = source.replace(/\[url](.*?)\[\/url]/gi, (m, p1) => `<a href="${sanitizeUrl(p1)}">${sanitizeUrl(p1)}</a>`);
+    source = source.replace(/\[url=(.*?)](.*?)\[\/url]/gi, (m, p1, p2) => `<a href="${sanitizeUrl(p1)}">${p2}</a>`);
+    source = source.replace(/\[img](.*?)\[\/img]/gi, (m, p1) => `<img src="${sanitizeUrl(p1)}" loading="lazy" class="img-responsive" style="display: inline !important;">`);
+    source = source.replace(/\[img width=(\d+)](.*?)\[\/img]/gi, (m, p1, p2) => `<img src="${sanitizeUrl(p2)}" loading="lazy" width="${p1}px">`);
+    source = source.replace(/\[img=(\d+)(?:x\d+)?](.*?)\[\/img]/gi, (m, p1, p2) => `<img src="${sanitizeUrl(p2)}" loading="lazy" width="${p1}px">`);
 
-        // Images with size: [img=width]url[/img]
-        result = result.replace(/\[img=(\d+)\](.*?)\[\/img\]/gi, '<img src="$2" class="gz-bbcode-img" style="max-width: $1px;" loading="lazy" alt="Screenshot" />');
+    // Youtube & Video
+    const videoIframe = (m, p1) => `<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/${p1}?rel=0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+    source = source.replace(/\[youtube]([a-z0-9_-]{11})\[\/youtube]/gi, videoIframe);
+    source = source.replace(/\[video]([a-z0-9_-]{11})\[\/video]/gi, videoIframe);
+    source = source.replace(/\[video=&quot;youtube&quot;]([a-z0-9_-]{11})\[\/video]/gi, videoIframe);
 
-        // Images: [img]url[/img]
-        result = result.replace(/\[img\](.*?)\[\/img\]/gi, '<img src="$1" class="gz-bbcode-img" loading="lazy" alt="Screenshot" />');
+    // Comparisons (Basic fallback for JS)
+    source = source.replace(/\[comparison=(.*?)]\s*(.*?)\s*\[\/comparison]/gis, (m, p1, p2) => {
+      const comparates = p1.split(/\s*,\s*/).filter(c => c.trim().length > 0);
+      const urls = p2.split(/\s*(?:,|\s)\s*/).filter(u => u.trim().length > 0);
 
-        // URLs with images inside: [url=link][img...]...[/img][/url]
-        result = result.replace(/\[url=([^\]]*)\](<img[^>]*>)\[\/url\]/gi, '<a href="$1" target="_blank" rel="noopener">$2</a>');
+      if (comparates.length === 0 || urls.length === 0) return 'Broken comparison';
+      const validatedUrls = urls.map(u => sanitizeUrl(u, true));
 
-        // URLs: [url=link]text[/url]
-        result = result.replace(/\[url=([^\]]*)\]([\s\S]*?)\[\/url\]/gi, '<a href="$1" target="_blank" rel="noopener">$2</a>');
+      const chunkedUrls = [];
+      for (let i = 0; i < validatedUrls.length; i += comparates.length) {
+        chunkedUrls.push(validatedUrls.slice(i, i + comparates.length));
+      }
 
-        // URLs: [url]link[/url]
-        result = result.replace(/\[url\](.*?)\[\/url\]/gi, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+      let html = `<div class="comparison" x-data="{ show: false }">`;
+      html += `<div class="comparison__text">`;
+      comparates.forEach((comp, idx) => {
+        html += (idx === comparates.length - 1) ? `${comp}:` : `${comp} <span class="comparison__divider">vs</span> `;
+      });
+      html += ` <button class="comparison__button" x-on:click.prevent="show = true; $nextTick(() => $refs.screenshots.focus())" x-on:keydown.escape.window="show = false">Show</button>`;
+      html += `</div>`;
 
-        // Headings: [h]text[/h] and [h1] through [h6]
-        result = result.replace(/\[h\]([\s\S]*?)\[\/h\]/gi, '<div class="gz-bbcode-heading gz-bbcode-h1">$1</div>');
-        result = result.replace(/\[h1\]([\s\S]*?)\[\/h1\]/gi, '<div class="gz-bbcode-heading gz-bbcode-h1">$1</div>');
-        result = result.replace(/\[h2\]([\s\S]*?)\[\/h2\]/gi, '<div class="gz-bbcode-heading gz-bbcode-h2">$1</div>');
-        result = result.replace(/\[h3\]([\s\S]*?)\[\/h3\]/gi, '<div class="gz-bbcode-heading gz-bbcode-h3">$1</div>');
-        result = result.replace(/\[h4\]([\s\S]*?)\[\/h4\]/gi, '<div class="gz-bbcode-heading gz-bbcode-h4">$1</div>');
-        result = result.replace(/\[h5\]([\s\S]*?)\[\/h5\]/gi, '<div class="gz-bbcode-heading gz-bbcode-h5">$1</div>');
-        result = result.replace(/\[h6\]([\s\S]*?)\[\/h6\]/gi, '<div class="gz-bbcode-heading gz-bbcode-h6">$1</div>');
+      html += `<ul class="comparison__screenshots" tabindex="-1" x-ref="screenshots" x-show="show" x-cloak `;
+      html += `x-on:click="show = false" `;
+      html += `x-on:keydown.down.window="if (show) { $event.preventDefault(); $event.stopPropagation(); $el.scrollBy(0, $el.getElementsByTagName('li')[0].offsetHeight); }" `;
+      html += `x-on:keydown.up.window="if (show) { $event.preventDefault(); $event.stopPropagation(); $el.scrollBy(0, -1 * $el.getElementsByTagName('li')[0].offsetHeight); }">`;
 
-        // Bold, italic, underline, strikethrough
-        result = result.replace(/\[b\]([\s\S]*?)\[\/b\]/gi, '<strong>$1</strong>');
-        result = result.replace(/\[i\]([\s\S]*?)\[\/i\]/gi, '<em>$1</em>');
-        result = result.replace(/\[u\]([\s\S]*?)\[\/u\]/gi, '<u>$1</u>');
-        result = result.replace(/\[s\]([\s\S]*?)\[\/s\]/gi, '<s>$1</s>');
+      chunkedUrls.forEach((row, rowIdx) => {
+        html += `<li>`;
+        html += `<ul class="comparison__row" x-data="{ screen: 1 }" `;
+        html += `x-on:keydown.window="if (isFinite($event.key) && 1 <= $event.key && $event.key <= ${comparates.length}) { screen = $event.key; }" `;
+        html += `x-on:keydown.left.window="if (show) { $event.preventDefault(); $event.stopPropagation(); screen = screen == 1 ? ${comparates.length} : screen - 1; }" `;
+        html += `x-on:keydown.right.window="if (show) { $event.preventDefault(); $event.stopPropagation(); screen = screen == ${comparates.length} ? 1 : screen + 1; }" `;
+        html += `x-on:mousemove.window="screen = Math.ceil(($event.clientX * ${comparates.length}) / window.innerWidth)">`;
 
-        // Size: [size=N]text[/size]
-        result = result.replace(/\[size=(\d+)\]([\s\S]*?)\[\/size\]/gi, '<span style="font-size: $1px;">$2</span>');
+        row.forEach((url, urlIdx) => {
+          const iteration = urlIdx + 1;
+          html += `<li class="comparison__image-container" x-bind:class="screen != ${iteration} && 'comparison__image-container--hidden'">`;
+          html += `<figure class="comparison__figure">`;
+          if (rowIdx === 0) { // first row gets figcaption
+            html += `<figcaption class="comparison__figcaption">${comparates[urlIdx]}</figcaption>`;
+          }
+          html += `<img class="comparison__image" src="${url}" loading="lazy" x-bind:class="screen != ${iteration} && 'comparison__image--hidden'" />`;
+          html += `</figure></li>`;
+        });
+        html += `</ul></li>`;
+      });
+      html += `</ul></div>`;
+      return html;
+    });
 
-        // Color: [color=X]text[/color]
-        result = result.replace(/\[color=([#\w]+)\]([\s\S]*?)\[\/color\]/gi, '<span style="color: $1;">$2</span>');
-
-        // Center, left, right alignment
-        result = result.replace(/\[center\]([\s\S]*?)\[\/center\]/gi, '<div style="text-align: center;">$1</div>');
-        result = result.replace(/\[left\]([\s\S]*?)\[\/left\]/gi, '<div style="text-align: left;">$1</div>');
-        result = result.replace(/\[right\]([\s\S]*?)\[\/right\]/gi, '<div style="text-align: right;">$1</div>');
-
-        // Note: [note]text[/note]
-        result = result.replace(/\[note\]([\s\S]*?)\[\/note\]/gi, '<div class="gz-bbcode-note">$1</div>');
-
-        // Alert: [alert]text[/alert]
-        result = result.replace(/\[alert\]([\s\S]*?)\[\/alert\]/gi, '<div class="gz-bbcode-alert">$1</div>');
-
-        // Quote: [quote=author]text[/quote] and [quote]text[/quote]
-        result = result.replace(/\[quote=([^\]]*)\]([\s\S]*?)\[\/quote\]/gi, '<blockquote class="gz-bbcode-quote"><cite>$1</cite>$2</blockquote>');
-        result = result.replace(/\[quote\]([\s\S]*?)\[\/quote\]/gi, '<blockquote class="gz-bbcode-quote">$1</blockquote>');
-
-        // Code: [code]text[/code]
-        result = result.replace(/\[code\]([\s\S]*?)\[\/code\]/gi, '<pre class="gz-bbcode-code">$1</pre>');
-
-        // Spoiler: [spoiler=title]text[/spoiler] and [spoiler]text[/spoiler]
-        result = result.replace(/\[spoiler=([^\]]*)\]([\s\S]*?)\[\/spoiler\]/gi, '<details class="gz-bbcode-spoiler"><summary>$1</summary><div class="gz-bbcode-spoiler-content">$2</div></details>');
-        result = result.replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi, '<details class="gz-bbcode-spoiler"><summary>Spoiler</summary><div class="gz-bbcode-spoiler-content">$1</div></details>');
-
-        // Hide: [hide]text[/hide]
-        result = result.replace(/\[hide\]([\s\S]*?)\[\/hide\]/gi, '<details class="gz-bbcode-spoiler"><summary>Hidden Content</summary><div class="gz-bbcode-spoiler-content">$1</div></details>');
-
-        // Comparison: [comparison=title]...[/comparison]
-        result = result.replace(/\[comparison=([^\]]*)\]([\s\S]*?)\[\/comparison\]/gi, '<details class="gz-bbcode-comparison"><summary>$1</summary><div class="gz-bbcode-spoiler-content">$2</div></details>');
-
-        // Font: [font=fontname]text[/font]
-        result = result.replace(/\[font=([^\]]+)\]([\s\S]*?)\[\/font\]/gi, '<span style="font-family: $1;">$2</span>');
-
-        // Table tags: [table], [tr], [td], [th]
-        result = result.replace(/\[table\]/gi, '<table class="gz-bbcode-table">');
-        result = result.replace(/\[\/table\]/gi, '</table>');
-        result = result.replace(/\[tr\]/gi, '<tr>');
-        result = result.replace(/\[\/tr\]/gi, '</tr>');
-        result = result.replace(/\[td\]/gi, '<td>');
-        result = result.replace(/\[\/td\]/gi, '</td>');
-        result = result.replace(/\[th\]/gi, '<th>');
-        result = result.replace(/\[\/th\]/gi, '</th>');
-
-        // Horizontal rule: [hr]
-        result = result.replace(/\[hr\]/gi, '<hr class="gz-bbcode-hr">');
-
-      } while (result !== prevResult);
-
-      return result;
+    const parsers = {
+      h1: { open: /^\[h1\]/i, close: '[/h1]', openHtml: '<h1>', closeHtml: '</h1>', block: true },
+      h2: { open: /^\[h2\]/i, close: '[/h2]', openHtml: '<h2>', closeHtml: '</h2>', block: true },
+      h3: { open: /^\[h3\]/i, close: '[/h3]', openHtml: '<h3>', closeHtml: '</h3>', block: true },
+      h4: { open: /^\[h4\]/i, close: '[/h4]', openHtml: '<h4>', closeHtml: '</h4>', block: true },
+      h5: { open: /^\[h5\]/i, close: '[/h5]', openHtml: '<h5>', closeHtml: '</h5>', block: true },
+      h6: { open: /^\[h6\]/i, close: '[/h6]', openHtml: '<h6>', closeHtml: '</h6>', block: true },
+      bold: { open: /^\[b\]/i, close: '[/b]', openHtml: '<b>', closeHtml: '</b>', block: false },
+      italic: { open: /^\[i\]/i, close: '[/i]', openHtml: '<i>', closeHtml: '</i>', block: false },
+      underline: { open: /^\[u\]/i, close: '[/u]', openHtml: '<u>', closeHtml: '</u>', block: false },
+      linethrough: { open: /^\[s\]/i, close: '[/s]', openHtml: '<s>', closeHtml: '</s>', block: false },
+      size: {
+        open: /^\[size=(\d+)\]/i, close: '[/size]', openHtml: '', closeHtml: '</span>', block: false,
+        handler: (m) => `<span style="font-size: clamp(10px, ${m[1]}px, 100px);">`
+      },
+      font: {
+        open: /^\[font=([a-z0-9 ]+)\]/i, close: '[/font]', openHtml: '', closeHtml: '</span>', block: false,
+        handler: (m) => `<span style="font-family: ${m[1]};">`
+      },
+      color: {
+        open: /^\[color=(\#[a-f0-9]{3,4}|\#[a-f0-9]{6}|\#[a-f0-9]{8}|[a-z]+)\]/i, close: '[/color]', openHtml: '', closeHtml: '</span>', block: false,
+        handler: (m) => `<span style="color: ${m[1]};">`
+      },
+      center: { open: /^\[center\]/i, close: '[/center]', openHtml: '<div class="bbcode-rendered__center" style="text-align: center;">', closeHtml: '</div>', block: true },
+      left: { open: /^\[left\]/i, close: '[/left]', openHtml: '<div class="bbcode-rendered__left" style="text-align: left;">', closeHtml: '</div>', block: true },
+      right: { open: /^\[right\]/i, close: '[/right]', openHtml: '<div class="bbcode-rendered__right" style="text-align: right;">', closeHtml: '</div>', block: true },
+      quote: { open: /^\[quote\]/i, close: '[/quote]', openHtml: '<blockquote>', closeHtml: '</blockquote>', block: true },
+      namedquote: {
+        open: /^\[quote=(.*?)\]/i, close: '[/quote]', openHtml: '', closeHtml: '</p></blockquote>', block: true,
+        handler: (m) => `<blockquote><i class="fas fa-quote-left"></i> <cite>Quoting ${m[1]}:</cite><p>`
+      },
+      orderedlistnumerical: { open: /^\[list=1\]/i, close: '[/list]', openHtml: '<ol>', closeHtml: '</ol>', block: true },
+      orderedlistalpha: { open: /^\[list=a\]/i, close: '[/list]', openHtml: '<ol type="a">', closeHtml: '</ol>', block: true },
+      unorderedlist: { open: /^\[list\]/i, close: '[/list]', openHtml: '<ul>', closeHtml: '</ul>', block: true },
+      code: { open: /^\[code\]/i, close: '[/code]', openHtml: '<div class="bbcode-rendered__clipboard" x-data="clipboardButton"><pre><code>', closeHtml: '</code></pre><div class="bbcode-rendered__clipboard-container"><button class="bbcode-rendered__clipboard-button" x-bind="button" title="Copy"><i class="fa fa-clone"></i></button></div></div>', block: true },
+      pre: { open: /^\[pre\]/i, close: '[/pre]', openHtml: '<code>', closeHtml: '</code>', block: false },
+      alert: { open: /^\[alert\]/i, close: '[/alert]', openHtml: '<div class="bbcode-rendered__alert">', closeHtml: '</div>', block: true },
+      note: { open: /^\[note\]/i, close: '[/note]', openHtml: '<div class="bbcode-rendered__note">', closeHtml: '</div>', block: true },
+      sub: { open: /^\[sub\]/i, close: '[/sub]', openHtml: '<sub>', closeHtml: '</sub>', block: false },
+      sup: { open: /^\[sup\]/i, close: '[/sup]', openHtml: '<sup>', closeHtml: '</sup>', block: false },
+      small: { open: /^\[small\]/i, close: '[/small]', openHtml: '<small>', closeHtml: '</small>', block: false },
+      table: { open: /^\[table\]/i, close: '[/table]', openHtml: '<table>', closeHtml: '</table>', block: true },
+      tablerow: { open: /^\[tr\]/i, close: '[/tr]', openHtml: '<tr>', closeHtml: '</tr>', block: true },
+      tableheader: { open: /^\[th\]/i, close: '[/th]', openHtml: '<th>', closeHtml: '</th>', block: true },
+      tabledata: { open: /^\[td\]/i, close: '[/td]', openHtml: '<td>', closeHtml: '</td>', block: true },
+      spoiler: { open: /^\[spoiler\]/i, close: '[/spoiler]', openHtml: '<details><summary>Spoiler</summary><div style="text-align:left;">', closeHtml: '</div></details>', block: false },
+      namedspoiler: {
+        open: /^\[spoiler=(.*?)\]/i, close: '[/spoiler]', openHtml: '', closeHtml: '</div></details>', block: false,
+        handler: (m) => `<details><summary>${m[1]}</summary><div style="text-align:left;">`
+      }
     };
 
-    html = processTags(html);
+    let openedElements = [];
+    let state = { source, index: 0 };
 
-    // Lists: [list] and [*] - handle after other tags
-    // First convert [*] items
-    html = html.replace(/\[\*\]\s*/g, '<li>');
-    // Then wrap [list]...[/list] content
-    html = html.replace(/\[list\]([\s\S]*?)\[\/list\]/gi, '<ul class="gz-bbcode-list">$1</ul>');
-    // Close unclosed <li> tags (simple approach - add closing before next <li> or </ul>)
-    html = html.replace(/<li>([\s\S]*?)(?=<li>|<\/ul>)/gi, '<li>$1</li>');
+    while (state.index < state.source.length) {
+      state.index = state.source.indexOf('[', state.index);
+      if (state.index === -1) break;
+      if (state.index + 1 >= state.source.length) break;
 
-    // Line breaks - but not inside pre/code blocks
-    // Collapse 3+ consecutive newlines to 2 (one blank line max)
-    html = html.replace(/\n{3,}/g, '\n\n');
-    // Convert \n to <br>
-    html = html.replace(/\n/g, '<br>');
+      if (state.source[state.index + 1] === '/' && openedElements.length > 0) {
+        let name = openedElements[openedElements.length - 1];
+        let el = parsers[name];
+        let tag = state.source.substring(state.index, state.index + el.close.length);
 
-    // Collapse 3+ consecutive <br> tags to 2
-    html = html.replace(/(<br>){3,}/gi, '<br><br>');
+        if (tag.toLowerCase() === el.close.toLowerCase()) {
+          openedElements.pop();
+          state.source = state.source.substring(0, state.index) + el.closeHtml + state.source.substring(state.index + el.close.length);
 
-    // Clean up excessive <br> after block elements
-    html = html.replace(/(<\/div>)<br>/gi, '$1');
-    html = html.replace(/(<\/ul>)<br>/gi, '$1');
-    html = html.replace(/(<\/li>)<br>/gi, '$1');
-    html = html.replace(/(<\/details>)<br>/gi, '$1');
-    html = html.replace(/(<\/blockquote>)<br>/gi, '$1');
-    html = html.replace(/<br>(<\/)/gi, '$1');
+          if (el.block) {
+            handleBlockElementSpacing(state, state.index, state.index + el.closeHtml.length - 1);
+          }
+        } else {
+          openedElements.push(name);
+        }
+      } else {
+        let remainingText = state.source.substring(state.index);
+        let matched = false;
 
-    // Clean up <br> tags around table elements (they break table layout)
-    html = html.replace(/(<table[^>]*>)<br>/gi, '$1');
-    html = html.replace(/<br>(<\/table>)/gi, '$1');
-    html = html.replace(/(<tr>)<br>/gi, '$1');
-    html = html.replace(/<br>(<\/tr>)/gi, '$1');
-    html = html.replace(/(<td>)<br>/gi, '$1');
-    html = html.replace(/<br>(<\/td>)/gi, '$1');
-    html = html.replace(/(<th>)<br>/gi, '$1');
-    html = html.replace(/<br>(<\/th>)/gi, '$1');
-    html = html.replace(/(<\/tr>)<br>/gi, '$1');
-    html = html.replace(/(<\/td>)<br>/gi, '$1');
-    html = html.replace(/(<\/th>)<br>/gi, '$1');
+        for (const [name, el] of Object.entries(parsers)) {
+          const match = remainingText.match(el.open);
+          if (match) {
+            let replacement = el.handler ? el.handler(match) : el.openHtml;
+            state.source = state.source.substring(0, state.index) + replacement + state.source.substring(state.index + match[0].length);
 
-    return html;
+            if (el.block) {
+              handleBlockElementSpacing(state, state.index, state.index + replacement.length - 1);
+            }
+
+            openedElements.push(name);
+            matched = true;
+            break;
+          }
+        }
+
+        if (!matched) {
+          state.index++;
+        }
+      }
+    }
+
+    while (openedElements.length > 0) {
+      let name = openedElements.pop();
+      state.source += parsers[name].closeHtml;
+    }
+
+    state.source = state.source.replace(/\r\n/g, '<br>').replace(/\n/g, '<br>');
+
+    return `<div class="bbcode-rendered">${state.source}</div>`;
   };
 
   // MediaInfo parser - extracts key info into a summary
@@ -5204,6 +5405,41 @@
     });
     modal.appendChild(optionsSection);
 
+    // Colors Section
+    const colorsSection = create('div', 'gz-config-section');
+    const colorsTitle = create('div', 'gz-config-section-title');
+    colorsTitle.textContent = 'Component Colors';
+    colorsSection.appendChild(colorsTitle);
+
+    const colorsGrid = create('div');
+    colorsGrid.style.display = 'grid';
+    colorsGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    colorsGrid.style.gap = '8px';
+
+    const colorInputs = {};
+    Object.keys(DEFAULT_CONFIG.componentColors).forEach(key => {
+      const field = create('div', 'gz-config-field');
+      const label = create('label', 'gz-config-label');
+      label.style.display = 'flex';
+      label.style.alignItems = 'center';
+
+      const input = create('input');
+      input.type = 'color';
+      input.value = CONFIG.componentColors[key] || DEFAULT_CONFIG.componentColors[key];
+      input.style.marginRight = '8px';
+      input.style.cursor = 'pointer';
+
+      colorInputs[key] = input;
+
+      label.appendChild(input);
+      label.appendChild(document.createTextNode(SEQUENCE_LABELS[key] || key));
+      field.appendChild(label);
+      colorsGrid.appendChild(field);
+    });
+
+    colorsSection.appendChild(colorsGrid);
+    modal.appendChild(colorsSection);
+
     // Sequence Order Section
     const sequenceSection = create('div', 'gz-config-section');
     const sequenceTitle = create('div', 'gz-config-section-title');
@@ -5345,6 +5581,12 @@
           newConfig[opt.key] = inputs[opt.key].checked;
         }
       });
+
+      newConfig.componentColors = {};
+      Object.keys(DEFAULT_CONFIG.componentColors).forEach(key => {
+        newConfig.componentColors[key] = colorInputs[key].value;
+      });
+
       saveUserConfig(newConfig);
 
       // Save sequence order and disabled items
@@ -5406,7 +5648,7 @@
 
       const dynamicStyles = `
         :root {
-          --gz-base-size: ${(CONFIG.baseFontSize || 100) / 100};
+          --gz-base-size: ${(CONFIG.baseFontSize || 85) / 100};
         }
         .gz-similar-layout,
         .gz-torrent-table,
