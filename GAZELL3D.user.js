@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.9.7.1
+// @version      1.9.7.2
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -556,10 +556,10 @@
     }
 
     .gz-panel .work__tags li {
-      padding: 0.25rem 0.6rem;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
+      padding: 0.15rem 0.3rem;
+      background: none;
+      border: none;
+      border-radius: 0;
       font-size: 0.85em;
       color: rgba(255, 255, 255, 0.8);
     }
@@ -954,8 +954,6 @@
       font-size: 0.9em;
       line-height: 1.35;
       color: rgba(255, 255, 255, 0.85);
-      max-height: 500px;
-      overflow-y: auto;
     }
 
     /* Collapse multiple consecutive br tags to reduce excessive blank lines */
@@ -972,13 +970,9 @@
     }
 
     .gz-dropdown-filelist {
-      max-height: 500px;
-      overflow-y: auto;
     }
 
     .gz-dropdown-mediainfo {
-      max-height: 600px;
-      overflow: auto;
     }
 
     .gz-dropdown-filelist table {
