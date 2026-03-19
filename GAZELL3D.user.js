@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.9.3
+// @version      1.9.4
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -30,6 +30,7 @@
     enableGazelleButtons: true,
     enableGazelleTorrentLayout: true,
     enableTorrentDropdowns: true,
+    baseFontSize: 100,
   });
 
   // Load user config from storage, falling back to defaults
@@ -225,8 +226,8 @@
     }
 
     .gz-similar-layout__column--right {
-      flex: 0 0 300px;
-      max-width: 300px;
+      flex: 0 0 18.75em;
+      max-width: 18.75em;
       width: 100%;
     }
 
@@ -320,7 +321,7 @@
       gap: 0.4rem;
       padding: 0;
       margin: 0;
-      font-size: 0.85rem;
+      font-size: 0.85em;
     }
 
     .gz-meta-card .meta__ids li,
@@ -363,7 +364,7 @@
       white-space: nowrap;
       padding: 0.4rem 0.5rem;
       justify-content: center;
-      font-size: 0.8rem;
+      font-size: 0.8em;
       border-radius: 0.5rem;
     }
 
@@ -453,7 +454,7 @@
       padding: 0.35rem 0.65rem;
       background: rgba(255, 255, 255, 0);
       border-radius: 0.4rem;
-      font-size: 1.4em;
+      font-size: 0.95em;
     }
 
     .gz-meta-card .work__tags li a {
@@ -599,16 +600,16 @@
       }
 
       .gz-meta-card .meta__poster-link {
-        flex: 0 0 200px;
-        max-width: 200px;
+        flex: 0 0 12.5em;
+        max-width: 12.5em;
       }
 
       .gz-meta-card .meta__title-link,
       .gz-meta-card .meta__description,
       .gz-meta-card .work__tags,
       .gz-meta-card .meta__ids {
-        flex: 1 1 calc(100% - 220px);
-        min-width: 200px;
+        flex: 1 1 calc(100% - 13.75em);
+        min-width: 12.5em;
       }
 
       .gz-meta-card .gz-meta-divider,
@@ -625,7 +626,7 @@
 
       .gz-meta-card .meta__poster-link {
         flex: 1 1 100%;
-        max-width: 280px;
+        max-width: 17.5em;
         align-self: center;
       }
 
@@ -1945,26 +1946,44 @@
   const applyUnknownHighlight = (element, text = '') => {
     if (!element) return;
     const value = text || '';
-    if (!/unknown/i.test(value)) {
-      element.textContent = value;
-      return;
-    }
     element.textContent = '';
-    const regex = /unknown/gi;
-    let lastIndex = 0;
-    let match;
-    while ((match = regex.exec(value))) {
-      if (match.index > lastIndex) {
-        element.appendChild(document.createTextNode(value.slice(lastIndex, match.index)));
+
+    const parts = value.split(' / ');
+    parts.forEach((part, index) => {
+      if (/unknown/i.test(part)) {
+        const regex = /unknown/gi;
+        let lastIndex = 0;
+        let match;
+        while ((match = regex.exec(part))) {
+          if (match.index > lastIndex) {
+            element.appendChild(document.createTextNode(part.slice(lastIndex, match.index)));
+          }
+          const span = create('span', 'gz-label--unknown');
+          span.textContent = match[0];
+          element.appendChild(span);
+          lastIndex = regex.lastIndex;
+        }
+        if (lastIndex < part.length) {
+          element.appendChild(document.createTextNode(part.slice(lastIndex)));
+        }
+      } else {
+        const span = create('span');
+        span.textContent = part;
+        const style = TAG_STYLES[part];
+        if (style) {
+          if (style.color) span.style.color = style.color;
+          if (style.fontWeight) span.style.fontWeight = style.fontWeight;
+        }
+        element.appendChild(span);
       }
-      const span = create('span', 'gz-label--unknown');
-      span.textContent = match[0];
-      element.appendChild(span);
-      lastIndex = regex.lastIndex;
-    }
-    if (lastIndex < value.length) {
-      element.appendChild(document.createTextNode(value.slice(lastIndex)));
-    }
+
+      if (index < parts.length - 1) {
+        const separator = create('span');
+        separator.textContent = ' / ';
+        separator.style.opacity = '0.65';
+        element.appendChild(separator);
+      }
+    });
   };
   const findMetadataStartIndex = (text = '') => {
     // 1. TV Shows: Priority on Season/Episode patterns.
@@ -2017,6 +2036,7 @@
   let SERVICE_TOKENS = [];
   let COUNTRY_MAP = {};
   let LANGUAGE_MAP = {};
+  let TAG_STYLES = {};
   let RELEASE_GROUP_BLOCK_TOKENS = new Set();
 
   const loadConfig = async () => {
@@ -2464,7 +2484,7 @@
     })();
     const audioCodecWithChannels = [audioCodec, audioChannels].filter(Boolean).join(' ');
     const atmos = /\bAtmos\b/i.test(baseTitle) ? 'Atmos' : '';
-    const hdr = getMatchFromPatterns(HDR_PATTERNS, baseTitle) || 'SDR';
+    const hdr = getMatchFromPatterns(HDR_PATTERNS, baseTitle);
     const hybrid = /\bHybrid\b/i.test(baseTitle) ? 'Hybrid' : '';
     const repackProper = (() => {
       const match = /\b(REPACK(?:\d+)?|PROPER(?:\d+)?)\b/i.exec(baseTitle);
@@ -5103,6 +5123,7 @@
     { key: 'enableGazelleButtons', label: 'Enable Gazelle-style buttons' },
     { key: 'enableGazelleTorrentLayout', label: 'Enable Gazelle torrent table layout' },
     { key: 'enableTorrentDropdowns', label: 'Enable torrent dropdowns (requires API key)' },
+    { key: 'baseFontSize', label: 'Base Font Size (%)', type: 'number', min: 50, max: 200 },
   ];
 
   // Create and show config modal
@@ -5151,17 +5172,33 @@
     optionsTitle.textContent = 'Options';
     optionsSection.appendChild(optionsTitle);
 
-    const checkboxes = {};
+    const inputs = {};
     CONFIG_OPTIONS.forEach(opt => {
       const field = create('div', 'gz-config-field');
       const label = create('label', 'gz-config-label');
-      const checkbox = create('input');
-      checkbox.type = 'checkbox';
-      checkbox.checked = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
-      checkboxes[opt.key] = checkbox;
-      label.appendChild(checkbox);
-      const text = document.createTextNode(opt.label);
-      label.appendChild(text);
+
+      if (opt.type === 'number') {
+        const input = create('input');
+        input.type = 'number';
+        input.min = opt.min || 0;
+        input.max = opt.max || 1000;
+        input.value = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
+        input.style.width = '60px';
+        input.style.marginRight = '8px';
+        inputs[opt.key] = input;
+
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(opt.label));
+      } else {
+        const checkbox = create('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
+        inputs[opt.key] = checkbox;
+
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(opt.label));
+      }
+
       field.appendChild(label);
       optionsSection.appendChild(field);
     });
@@ -5302,7 +5339,11 @@
       // Save config options
       const newConfig = {};
       CONFIG_OPTIONS.forEach(opt => {
-        newConfig[opt.key] = checkboxes[opt.key].checked;
+        if (opt.type === 'number') {
+          newConfig[opt.key] = parseInt(inputs[opt.key].value, 10) || DEFAULT_CONFIG[opt.key];
+        } else {
+          newConfig[opt.key] = inputs[opt.key].checked;
+        }
       });
       saveUserConfig(newConfig);
 
@@ -5358,11 +5399,27 @@
       SERVICE_TOKENS = config.SERVICE_TOKENS || [];
       COUNTRY_MAP = config.COUNTRY_MAP || {};
       LANGUAGE_MAP = config.LANGUAGE_MAP || {};
+      TAG_STYLES = config.TAG_STYLES || {};
 
       // Initialize dependent sets
       RELEASE_GROUP_BLOCK_TOKENS = initReleaseGroupBlockTokens();
 
-      injectStyles(STYLE);
+      const dynamicStyles = `
+        :root {
+          --gz-base-size: ${(CONFIG.baseFontSize || 100) / 100};
+        }
+        .gz-similar-layout,
+        .gz-torrent-table,
+        .gz-page-header,
+        .gz-search-title,
+        .gz-tooltip,
+        .gz-dropdown-container,
+        .torrent-search--list__name {
+          font-size: calc(1em * var(--gz-base-size, 1));
+        }
+      `;
+
+      injectStyles(STYLE + dynamicStyles);
       if (CONFIG.enableOriginalTitleTooltip) {
         initTooltip();
       }

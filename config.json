@@ -1023,5 +1023,98 @@
     "AFRIKAANS": "Afrikaans",
     "HINDUSTANI": "Hindi",
     "URDU": "Urdu"
+  },
+  "TAG_STYLES": {
+    "4K": {
+      "color": "#00bcd4"
+    },
+    "2160p": {
+      "color": "#00bcd4"
+    },
+    "Blu-ray": {
+      "color": "#047eb4"
+    },
+    "BluRay": {
+      "color": "#047eb4"
+    },
+    "UHD BluRay": {
+      "color": "#047eb4"
+    },
+    "WEB-DL": {
+      "color": "#b266ff"
+    },
+    "WEBRip": {
+      "color": "#b266ff"
+    },
+    "AMZN": {
+      "color": "#00a3d9"
+    },
+    "ATVP": {
+      "color": "#888888"
+    },
+    "DSNP": {
+      "color": "#1d3d8d"
+    },
+    "HMAX": {
+      "color": "#002ae7"
+    },
+    "MAX": {
+      "color": "#002ae7"
+    },
+    "HULU": {
+      "color": "#17ef89"
+    },
+    "MA": {
+      "color": "#009688"
+    },
+    "NF": {
+      "color": "#e9292d"
+    },
+    "PMTP": {
+      "color": "#005ded"
+    },
+    "CC": {
+      "color": "#f3be00"
+    },
+    "DV": {
+      "color": "#D32F2F",
+      "fontWeight": "bold"
+    },
+    "DV HDR10+": {
+      "color": "#388E3C",
+      "fontWeight": "bold"
+    },
+    "DV HDR": {
+      "color": "#388E3C",
+      "fontWeight": "bold"
+    },
+    "HDR10+": {
+      "color": "#388E3C",
+      "fontWeight": "bold"
+    },
+    "HDR10": {
+      "color": "#388E3C",
+      "fontWeight": "bold"
+    },
+    "HDR": {
+      "color": "#388E3C",
+      "fontWeight": "bold"
+    },
+    "HLG": {
+      "color": "#388E3C",
+      "fontWeight": "bold"
+    },
+    "Atmos": {
+      "color": "#1976D2",
+      "fontWeight": "bold"
+    },
+    "Remux": {
+      "color": "#B8860B",
+      "fontWeight": "bold"
+    },
+    "Scene": {
+      "color": "#C2185B",
+      "fontWeight": "bold"
+    }
   }
 }
