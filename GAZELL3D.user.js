@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.9.7.3
+// @version      1.9.8
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -30,6 +30,7 @@
     enableGazelleButtons: true,
     enableGazelleTorrentLayout: true,
     enableTorrentDropdowns: true,
+    enableComponentColors: true,
     baseFontSize: 100,
     componentColors: {
       videoCodec: '#e6e6e6',
@@ -2118,12 +2119,14 @@
       } else {
         const span = create('span');
         span.textContent = value;
-        const color = CONFIG.componentColors?.[category];
-        if (color && color !== '#ffffff' && color !== '#e6e6e6') {
-          span.style.color = color;
-        }
-        if (['resolution', 'source', 'remux', 'service', 'audio', 'atmos', 'hdr', 'scene'].includes(category)) {
-          span.style.fontWeight = 'bold';
+        if (CONFIG.enableComponentColors !== false) {
+          const color = CONFIG.componentColors?.[category];
+          if (color && color !== '#ffffff' && color !== '#e6e6e6') {
+            span.style.color = color;
+          }
+          if (['resolution', 'source', 'remux', 'service', 'audio', 'atmos', 'hdr', 'scene'].includes(category)) {
+            span.style.fontWeight = 'bold';
+          }
         }
         element.appendChild(span);
       }
@@ -5569,6 +5572,7 @@
     { key: 'enableGazelleButtons', label: 'Enable Gazelle-style buttons' },
     { key: 'enableGazelleTorrentLayout', label: 'Enable Gazelle torrent table layout' },
     { key: 'enableTorrentDropdowns', label: 'Enable torrent dropdowns (requires API key)' },
+    { key: 'enableComponentColors', label: 'Enable component colors in Gazellify names' },
     { key: 'baseFontSize', label: 'Base Font Size (%)', type: 'number', min: 50, max: 200 },
   ];
 
@@ -5891,20 +5895,13 @@
       // Initialize dependent sets
       RELEASE_GROUP_BLOCK_TOKENS = initReleaseGroupBlockTokens();
 
-      const dynamicStyles = `
-        :root {
-          --gz-base-size: ${(CONFIG.baseFontSize || 85) / 100};
+      const baseZoom = (CONFIG.baseFontSize || 100) / 100;
+      const dynamicStyles = baseZoom !== 1 ? `
+        main.page__torrent-similar--index article,
+        main.page__torrent--show article {
+          zoom: ${baseZoom};
         }
-        .gz-similar-layout,
-        .gz-torrent-table,
-        .gz-page-header,
-        .gz-search-title,
-        .gz-tooltip,
-        .gz-dropdown-container,
-        .torrent-search--list__name {
-          font-size: calc(1em * var(--gz-base-size, 1));
-        }
-      `;
+      ` : '';
 
       injectStyles(STYLE + dynamicStyles);
       if (CONFIG.enableOriginalTitleTooltip) {
