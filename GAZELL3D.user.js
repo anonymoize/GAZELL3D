@@ -5901,6 +5901,9 @@
         main.page__torrent--show article {
           zoom: ${baseZoom};
         }
+        .comparison__screenshots {
+          zoom: ${1 / baseZoom};
+        }
       ` : '';
 
       injectStyles(STYLE + dynamicStyles);
