@@ -951,6 +951,81 @@
       color: #eaeeecff;
     }
 
+    .gz-dropdown-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      font-size: 0.9em;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .gz-details-section {
+      min-width: 0;
+    }
+
+    .gz-details-heading {
+      margin: 0 0 8px;
+      font-size: 0.78em;
+      line-height: 1.2;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.52);
+      font-weight: 700;
+    }
+
+    .gz-details-grid {
+      display: grid;
+      gap: 6px;
+      margin: 0;
+    }
+
+    .gz-details-row {
+      display: grid;
+      grid-template-columns: minmax(92px, 0.8fr) minmax(0, 1fr);
+      gap: 10px;
+      align-items: baseline;
+      min-width: 0;
+    }
+
+    .gz-details-label {
+      color: rgba(255, 255, 255, 0.55);
+      font-weight: 600;
+      min-width: 0;
+    }
+
+    .gz-details-value {
+      margin: 0;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .gz-details-link {
+      color: #eaeeecff;
+      text-decoration: none;
+    }
+
+    .gz-details-link:hover {
+      text-decoration: underline;
+    }
+
+    .gz-details-value--flag {
+      justify-self: start;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 0.9em;
+    }
+
+    .gz-details-value--active {
+      color: #dff7e8;
+      background: rgba(70, 160, 105, 0.22);
+    }
+
+    .gz-details-value--inactive {
+      color: rgba(255, 255, 255, 0.58);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
     .gz-dropdown-description {
       font-size: 0.9em;
       line-height: 1.35;
@@ -4174,6 +4249,133 @@
   };
 
 
+  const formatDropdownDetailValue = (value) => {
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    if (value === null || value === undefined || value === '') return 'N/A';
+    return String(value);
+  };
+
+  const isFreeleechActive = (value) => {
+    const normalized = String(value ?? '').trim().toLowerCase();
+    return normalized && !['0', '0%', 'false', 'no', 'none', 'n/a'].includes(normalized);
+  };
+
+  const formatImdbTitleId = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const raw = String(value).trim();
+    if (/^tt\d+$/i.test(raw)) return `tt${raw.replace(/^tt/i, '').padStart(7, '0')}`;
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) return null;
+    return `tt${digits.padStart(7, '0')}`;
+  };
+
+  const getTmdbMetaType = (torrentData) => {
+    const category = String(torrentData.category || '').toLowerCase();
+    return category.includes('tv') ? 'tv' : 'movie';
+  };
+
+  const buildMetaIdLink = (source, value, torrentData) => {
+    if (value === null || value === undefined || value === '') return null;
+
+    if (source === 'tmdb') {
+      return `https://www.themoviedb.org/${getTmdbMetaType(torrentData)}/${value}`;
+    }
+    if (source === 'imdb') {
+      const imdbId = formatImdbTitleId(value);
+      return imdbId ? `https://www.imdb.com/title/${imdbId}/` : null;
+    }
+    if (source === 'tvdb') {
+      return `https://thetvdb.com/dereferrer/series/${value}`;
+    }
+    if (source === 'mal') {
+      return `https://myanimelist.net/anime/${value}`;
+    }
+
+    return null;
+  };
+
+  const renderTorrentDetailsContent = (torrentData) => {
+    const content = create('div', 'gz-dropdown-details');
+    const rawLines = [];
+    const sections = [
+      {
+        heading: 'Torrent',
+        rows: [
+          { label: 'Category', value: torrentData.category },
+          { label: 'Type', value: torrentData.type },
+          { label: 'File Count', value: torrentData.num_file }
+        ]
+      },
+      {
+        heading: 'Flags',
+        rows: [
+          { label: 'Double Upload', value: torrentData.double_upload, kind: 'flag' },
+          { label: 'Freeleech', value: torrentData.freeleech, kind: 'freeleech' },
+          { label: 'Internal', value: torrentData.internal, kind: 'flag' },
+          { label: 'Featured', value: torrentData.featured, kind: 'flag' },
+          { label: 'Personal Release', value: torrentData.personal_release, kind: 'flag' },
+          { label: 'Exclusive', value: torrentData.exclusive, kind: 'flag' },
+          { label: 'Trumpable', value: torrentData.trumpable, kind: 'flag' }
+        ]
+      },
+      {
+        heading: 'Meta IDs',
+        rows: [
+          { label: 'TMDB ID', value: torrentData.tmdb_id, href: buildMetaIdLink('tmdb', torrentData.tmdb_id, torrentData) },
+          { label: 'IMDb ID', value: torrentData.imdb_id, displayValue: formatImdbTitleId(torrentData.imdb_id), href: buildMetaIdLink('imdb', torrentData.imdb_id, torrentData) },
+          { label: 'TVDB ID', value: torrentData.tvdb_id, href: buildMetaIdLink('tvdb', torrentData.tvdb_id, torrentData) },
+          { label: 'MAL ID', value: torrentData.mal_id, href: buildMetaIdLink('mal', torrentData.mal_id, torrentData) }
+        ]
+      }
+    ];
+
+    sections.forEach((sectionConfig, sectionIndex) => {
+      if (sectionIndex > 0) rawLines.push('');
+      rawLines.push(`${sectionConfig.heading}:`);
+
+      const section = create('section', 'gz-details-section');
+      const heading = create('h3', 'gz-details-heading');
+      heading.textContent = sectionConfig.heading;
+      section.appendChild(heading);
+
+      const grid = create('dl', 'gz-details-grid');
+      sectionConfig.rows.forEach(({ label, value, displayValue, href, kind }) => {
+        const formattedValue = formatDropdownDetailValue(displayValue ?? value);
+        rawLines.push(`${label}: ${formattedValue}`);
+
+        const row = create('div', 'gz-details-row');
+        const term = create('dt', 'gz-details-label');
+        const detail = create('dd', 'gz-details-value');
+
+        term.textContent = label;
+        if (href && formattedValue !== 'N/A') {
+          const link = create('a', 'gz-details-link');
+          link.href = href;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = formattedValue;
+          detail.appendChild(link);
+        } else {
+          detail.textContent = formattedValue;
+        }
+
+        if (kind === 'flag' || kind === 'freeleech') {
+          const isActive = kind === 'flag' ? value === true : isFreeleechActive(value);
+          detail.classList.add('gz-details-value--flag', isActive ? 'gz-details-value--active' : 'gz-details-value--inactive');
+        }
+
+        row.appendChild(term);
+        row.appendChild(detail);
+        grid.appendChild(row);
+      });
+
+      section.appendChild(grid);
+      content.appendChild(section);
+    });
+
+    return { element: content, rawContent: rawLines.join('\n') };
+  };
+
   // Render the dropdown content for a torrent
   const renderTorrentDropdown = (torrentData, colSpan) => {
     const container = create('div', 'gz-dropdown-container');
@@ -4194,6 +4396,7 @@
 
     // Determine which tabs to show
     const tabsConfig = [
+      { id: 'details', label: 'Details', hasContent: true },
       { id: 'description', label: 'Description', hasContent: true },
       { id: 'filelist', label: 'Files', hasContent: torrentData.files && torrentData.files.length > 0 }
     ];
@@ -4224,7 +4427,12 @@
       let rawCopyContent = '';
 
       // Populate panel content
-      if (config.id === 'description') {
+      if (config.id === 'details') {
+        panel.classList.add('gz-dropdown-details-panel');
+        const details = renderTorrentDetailsContent(torrentData);
+        rawCopyContent = details.rawContent;
+        panel.appendChild(details.element);
+      } else if (config.id === 'description') {
         panel.classList.add('gz-dropdown-description');
         rawCopyContent = torrentData.description || '';
         panel.innerHTML = parseBBCode(rawCopyContent);
