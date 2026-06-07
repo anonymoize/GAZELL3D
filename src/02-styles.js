@@ -712,6 +712,103 @@
       min-width: 0;
     }
 
+    .gz-trump-report-alert-host {
+      grid-column: 1 / -1;
+      min-width: 0;
+    }
+
+    .gz-trump-report-alert-host[hidden] {
+      display: none !important;
+    }
+
+    .gz-trump-report-alert {
+      display: grid;
+      gap: 10px;
+      padding: 12px 14px;
+      background: rgba(170, 36, 36, 0.2);
+      border: 1px solid rgba(255, 90, 90, 0.42);
+      border-left: 4px solid rgba(255, 88, 88, 0.9);
+      border-radius: 6px;
+      color: rgba(255, 238, 238, 0.96);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .gz-trump-report-alert__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .gz-trump-report-alert__title {
+      min-width: 0;
+      font-weight: 800;
+      font-size: 0.96em;
+      overflow-wrap: anywhere;
+    }
+
+    .gz-trump-report-alert__badge {
+      flex: 0 0 auto;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(255, 88, 88, 0.18);
+      color: rgb(255, 205, 205);
+      font-size: 0.78em;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .gz-trump-report-alert__list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .gz-trump-report-alert__item {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .gz-trump-report-alert__item:first-child {
+      padding-top: 0;
+      border-top: none;
+    }
+
+    .gz-trump-report-alert__item-title {
+      min-width: 0;
+      font-weight: 700;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .gz-trump-report-alert__meta {
+      color: rgba(255, 226, 226, 0.72);
+      font-size: 0.82em;
+    }
+
+    .gz-trump-report-alert__row {
+      display: grid;
+      grid-template-columns: 76px minmax(0, 1fr);
+      gap: 10px;
+      align-items: baseline;
+      min-width: 0;
+      font-size: 0.86em;
+    }
+
+    .gz-trump-report-alert__label {
+      color: rgba(255, 226, 226, 0.68);
+      font-weight: 700;
+    }
+
+    .gz-trump-report-alert__value {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      color: rgba(255, 255, 255, 0.92);
+    }
+
     .gz-details-heading {
       margin: 0 0 8px;
       font-size: 0.78em;

@@ -43,9 +43,125 @@
     return null;
   };
 
+  const getTorrentDataId = (torrentData) => {
+    const directId = torrentData?.id ?? torrentData?.torrent_id;
+    if (directId !== null && directId !== undefined && directId !== '') return String(directId);
+
+    const idSources = [
+      torrentData?.details_link,
+      torrentData?.download_link,
+      torrentData?.magnet_link
+    ];
+    for (const source of idSources) {
+      const match = String(source || '').match(/\/(?:torrents|download)\/(\d+)/);
+      if (match) return match[1];
+    }
+
+    return null;
+  };
+
+  const normalizeTrumpReportTorrentList = (value) => {
+    if (!value) return [];
+    return Array.isArray(value) ? value.filter(Boolean) : [value];
+  };
+
+  const formatReportTorrentName = (torrent) => {
+    if (!torrent) return 'Unknown torrent';
+    const name = torrent.name || torrent.title || torrent.release_name || 'Unknown torrent';
+    return torrent.id ? `${name} (#${torrent.id})` : name;
+  };
+
+  const formatTrumpReportStatus = (report) => {
+    if (report?.solved === true) return 'Solved';
+    if (report?.solved === false) return 'Open';
+    return 'Status unknown';
+  };
+
+  const formatTrumpReportDate = (dateStr) => {
+    const formatted = formatDate(dateStr);
+    return formatted === 'Unknown' ? null : formatted;
+  };
+
+  const renderTrumpReportAlert = (host, reports) => {
+    host.textContent = '';
+    const validReports = Array.isArray(reports) ? reports.filter(Boolean) : [];
+    if (!validReports.length) {
+      host.hidden = true;
+      return '';
+    }
+
+    host.hidden = false;
+    const alert = create('div', 'gz-trump-report-alert');
+    const header = create('div', 'gz-trump-report-alert__header');
+    const title = create('div', 'gz-trump-report-alert__title');
+    const countLabel = validReports.length === 1 ? 'Existing Trump Report' : `${validReports.length} Existing Trump Reports`;
+    title.textContent = countLabel;
+    const badge = create('span', 'gz-trump-report-alert__badge');
+    badge.textContent = 'Action needed';
+    appendAll(header, [title, badge]);
+    alert.appendChild(header);
+
+    const list = create('div', 'gz-trump-report-alert__list');
+    const rawLines = [countLabel + ':'];
+
+    validReports.forEach((report, index) => {
+      const item = create('article', 'gz-trump-report-alert__item');
+      const reportTitle = report.title || report.message || `Trump report #${report.id || index + 1}`;
+      const metaParts = [
+        report.id ? `#${report.id}` : null,
+        formatTrumpReportStatus(report),
+        formatTrumpReportDate(report.created_at)
+      ].filter(Boolean);
+
+      const itemTitle = create('div', 'gz-trump-report-alert__item-title');
+      itemTitle.textContent = reportTitle;
+      const meta = create('div', 'gz-trump-report-alert__meta');
+      meta.textContent = metaParts.join(' - ');
+      appendAll(item, [itemTitle, meta]);
+
+      rawLines.push('');
+      rawLines.push(`${index + 1}. ${reportTitle}`);
+      if (metaParts.length) rawLines.push(`Status: ${metaParts.join(' - ')}`);
+
+      const reportedTorrents = normalizeTrumpReportTorrentList(report.reported_torrents);
+      if (reportedTorrents.length) {
+        const row = create('div', 'gz-trump-report-alert__row');
+        const label = create('span', 'gz-trump-report-alert__label');
+        label.textContent = 'Reported';
+        const value = create('span', 'gz-trump-report-alert__value');
+        value.textContent = reportedTorrents.map(formatReportTorrentName).join(' | ');
+        appendAll(row, [label, value]);
+        item.appendChild(row);
+        rawLines.push(`Reported: ${value.textContent}`);
+      }
+
+      const trumpingTorrents = normalizeTrumpReportTorrentList(report.trumping_torrent);
+      if (trumpingTorrents.length) {
+        const row = create('div', 'gz-trump-report-alert__row');
+        const label = create('span', 'gz-trump-report-alert__label');
+        label.textContent = 'Trumping';
+        const value = create('span', 'gz-trump-report-alert__value');
+        value.textContent = trumpingTorrents.map(formatReportTorrentName).join(' | ');
+        appendAll(row, [label, value]);
+        item.appendChild(row);
+        rawLines.push(`Trumping: ${value.textContent}`);
+      }
+
+      list.appendChild(item);
+    });
+
+    alert.appendChild(list);
+    host.appendChild(alert);
+    return rawLines.join('\n');
+  };
+
   const renderTorrentDetailsContent = (torrentData) => {
     const content = create('div', 'gz-dropdown-details');
     const rawLines = [];
+    const torrentId = getTorrentDataId(torrentData);
+    const trumpReportHost = create('div', 'gz-trump-report-alert-host');
+    trumpReportHost.hidden = true;
+    if (torrentId) content.appendChild(trumpReportHost);
     const sections = [
       {
         heading: 'Torrent',
@@ -122,7 +238,7 @@
       content.appendChild(section);
     });
 
-    return { element: content, rawContent: rawLines.join('\n') };
+    return { element: content, rawContent: rawLines.join('\n'), torrentId, trumpReportHost };
   };
 
   // Render the dropdown content for a torrent
@@ -181,6 +297,17 @@
         const details = renderTorrentDetailsContent(torrentData);
         rawCopyContent = details.rawContent;
         panel.appendChild(details.element);
+        if (details.torrentId && details.trumpReportHost) {
+          fetchTrumpReportsForTorrent(details.torrentId)
+            .then((reports) => {
+              const rawReportContent = renderTrumpReportAlert(details.trumpReportHost, reports);
+              panel.dataset.rawContent = [details.rawContent, rawReportContent].filter(Boolean).join('\n\n');
+            })
+            .catch((err) => {
+              console.warn(`GAZELL3D: Failed to fetch trump reports for torrent ${details.torrentId}`, err);
+              details.trumpReportHost.hidden = true;
+            });
+        }
       } else if (config.id === 'description') {
         panel.classList.add('gz-dropdown-description');
         rawCopyContent = torrentData.description || '';

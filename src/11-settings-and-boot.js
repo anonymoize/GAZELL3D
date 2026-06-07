@@ -13,10 +13,8 @@
 
     const searchPage = $(SELECTORS.torrentSearchPage);
     if (searchPage) {
-      if (CONFIG.enableGazellifySearch) {
-        gazellifySearchResults();
-        watchSearchResults();
-      }
+      refreshSearchResults();
+      watchSearchResults();
       return true;
     }
 

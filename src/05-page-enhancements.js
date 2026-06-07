@@ -67,15 +67,99 @@
     });
   };
 
+  const getSearchResultTorrentId = (row, link) => {
+    const rowId = row?.dataset?.torrentId;
+    if (rowId) return rowId;
+    const torrentUrl = link?.href || '';
+    const torrentIdMatch = torrentUrl.match(/\/torrents\/(\d+)/);
+    return torrentIdMatch ? torrentIdMatch[1] : null;
+  };
+
+  const getSearchDropdownColSpan = (row) => {
+    const rowCells = row?.children?.length || 0;
+    if (rowCells > 0) return rowCells;
+    const headerCells = row?.closest('table')?.querySelectorAll('thead th').length || 0;
+    return headerCells > 0 ? headerCells : 1;
+  };
+
+  const enhanceSearchTorrentDropdowns = () => {
+    if (!CONFIG.enableTorrentDropdowns) return;
+
+    $$('.torrent-search--list__row').forEach((row) => {
+      const link = $('.torrent-search--list__name', row);
+      if (!link || link.dataset.gzSearchDropdown === '1') return;
+
+      const torrentId = getSearchResultTorrentId(row, link);
+      if (!torrentId) return;
+
+      link.classList.add('gz-clickable');
+      link.dataset.torrentId = torrentId;
+      link.dataset.gzSearchDropdown = '1';
+
+      link.addEventListener('click', async (e) => {
+        if (e.button !== 0 || e.ctrlKey || e.metaKey) {
+          return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const existingDropdown = row.nextElementSibling;
+        if (existingDropdown && existingDropdown.classList.contains('gz-dropdown-row')) {
+          existingDropdown.remove();
+          return;
+        }
+
+        const colSpan = getSearchDropdownColSpan(row);
+        const loadingRow = createLoadingDropdownRow(colSpan);
+        row.insertAdjacentElement('afterend', loadingRow);
+
+        let torrentData = null;
+        let errorMessage = 'Failed to fetch torrent data. Check API key.';
+        try {
+          torrentData = await fetchTorrentById(torrentId);
+        } catch (err) {
+          errorMessage = err?.message
+            ? `Failed to fetch torrent data: ${err.message}`
+            : errorMessage;
+          console.error(`GAZELL3D: Failed to fetch torrent data for ${torrentId}`, err);
+        }
+        if (!loadingRow.isConnected) return;
+
+        if (!torrentData) {
+          loadingRow.replaceWith(createErrorDropdownRow(colSpan, errorMessage));
+          return;
+        }
+
+        const dropdownRow = create('tr', 'gz-dropdown-row');
+        const td = create('td');
+        td.setAttribute('colspan', colSpan);
+        td.appendChild(renderTorrentDropdown(torrentData, colSpan));
+        dropdownRow.appendChild(td);
+
+        loadingRow.replaceWith(dropdownRow);
+      });
+    });
+  };
+
+  const refreshSearchResults = () => {
+    if (CONFIG.enableGazellifySearch) {
+      gazellifySearchResults();
+    }
+    if (CONFIG.enableTorrentDropdowns) {
+      enhanceSearchTorrentDropdowns();
+    }
+  };
+
   const watchSearchResults = () => {
-    if (!CONFIG.enableGazellifySearch) return;
+    if (!CONFIG.enableGazellifySearch && !CONFIG.enableTorrentDropdowns) return;
     if (searchResultsObserver) {
       searchResultsObserver.disconnect();
       searchResultsObserver = null;
     }
     const searchPage = $(SELECTORS.torrentSearchPage);
     if (!searchPage) return;
-    searchResultsObserver = new MutationObserver(() => gazellifySearchResults());
+    searchResultsObserver = new MutationObserver(() => refreshSearchResults());
     searchResultsObserver.observe(searchPage, { childList: true, subtree: true });
   };
 

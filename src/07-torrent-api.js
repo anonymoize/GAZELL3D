@@ -5,6 +5,10 @@
   // Cache for fetched torrent data
   let torrentDataCache = null;
   let torrentDataPromise = null;
+  const torrentByIdCache = new Map();
+  const torrentByIdPromises = new Map();
+  const trumpReportsByTorrentCache = new Map();
+  const trumpReportsByTorrentPromises = new Map();
 
   // Extract TMDB ID from the page
   const getTmdbIdFromPage = () => {
@@ -56,7 +60,11 @@
 
           // Add torrents from this page to the map
           response.data.forEach(torrent => {
-            dataMap.set(torrent.id, torrent.attributes);
+            const attributes = torrent.attributes || {};
+            dataMap.set(String(torrent.id), {
+              ...attributes,
+              id: attributes.id ?? torrent.id
+            });
           });
 
           // Check if there are more pages to fetch
@@ -86,6 +94,140 @@
     })();
 
     return torrentDataPromise;
+  };
+
+  // Fetch one torrent's full detail payload by ID
+  const fetchTorrentById = async (torrentId) => {
+    const id = String(torrentId || '').trim();
+    if (!id) return null;
+    if (torrentByIdCache.has(id)) return torrentByIdCache.get(id);
+    if (torrentByIdPromises.has(id)) return torrentByIdPromises.get(id);
+
+    if (!AITHER_API_KEY || AITHER_API_KEY === 'YOUR_API_KEY_HERE') {
+      console.warn('GAZELL3D: Aither API key not configured');
+      throw new Error('Aither API key not configured.');
+    }
+
+    const promise = (async () => {
+      try {
+        const response = await gmFetchJson(
+          `https://aither.cc/api/torrents/${encodeURIComponent(id)}`,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${AITHER_API_KEY}`
+            }
+          }
+        );
+
+        const torrentResource = response?.data?.attributes ? response.data : response;
+        const torrentData = torrentResource?.attributes || null;
+        if (!torrentData) {
+          const message = response?.message || 'Empty torrent API response.';
+          throw new Error(message);
+        }
+
+        const normalizedTorrentData = {
+          ...torrentData,
+          id: torrentData.id ?? torrentResource.id ?? id
+        };
+        torrentByIdCache.set(id, normalizedTorrentData);
+        return normalizedTorrentData;
+      } finally {
+        torrentByIdPromises.delete(id);
+      }
+    })();
+
+    torrentByIdPromises.set(id, promise);
+    return promise;
+  };
+
+  const normalizeTrumpReportData = (response) => {
+    const payload = response?.data ?? response;
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (payload && typeof payload === 'object' && (
+      payload.id ||
+      payload.title ||
+      payload.solved !== undefined ||
+      payload.reported_torrents ||
+      payload.trumping_torrent
+    )) {
+      return [payload];
+    }
+    return [];
+  };
+
+  // Fetch existing trump reports filed against a torrent.
+  const fetchTrumpReportsForTorrent = async (torrentId) => {
+    const id = String(torrentId || '').trim();
+    if (!id) return [];
+    if (trumpReportsByTorrentCache.has(id)) return trumpReportsByTorrentCache.get(id);
+    if (trumpReportsByTorrentPromises.has(id)) return trumpReportsByTorrentPromises.get(id);
+
+    if (!AITHER_API_KEY || AITHER_API_KEY === 'YOUR_API_KEY_HERE') {
+      console.warn('GAZELL3D: Aither API key not configured');
+      throw new Error('Aither API key not configured.');
+    }
+
+    const promise = (async () => {
+      try {
+        const reports = [];
+        const seenReportIds = new Set();
+        let currentPage = 1;
+        let hasMorePages = true;
+
+        while (hasMorePages) {
+          const url = new URL('https://aither.cc/api/trumping-reports/filter');
+          url.searchParams.set('reported_torrent_id', id);
+          url.searchParams.set('page', String(currentPage));
+
+          const response = await gmFetchJson(
+            url,
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${AITHER_API_KEY}`
+              }
+            }
+          );
+
+          if (response?.message && response.data === undefined) {
+            throw new Error(response.message);
+          }
+
+          normalizeTrumpReportData(response).forEach((report) => {
+            const reportId = report?.id ?? JSON.stringify(report);
+            if (seenReportIds.has(reportId)) return;
+            seenReportIds.add(reportId);
+            reports.push(report);
+          });
+
+          const lastPage = Number(response?.meta?.last_page || 0);
+          if (lastPage) {
+            hasMorePages = currentPage < lastPage;
+          } else {
+            hasMorePages = Boolean(response?.links?.next);
+          }
+
+          currentPage++;
+          if (currentPage > 20) {
+            console.warn('GAZELL3D: Reached maximum trump report page limit (20 pages)');
+            hasMorePages = false;
+          }
+        }
+
+        trumpReportsByTorrentCache.set(id, reports);
+        return reports;
+      } finally {
+        trumpReportsByTorrentPromises.delete(id);
+      }
+    })();
+
+    trumpReportsByTorrentPromises.set(id, promise);
+    return promise;
   };
 
   // Format bytes to human readable

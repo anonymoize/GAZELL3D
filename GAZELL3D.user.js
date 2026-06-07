@@ -963,6 +963,103 @@
       min-width: 0;
     }
 
+    .gz-trump-report-alert-host {
+      grid-column: 1 / -1;
+      min-width: 0;
+    }
+
+    .gz-trump-report-alert-host[hidden] {
+      display: none !important;
+    }
+
+    .gz-trump-report-alert {
+      display: grid;
+      gap: 10px;
+      padding: 12px 14px;
+      background: rgba(170, 36, 36, 0.2);
+      border: 1px solid rgba(255, 90, 90, 0.42);
+      border-left: 4px solid rgba(255, 88, 88, 0.9);
+      border-radius: 6px;
+      color: rgba(255, 238, 238, 0.96);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .gz-trump-report-alert__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .gz-trump-report-alert__title {
+      min-width: 0;
+      font-weight: 800;
+      font-size: 0.96em;
+      overflow-wrap: anywhere;
+    }
+
+    .gz-trump-report-alert__badge {
+      flex: 0 0 auto;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(255, 88, 88, 0.18);
+      color: rgb(255, 205, 205);
+      font-size: 0.78em;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .gz-trump-report-alert__list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .gz-trump-report-alert__item {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .gz-trump-report-alert__item:first-child {
+      padding-top: 0;
+      border-top: none;
+    }
+
+    .gz-trump-report-alert__item-title {
+      min-width: 0;
+      font-weight: 700;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .gz-trump-report-alert__meta {
+      color: rgba(255, 226, 226, 0.72);
+      font-size: 0.82em;
+    }
+
+    .gz-trump-report-alert__row {
+      display: grid;
+      grid-template-columns: 76px minmax(0, 1fr);
+      gap: 10px;
+      align-items: baseline;
+      min-width: 0;
+      font-size: 0.86em;
+    }
+
+    .gz-trump-report-alert__label {
+      color: rgba(255, 226, 226, 0.68);
+      font-weight: 700;
+    }
+
+    .gz-trump-report-alert__value {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      color: rgba(255, 255, 255, 0.92);
+    }
+
     .gz-details-heading {
       margin: 0 0 8px;
       font-size: 0.78em;
@@ -2845,15 +2942,99 @@
     });
   };
 
+  const getSearchResultTorrentId = (row, link) => {
+    const rowId = row?.dataset?.torrentId;
+    if (rowId) return rowId;
+    const torrentUrl = link?.href || '';
+    const torrentIdMatch = torrentUrl.match(/\/torrents\/(\d+)/);
+    return torrentIdMatch ? torrentIdMatch[1] : null;
+  };
+
+  const getSearchDropdownColSpan = (row) => {
+    const rowCells = row?.children?.length || 0;
+    if (rowCells > 0) return rowCells;
+    const headerCells = row?.closest('table')?.querySelectorAll('thead th').length || 0;
+    return headerCells > 0 ? headerCells : 1;
+  };
+
+  const enhanceSearchTorrentDropdowns = () => {
+    if (!CONFIG.enableTorrentDropdowns) return;
+
+    $$('.torrent-search--list__row').forEach((row) => {
+      const link = $('.torrent-search--list__name', row);
+      if (!link || link.dataset.gzSearchDropdown === '1') return;
+
+      const torrentId = getSearchResultTorrentId(row, link);
+      if (!torrentId) return;
+
+      link.classList.add('gz-clickable');
+      link.dataset.torrentId = torrentId;
+      link.dataset.gzSearchDropdown = '1';
+
+      link.addEventListener('click', async (e) => {
+        if (e.button !== 0 || e.ctrlKey || e.metaKey) {
+          return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const existingDropdown = row.nextElementSibling;
+        if (existingDropdown && existingDropdown.classList.contains('gz-dropdown-row')) {
+          existingDropdown.remove();
+          return;
+        }
+
+        const colSpan = getSearchDropdownColSpan(row);
+        const loadingRow = createLoadingDropdownRow(colSpan);
+        row.insertAdjacentElement('afterend', loadingRow);
+
+        let torrentData = null;
+        let errorMessage = 'Failed to fetch torrent data. Check API key.';
+        try {
+          torrentData = await fetchTorrentById(torrentId);
+        } catch (err) {
+          errorMessage = err?.message
+            ? `Failed to fetch torrent data: ${err.message}`
+            : errorMessage;
+          console.error(`GAZELL3D: Failed to fetch torrent data for ${torrentId}`, err);
+        }
+        if (!loadingRow.isConnected) return;
+
+        if (!torrentData) {
+          loadingRow.replaceWith(createErrorDropdownRow(colSpan, errorMessage));
+          return;
+        }
+
+        const dropdownRow = create('tr', 'gz-dropdown-row');
+        const td = create('td');
+        td.setAttribute('colspan', colSpan);
+        td.appendChild(renderTorrentDropdown(torrentData, colSpan));
+        dropdownRow.appendChild(td);
+
+        loadingRow.replaceWith(dropdownRow);
+      });
+    });
+  };
+
+  const refreshSearchResults = () => {
+    if (CONFIG.enableGazellifySearch) {
+      gazellifySearchResults();
+    }
+    if (CONFIG.enableTorrentDropdowns) {
+      enhanceSearchTorrentDropdowns();
+    }
+  };
+
   const watchSearchResults = () => {
-    if (!CONFIG.enableGazellifySearch) return;
+    if (!CONFIG.enableGazellifySearch && !CONFIG.enableTorrentDropdowns) return;
     if (searchResultsObserver) {
       searchResultsObserver.disconnect();
       searchResultsObserver = null;
     }
     const searchPage = $(SELECTORS.torrentSearchPage);
     if (!searchPage) return;
-    searchResultsObserver = new MutationObserver(() => gazellifySearchResults());
+    searchResultsObserver = new MutationObserver(() => refreshSearchResults());
     searchResultsObserver.observe(searchPage, { childList: true, subtree: true });
   };
 
@@ -3322,6 +3503,10 @@
   // Cache for fetched torrent data
   let torrentDataCache = null;
   let torrentDataPromise = null;
+  const torrentByIdCache = new Map();
+  const torrentByIdPromises = new Map();
+  const trumpReportsByTorrentCache = new Map();
+  const trumpReportsByTorrentPromises = new Map();
 
   // Extract TMDB ID from the page
   const getTmdbIdFromPage = () => {
@@ -3373,7 +3558,11 @@
 
           // Add torrents from this page to the map
           response.data.forEach(torrent => {
-            dataMap.set(torrent.id, torrent.attributes);
+            const attributes = torrent.attributes || {};
+            dataMap.set(String(torrent.id), {
+              ...attributes,
+              id: attributes.id ?? torrent.id
+            });
           });
 
           // Check if there are more pages to fetch
@@ -3403,6 +3592,140 @@
     })();
 
     return torrentDataPromise;
+  };
+
+  // Fetch one torrent's full detail payload by ID
+  const fetchTorrentById = async (torrentId) => {
+    const id = String(torrentId || '').trim();
+    if (!id) return null;
+    if (torrentByIdCache.has(id)) return torrentByIdCache.get(id);
+    if (torrentByIdPromises.has(id)) return torrentByIdPromises.get(id);
+
+    if (!AITHER_API_KEY || AITHER_API_KEY === 'YOUR_API_KEY_HERE') {
+      console.warn('GAZELL3D: Aither API key not configured');
+      throw new Error('Aither API key not configured.');
+    }
+
+    const promise = (async () => {
+      try {
+        const response = await gmFetchJson(
+          `https://aither.cc/api/torrents/${encodeURIComponent(id)}`,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${AITHER_API_KEY}`
+            }
+          }
+        );
+
+        const torrentResource = response?.data?.attributes ? response.data : response;
+        const torrentData = torrentResource?.attributes || null;
+        if (!torrentData) {
+          const message = response?.message || 'Empty torrent API response.';
+          throw new Error(message);
+        }
+
+        const normalizedTorrentData = {
+          ...torrentData,
+          id: torrentData.id ?? torrentResource.id ?? id
+        };
+        torrentByIdCache.set(id, normalizedTorrentData);
+        return normalizedTorrentData;
+      } finally {
+        torrentByIdPromises.delete(id);
+      }
+    })();
+
+    torrentByIdPromises.set(id, promise);
+    return promise;
+  };
+
+  const normalizeTrumpReportData = (response) => {
+    const payload = response?.data ?? response;
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (payload && typeof payload === 'object' && (
+      payload.id ||
+      payload.title ||
+      payload.solved !== undefined ||
+      payload.reported_torrents ||
+      payload.trumping_torrent
+    )) {
+      return [payload];
+    }
+    return [];
+  };
+
+  // Fetch existing trump reports filed against a torrent.
+  const fetchTrumpReportsForTorrent = async (torrentId) => {
+    const id = String(torrentId || '').trim();
+    if (!id) return [];
+    if (trumpReportsByTorrentCache.has(id)) return trumpReportsByTorrentCache.get(id);
+    if (trumpReportsByTorrentPromises.has(id)) return trumpReportsByTorrentPromises.get(id);
+
+    if (!AITHER_API_KEY || AITHER_API_KEY === 'YOUR_API_KEY_HERE') {
+      console.warn('GAZELL3D: Aither API key not configured');
+      throw new Error('Aither API key not configured.');
+    }
+
+    const promise = (async () => {
+      try {
+        const reports = [];
+        const seenReportIds = new Set();
+        let currentPage = 1;
+        let hasMorePages = true;
+
+        while (hasMorePages) {
+          const url = new URL('https://aither.cc/api/trumping-reports/filter');
+          url.searchParams.set('reported_torrent_id', id);
+          url.searchParams.set('page', String(currentPage));
+
+          const response = await gmFetchJson(
+            url,
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${AITHER_API_KEY}`
+              }
+            }
+          );
+
+          if (response?.message && response.data === undefined) {
+            throw new Error(response.message);
+          }
+
+          normalizeTrumpReportData(response).forEach((report) => {
+            const reportId = report?.id ?? JSON.stringify(report);
+            if (seenReportIds.has(reportId)) return;
+            seenReportIds.add(reportId);
+            reports.push(report);
+          });
+
+          const lastPage = Number(response?.meta?.last_page || 0);
+          if (lastPage) {
+            hasMorePages = currentPage < lastPage;
+          } else {
+            hasMorePages = Boolean(response?.links?.next);
+          }
+
+          currentPage++;
+          if (currentPage > 20) {
+            console.warn('GAZELL3D: Reached maximum trump report page limit (20 pages)');
+            hasMorePages = false;
+          }
+        }
+
+        trumpReportsByTorrentCache.set(id, reports);
+        return reports;
+      } finally {
+        trumpReportsByTorrentPromises.delete(id);
+      }
+    })();
+
+    trumpReportsByTorrentPromises.set(id, promise);
+    return promise;
   };
 
   // Format bytes to human readable
@@ -4294,9 +4617,125 @@
     return null;
   };
 
+  const getTorrentDataId = (torrentData) => {
+    const directId = torrentData?.id ?? torrentData?.torrent_id;
+    if (directId !== null && directId !== undefined && directId !== '') return String(directId);
+
+    const idSources = [
+      torrentData?.details_link,
+      torrentData?.download_link,
+      torrentData?.magnet_link
+    ];
+    for (const source of idSources) {
+      const match = String(source || '').match(/\/(?:torrents|download)\/(\d+)/);
+      if (match) return match[1];
+    }
+
+    return null;
+  };
+
+  const normalizeTrumpReportTorrentList = (value) => {
+    if (!value) return [];
+    return Array.isArray(value) ? value.filter(Boolean) : [value];
+  };
+
+  const formatReportTorrentName = (torrent) => {
+    if (!torrent) return 'Unknown torrent';
+    const name = torrent.name || torrent.title || torrent.release_name || 'Unknown torrent';
+    return torrent.id ? `${name} (#${torrent.id})` : name;
+  };
+
+  const formatTrumpReportStatus = (report) => {
+    if (report?.solved === true) return 'Solved';
+    if (report?.solved === false) return 'Open';
+    return 'Status unknown';
+  };
+
+  const formatTrumpReportDate = (dateStr) => {
+    const formatted = formatDate(dateStr);
+    return formatted === 'Unknown' ? null : formatted;
+  };
+
+  const renderTrumpReportAlert = (host, reports) => {
+    host.textContent = '';
+    const validReports = Array.isArray(reports) ? reports.filter(Boolean) : [];
+    if (!validReports.length) {
+      host.hidden = true;
+      return '';
+    }
+
+    host.hidden = false;
+    const alert = create('div', 'gz-trump-report-alert');
+    const header = create('div', 'gz-trump-report-alert__header');
+    const title = create('div', 'gz-trump-report-alert__title');
+    const countLabel = validReports.length === 1 ? 'Existing Trump Report' : `${validReports.length} Existing Trump Reports`;
+    title.textContent = countLabel;
+    const badge = create('span', 'gz-trump-report-alert__badge');
+    badge.textContent = 'Action needed';
+    appendAll(header, [title, badge]);
+    alert.appendChild(header);
+
+    const list = create('div', 'gz-trump-report-alert__list');
+    const rawLines = [countLabel + ':'];
+
+    validReports.forEach((report, index) => {
+      const item = create('article', 'gz-trump-report-alert__item');
+      const reportTitle = report.title || report.message || `Trump report #${report.id || index + 1}`;
+      const metaParts = [
+        report.id ? `#${report.id}` : null,
+        formatTrumpReportStatus(report),
+        formatTrumpReportDate(report.created_at)
+      ].filter(Boolean);
+
+      const itemTitle = create('div', 'gz-trump-report-alert__item-title');
+      itemTitle.textContent = reportTitle;
+      const meta = create('div', 'gz-trump-report-alert__meta');
+      meta.textContent = metaParts.join(' - ');
+      appendAll(item, [itemTitle, meta]);
+
+      rawLines.push('');
+      rawLines.push(`${index + 1}. ${reportTitle}`);
+      if (metaParts.length) rawLines.push(`Status: ${metaParts.join(' - ')}`);
+
+      const reportedTorrents = normalizeTrumpReportTorrentList(report.reported_torrents);
+      if (reportedTorrents.length) {
+        const row = create('div', 'gz-trump-report-alert__row');
+        const label = create('span', 'gz-trump-report-alert__label');
+        label.textContent = 'Reported';
+        const value = create('span', 'gz-trump-report-alert__value');
+        value.textContent = reportedTorrents.map(formatReportTorrentName).join(' | ');
+        appendAll(row, [label, value]);
+        item.appendChild(row);
+        rawLines.push(`Reported: ${value.textContent}`);
+      }
+
+      const trumpingTorrents = normalizeTrumpReportTorrentList(report.trumping_torrent);
+      if (trumpingTorrents.length) {
+        const row = create('div', 'gz-trump-report-alert__row');
+        const label = create('span', 'gz-trump-report-alert__label');
+        label.textContent = 'Trumping';
+        const value = create('span', 'gz-trump-report-alert__value');
+        value.textContent = trumpingTorrents.map(formatReportTorrentName).join(' | ');
+        appendAll(row, [label, value]);
+        item.appendChild(row);
+        rawLines.push(`Trumping: ${value.textContent}`);
+      }
+
+      list.appendChild(item);
+    });
+
+    alert.appendChild(list);
+    host.appendChild(alert);
+    return rawLines.join('\n');
+  };
+
   const renderTorrentDetailsContent = (torrentData) => {
     const content = create('div', 'gz-dropdown-details');
     const rawLines = [];
+    const torrentId = getTorrentDataId(torrentData);
+    const trumpReportHost = create('div', 'gz-trump-report-alert-host');
+    trumpReportHost.hidden = true;
+    if (torrentId) content.appendChild(trumpReportHost);
     const sections = [
       {
         heading: 'Torrent',
@@ -4373,7 +4812,7 @@
       content.appendChild(section);
     });
 
-    return { element: content, rawContent: rawLines.join('\n') };
+    return { element: content, rawContent: rawLines.join('\n'), torrentId, trumpReportHost };
   };
 
   // Render the dropdown content for a torrent
@@ -4432,6 +4871,17 @@
         const details = renderTorrentDetailsContent(torrentData);
         rawCopyContent = details.rawContent;
         panel.appendChild(details.element);
+        if (details.torrentId && details.trumpReportHost) {
+          fetchTrumpReportsForTorrent(details.torrentId)
+            .then((reports) => {
+              const rawReportContent = renderTrumpReportAlert(details.trumpReportHost, reports);
+              panel.dataset.rawContent = [details.rawContent, rawReportContent].filter(Boolean).join('\n\n');
+            })
+            .catch((err) => {
+              console.warn(`GAZELL3D: Failed to fetch trump reports for torrent ${details.torrentId}`, err);
+              details.trumpReportHost.hidden = true;
+            });
+        }
       } else if (config.id === 'description') {
         panel.classList.add('gz-dropdown-description');
         rawCopyContent = torrentData.description || '';
@@ -5760,10 +6210,8 @@
 
     const searchPage = $(SELECTORS.torrentSearchPage);
     if (searchPage) {
-      if (CONFIG.enableGazellifySearch) {
-        gazellifySearchResults();
-        watchSearchResults();
-      }
+      refreshSearchResults();
+      watchSearchResults();
       return true;
     }
 
