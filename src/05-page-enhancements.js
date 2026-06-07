@@ -134,7 +134,11 @@
         const dropdownRow = create('tr', 'gz-dropdown-row');
         const td = create('td');
         td.setAttribute('colspan', colSpan);
-        td.appendChild(renderTorrentDropdown(torrentData, colSpan));
+        const trumpableReason = extractTrumpableReasonFromElement(row);
+        const dropdownTorrentData = trumpableReason
+          ? { ...torrentData, trumpable_reason: trumpableReason }
+          : torrentData;
+        td.appendChild(renderTorrentDropdown(dropdownTorrentData, colSpan));
         dropdownRow.appendChild(td);
 
         loadingRow.replaceWith(dropdownRow);

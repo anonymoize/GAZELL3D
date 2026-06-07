@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      1.9.8.2
+// @version      2.0.0
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -970,6 +970,32 @@
 
     .gz-trump-report-alert-host[hidden] {
       display: none !important;
+    }
+
+    .gz-trumpable-reason {
+      grid-column: 1 / -1;
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+      padding: 10px 12px;
+      background: rgba(170, 36, 36, 0.14);
+      border: 1px solid rgba(255, 90, 90, 0.32);
+      border-left: 4px solid rgba(255, 88, 88, 0.75);
+      border-radius: 6px;
+      color: rgba(255, 238, 238, 0.94);
+    }
+
+    .gz-trumpable-reason__heading {
+      font-size: 0.78em;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: rgb(255, 205, 205);
+    }
+
+    .gz-trumpable-reason__body {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      line-height: 1.35;
     }
 
     .gz-trump-report-alert {
@@ -3009,7 +3035,11 @@
         const dropdownRow = create('tr', 'gz-dropdown-row');
         const td = create('td');
         td.setAttribute('colspan', colSpan);
-        td.appendChild(renderTorrentDropdown(torrentData, colSpan));
+        const trumpableReason = extractTrumpableReasonFromElement(row);
+        const dropdownTorrentData = trumpableReason
+          ? { ...torrentData, trumpable_reason: trumpableReason }
+          : torrentData;
+        td.appendChild(renderTorrentDropdown(dropdownTorrentData, colSpan));
         dropdownRow.appendChild(td);
 
         loadingRow.replaceWith(dropdownRow);
@@ -4617,6 +4647,47 @@
     return null;
   };
 
+  const normalizeTrumpableReason = (value) => {
+    const text = normalizeText(value || '');
+    if (!text) return null;
+
+    const prefix = 'This torrent is trumpable for the following reason:';
+    const reason = text.toLowerCase().startsWith(prefix.toLowerCase())
+      ? text.slice(prefix.length).trim()
+      : text;
+
+    return reason || null;
+  };
+
+  const extractTrumpableReasonFromElement = (scope) => {
+    if (!scope?.querySelectorAll) return null;
+    const candidates = Array.from(scope.querySelectorAll('.torrent-icons__torrent-trump[title], [title] .torrent-icons__torrent-trump'));
+    for (const candidate of candidates) {
+      const titleNode = candidate.matches?.('[title]')
+        ? candidate
+        : candidate.closest?.('[title]');
+      const title = titleNode?.getAttribute('title') || '';
+      if (!/trumpable/i.test(title)) continue;
+      const reason = normalizeTrumpableReason(title);
+      if (reason) return reason;
+    }
+    return null;
+  };
+
+  const getTorrentTrumpableReason = (torrentData) => {
+    const fields = [
+      torrentData?.trumpable_reason,
+      torrentData?.trumpableReason,
+      torrentData?.trump_reason,
+      torrentData?.trumpReason
+    ];
+    for (const field of fields) {
+      const reason = normalizeTrumpableReason(field);
+      if (reason) return reason;
+    }
+    return null;
+  };
+
   const getTorrentDataId = (torrentData) => {
     const directId = torrentData?.id ?? torrentData?.torrent_id;
     if (directId !== null && directId !== undefined && directId !== '') return String(directId);
@@ -4729,6 +4800,16 @@
     return rawLines.join('\n');
   };
 
+  const renderTrumpableReasonNotice = (reason) => {
+    const notice = create('div', 'gz-trumpable-reason');
+    const heading = create('div', 'gz-trumpable-reason__heading');
+    heading.textContent = 'Trumpable Reason';
+    const body = create('div', 'gz-trumpable-reason__body');
+    body.textContent = reason;
+    appendAll(notice, [heading, body]);
+    return notice;
+  };
+
   const renderTorrentDetailsContent = (torrentData) => {
     const content = create('div', 'gz-dropdown-details');
     const rawLines = [];
@@ -4736,6 +4817,13 @@
     const trumpReportHost = create('div', 'gz-trump-report-alert-host');
     trumpReportHost.hidden = true;
     if (torrentId) content.appendChild(trumpReportHost);
+    const trumpableReason = torrentData.trumpable === true ? getTorrentTrumpableReason(torrentData) : null;
+    if (trumpableReason) {
+      content.appendChild(renderTrumpableReasonNotice(trumpableReason));
+      rawLines.push('Trumpable Reason:');
+      rawLines.push(trumpableReason);
+      rawLines.push('');
+    }
     const sections = [
       {
         heading: 'Torrent',
@@ -5494,6 +5582,7 @@
         const typePart = currentType ? `[${currentType}]` : '';
         const episodePart = episodeId ? `${episodeId} ` : '';
         const torrentDisplayName = `${episodePart}${typePart} ${torrentName}`.trim();
+        const trumpableReason = extractTrumpableReasonFromElement(row);
 
         // Register torrent in the trump report registry for season-aware filtering
         if (torrentId) {
@@ -5551,7 +5640,10 @@
             const dropdownRow = create('tr', 'gz-dropdown-row');
             const td = create('td');
             td.setAttribute('colspan', colSpan);
-            td.appendChild(renderTorrentDropdown(torrentData, colSpan));
+            const dropdownTorrentData = trumpableReason
+              ? { ...torrentData, trumpable_reason: trumpableReason }
+              : torrentData;
+            td.appendChild(renderTorrentDropdown(dropdownTorrentData, colSpan));
             dropdownRow.appendChild(td);
 
             loadingRow.replaceWith(dropdownRow);

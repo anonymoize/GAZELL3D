@@ -43,6 +43,47 @@
     return null;
   };
 
+  const normalizeTrumpableReason = (value) => {
+    const text = normalizeText(value || '');
+    if (!text) return null;
+
+    const prefix = 'This torrent is trumpable for the following reason:';
+    const reason = text.toLowerCase().startsWith(prefix.toLowerCase())
+      ? text.slice(prefix.length).trim()
+      : text;
+
+    return reason || null;
+  };
+
+  const extractTrumpableReasonFromElement = (scope) => {
+    if (!scope?.querySelectorAll) return null;
+    const candidates = Array.from(scope.querySelectorAll('.torrent-icons__torrent-trump[title], [title] .torrent-icons__torrent-trump'));
+    for (const candidate of candidates) {
+      const titleNode = candidate.matches?.('[title]')
+        ? candidate
+        : candidate.closest?.('[title]');
+      const title = titleNode?.getAttribute('title') || '';
+      if (!/trumpable/i.test(title)) continue;
+      const reason = normalizeTrumpableReason(title);
+      if (reason) return reason;
+    }
+    return null;
+  };
+
+  const getTorrentTrumpableReason = (torrentData) => {
+    const fields = [
+      torrentData?.trumpable_reason,
+      torrentData?.trumpableReason,
+      torrentData?.trump_reason,
+      torrentData?.trumpReason
+    ];
+    for (const field of fields) {
+      const reason = normalizeTrumpableReason(field);
+      if (reason) return reason;
+    }
+    return null;
+  };
+
   const getTorrentDataId = (torrentData) => {
     const directId = torrentData?.id ?? torrentData?.torrent_id;
     if (directId !== null && directId !== undefined && directId !== '') return String(directId);
@@ -155,6 +196,16 @@
     return rawLines.join('\n');
   };
 
+  const renderTrumpableReasonNotice = (reason) => {
+    const notice = create('div', 'gz-trumpable-reason');
+    const heading = create('div', 'gz-trumpable-reason__heading');
+    heading.textContent = 'Trumpable Reason';
+    const body = create('div', 'gz-trumpable-reason__body');
+    body.textContent = reason;
+    appendAll(notice, [heading, body]);
+    return notice;
+  };
+
   const renderTorrentDetailsContent = (torrentData) => {
     const content = create('div', 'gz-dropdown-details');
     const rawLines = [];
@@ -162,6 +213,13 @@
     const trumpReportHost = create('div', 'gz-trump-report-alert-host');
     trumpReportHost.hidden = true;
     if (torrentId) content.appendChild(trumpReportHost);
+    const trumpableReason = torrentData.trumpable === true ? getTorrentTrumpableReason(torrentData) : null;
+    if (trumpableReason) {
+      content.appendChild(renderTrumpableReasonNotice(trumpableReason));
+      rawLines.push('Trumpable Reason:');
+      rawLines.push(trumpableReason);
+      rawLines.push('');
+    }
     const sections = [
       {
         heading: 'Torrent',

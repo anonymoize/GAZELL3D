@@ -721,6 +721,32 @@
       display: none !important;
     }
 
+    .gz-trumpable-reason {
+      grid-column: 1 / -1;
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+      padding: 10px 12px;
+      background: rgba(170, 36, 36, 0.14);
+      border: 1px solid rgba(255, 90, 90, 0.32);
+      border-left: 4px solid rgba(255, 88, 88, 0.75);
+      border-radius: 6px;
+      color: rgba(255, 238, 238, 0.94);
+    }
+
+    .gz-trumpable-reason__heading {
+      font-size: 0.78em;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: rgb(255, 205, 205);
+    }
+
+    .gz-trumpable-reason__body {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      line-height: 1.35;
+    }
+
     .gz-trump-report-alert {
       display: grid;
       gap: 10px;

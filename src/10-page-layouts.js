@@ -154,6 +154,7 @@
         const typePart = currentType ? `[${currentType}]` : '';
         const episodePart = episodeId ? `${episodeId} ` : '';
         const torrentDisplayName = `${episodePart}${typePart} ${torrentName}`.trim();
+        const trumpableReason = extractTrumpableReasonFromElement(row);
 
         // Register torrent in the trump report registry for season-aware filtering
         if (torrentId) {
@@ -211,7 +212,10 @@
             const dropdownRow = create('tr', 'gz-dropdown-row');
             const td = create('td');
             td.setAttribute('colspan', colSpan);
-            td.appendChild(renderTorrentDropdown(torrentData, colSpan));
+            const dropdownTorrentData = trumpableReason
+              ? { ...torrentData, trumpable_reason: trumpableReason }
+              : torrentData;
+            td.appendChild(renderTorrentDropdown(dropdownTorrentData, colSpan));
             dropdownRow.appendChild(td);
 
             loadingRow.replaceWith(dropdownRow);
