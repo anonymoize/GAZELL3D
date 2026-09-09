@@ -614,18 +614,23 @@
       return row;
     };
     return Object.freeze({
-      attach: ({ row, link, load, colSpan, getTrumpableReason = () => null }) => {
+      attach: ({ row, link, load, colSpan, getTrumpableReason = () => null, onOpen = () => {} }) => {
         if (attachments.has(link)) return attachments.get(link);
         let current = null;
+        let cleanupOpen = null;
         const click = async (event) => {
           if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
           event.stopPropagation();
           if (current?.isConnected) {
             current.remove();
+            cleanupOpen?.();
+            cleanupOpen = null;
             current = null;
             return;
           }
+          cleanupOpen?.();
+          cleanupOpen = onOpen();
           const columns = colSpan();
           const loading = makeRow(columns, 'gz-dropdown-loading', 'Loading...');
           current = loading;
@@ -650,6 +655,8 @@
         const detach = () => {
           link.removeEventListener('click', click);
           current?.remove();
+          cleanupOpen?.();
+          cleanupOpen = null;
           current = null;
           link.classList.remove('gz-clickable');
           attachments.delete(link);

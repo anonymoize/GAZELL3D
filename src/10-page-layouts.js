@@ -709,3 +709,55 @@
 
     return true;
   };
+
+  // Keep the host's rows and controls intact: Livewire and other userscripts own them.
+  const buildMediahubLayouts = () => {
+    if (!CONFIG.enableGazelleTorrentLayout) return;
+    $$('.torrent-search--grouped__result', $(SELECTORS.torrentSearchPage)).forEach(article => {
+      article.classList.add('gz-mediahub');
+      article.classList.toggle('gz-mediahub--poster', CONFIG.enableSideLayout);
+      const releases = article.querySelector(':scope > section');
+      if (releases) {
+        releases.tabIndex = 0;
+        releases.setAttribute('role', 'region');
+        releases.setAttribute('aria-label', 'Torrent releases');
+      }
+      const tables = Array.from(article.querySelectorAll('.torrent-search--grouped__torrents'));
+      let shown = 0;
+      let total = 0;
+      const expanded = article.dataset.gzMediahubExpanded === '1';
+      tables.forEach(table => {
+        const count = table.querySelectorAll('.torrent-search--grouped__name > a').length;
+        const visible = expanded || shown < 15;
+        table.classList.toggle('gz-mediahub-hidden', !visible);
+        if (visible) shown += count;
+        total += count;
+      });
+      article.querySelectorAll('details.torrent-search--grouped__dropdown').forEach(details => {
+        if (!details.dataset.gzMediahubOpen) {
+          details.open = true;
+          details.dataset.gzMediahubOpen = '1';
+        }
+        const visible = Array.from(details.querySelectorAll('.torrent-search--grouped__torrents'))
+          .some(table => !table.classList.contains('gz-mediahub-hidden'));
+        details.classList.toggle('gz-mediahub-hidden', !visible);
+      });
+      let more = article.querySelector(':scope > .gz-mediahub-more');
+      if (total > shown || expanded) {
+        if (!more) {
+          more = create('button', 'gz-mediahub-more');
+          more.type = 'button';
+          more.addEventListener('click', () => {
+            article.dataset.gzMediahubExpanded = article.dataset.gzMediahubExpanded === '1' ? '0' : '1';
+            buildMediahubLayouts();
+          });
+          article.appendChild(more);
+        }
+        const label = expanded ? 'Show fewer releases' : `Show all ${total} releases`;
+        if (more.textContent !== label) more.textContent = label;
+        more.setAttribute('aria-expanded', String(expanded));
+      } else {
+        more?.remove();
+      }
+    });
+  };

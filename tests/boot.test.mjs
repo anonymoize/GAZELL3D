@@ -67,3 +67,67 @@ test('built userscript keeps detail tags as hidden direct children and preserves
   await settle(); assert.ok(icon.parentNode.classList.contains('gz-visible-tags'));
   assert.deepEqual(h.errors, []);
 });
+
+const mediahubRow = (id, type = '') => `<tr>${type}<td class="torrent-search--grouped__overview"><h3 class="torrent-search--grouped__name"><a href="/torrents/${id}">S00E53 1080p DSNP WEB-DL Dual-Audio DD+ 5.1 H.264-LADYBUG</a></h3><ul class="torrent-icons"><li data-seadex="yes">Seadex</li></ul></td><td>1 GiB</td></tr>`;
+const mediahub = `<main class="page__torrent--index"><article class="torrent-search--grouped__result"><details open><summary>Specials</summary><table class="torrent-search--grouped__torrents"><tbody>${mediahubRow(7, '<th class="torrent-search--grouped__type" rowspan="2">WEB-DL</th>')}${mediahubRow(8)}</tbody></table></details></article></main>`;
+
+test('Mediahub formats grouped releases and keeps spanning types aligned through concurrent dropdowns', async t => {
+  const h = await boot(t, mediahub, { enableGazellifySearch: true });
+  const links = [...h.document.querySelectorAll('.torrent-search--grouped__name > a')];
+  const type = h.document.querySelector('.torrent-search--grouped__type');
+  assert.deepEqual(h.requests, []);
+  assert.match(links[0].querySelector('.gz-search-title__subheading').textContent, /S00E53/);
+  assert.match(links[0].querySelector('.gz-hidden-original').textContent, /LADYBUG/);
+  links[0].click(); links[1].click(); await settle(); await settle();
+  assert.equal(type.rowSpan, 4);
+  assert.deepEqual([...h.document.querySelectorAll('.gz-dropdown-row td')].map(cell => cell.colSpan), [2, 2]);
+  links[0].click(); assert.equal(type.rowSpan, 3);
+  links[1].closest('tr').remove(); await settle();
+  assert.equal(type.rowSpan, 2);
+  assert.equal(h.document.querySelectorAll('.gz-dropdown-row').length, 0);
+  const tbody = h.document.querySelector('tbody');
+  tbody.insertAdjacentHTML('beforeend', mediahubRow(9)); await settle();
+  const late = tbody.querySelector('a[href="/torrents/9"]');
+  assert.ok(late.querySelector('.gz-search-title'));
+  assert.equal(late.dataset.gzSearchDropdown, '1');
+  assert.deepEqual(h.errors, []);
+});
+
+test('Mediahub dropdowns work with naming disabled and naming works with dropdowns disabled', async t => {
+  const dropdowns = await boot(t, mediahub, { enableGazellifySearch: false });
+  assert.equal(dropdowns.document.querySelectorAll('.gz-search-title').length, 0);
+  dropdowns.document.querySelector('.torrent-search--grouped__name > a').click(); await settle();
+  assert.ok(dropdowns.document.querySelector('.gz-dropdown-container'));
+  const names = await boot(t, mediahub, { enableGazellifySearch: true, enableTorrentDropdowns: false });
+  assert.equal(names.document.querySelectorAll('.gz-search-title').length, 2);
+  assert.equal(names.document.querySelectorAll('.gz-clickable').length, 0);
+});
+
+test('Mediahub layout flattens nested groups, limits long lists and preserves live controls', async t => {
+  const groups = Array.from({ length: 18 }, (_, i) => `<details class="torrent-search--grouped__dropdown"><summary>Episode ${i + 1}</summary><table class="torrent-search--grouped__torrents"><tbody>${mediahubRow(i + 7)}</tbody></table></details>`).join('');
+  const markup = `<main class="page__torrent--index"><article class="torrent-search--grouped__result"><header class="torrent-search--grouped__header">Example</header><section><details class="torrent-search--grouped__dropdown"><summary>Season 1</summary>${groups}</details></section></article></main>`;
+  const h = await boot(t, markup, { enableSideLayout: true, enableGazellifySearch: false, enableTorrentDropdowns: false });
+  const article = h.document.querySelector('.gz-mediahub');
+  assert.ok(article.classList.contains('gz-mediahub--poster'));
+  assert.equal(article.querySelectorAll('details:not([open])').length, 0);
+  assert.equal(article.querySelectorAll('table:not(.gz-mediahub-hidden)').length, 15);
+  const original = article.querySelector('.torrent-icons li');
+  let clicks = 0; original.addEventListener('click', () => clicks++);
+  const button = article.querySelector('.gz-mediahub-more');
+  button.click(); await settle();
+  assert.equal(article.querySelectorAll('table:not(.gz-mediahub-hidden)').length, 18);
+  assert.equal(button.getAttribute('aria-expanded'), 'true');
+  assert.equal(article.querySelector('.torrent-icons li'), original); original.click(); assert.equal(clicks, 1);
+  button.click(); await settle();
+  assert.equal(article.querySelectorAll('table:not(.gz-mediahub-hidden)').length, 15);
+  assert.equal(article.querySelectorAll('.gz-mediahub-more').length, 1);
+  article.querySelector('section').insertAdjacentHTML('beforeend', '<details class="torrent-search--grouped__dropdown"><summary>Complete pack</summary><table class="torrent-search--grouped__torrents"><tbody>' + mediahubRow(99) + '</tbody></table></details>');
+  await settle(); assert.match(button.textContent, /19/);
+  assert.deepEqual(h.errors, []);
+});
+
+test('Mediahub layout respects the table setting independently of naming', async t => {
+  const h = await boot(t, mediahub, { enableGazelleTorrentLayout: false, enableGazellifySearch: true });
+  assert.equal(h.document.querySelector('.gz-mediahub'), null);
+  assert.ok(h.document.querySelector('.gz-search-title'));
+});

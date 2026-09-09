@@ -2252,12 +2252,32 @@ transform: scale(2.35);
       transition: opacity 0.15s ease;
     }
 
+    .torrent-search--grouped__name > a:hover .gz-search-title__subheading,
     .torrent-search--list__name:hover .gz-search-title__heading,
     .torrent-search--list__name:hover .gz-search-title__subheading {
       opacity: 1;
     }
 
+    .torrent-search--grouped__name .gz-search-title__subheading {
+      font-size: 1em;
+      margin-top: 0;
+      opacity: 1;
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 900px) {
+      .torrent-search--grouped__torrents > tbody > .gz-dropdown-row {
+        display: block;
+      }
+      .torrent-search--grouped__torrents > tbody > .gz-dropdown-row > td {
+        display: block;
+        width: 100%;
+        min-width: 0;
+      }
+    }
+
     /* Position context for the hidden original text span (for Seadex compatibility) */
+    .torrent-search--grouped__name > a[data-gz-search],
     .torrent-search--list__name {
       position: relative;
     }
@@ -3759,4 +3779,125 @@ transform: scale(2.35);
     .comparison__text { font-weight: 700; margin-bottom: 8px; }
     .comparison__divider { font-weight: 300; color: rgba(255,255,255,0.4); }
     .comparison__button { font-weight: 300; background-color: transparent; color: #5dade2; border: none; cursor: pointer; text-decoration: underline; padding: 0 4px; }
+
+    /* Mediahub: compact poster rail and flat, native release tables. */
+    .gz-mediahub {
+      position: relative;
+      margin: 0 0 16px;
+      padding: 12px;
+      border: 1px solid var(--panel-border, #444);
+      border-radius: 3px;
+      background: var(--torrent-group-table-stripe-odd, #252525);
+      min-width: 0;
+    }
+    .gz-mediahub.gz-mediahub--poster { padding-left: 140px; min-height: 190px; }
+    .gz-mediahub .torrent-search--grouped__header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 6px 12px;
+      height: auto;
+      min-height: 0;
+      padding: 0 0 10px;
+      background: transparent;
+    }
+    .gz-mediahub--poster .torrent-search--grouped__poster {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      width: 112px;
+    }
+    .gz-mediahub .torrent-search--grouped__poster img {
+      width: 112px;
+      height: auto;
+      max-height: 170px;
+      object-fit: cover;
+      border-radius: 2px;
+    }
+    .gz-mediahub .torrent-search--grouped__title-name {
+      font-size: 16px;
+      margin: 0;
+      flex: 1 1 auto;
+    }
+    .gz-mediahub .torrent-search--grouped__directors { font-size: 12px; }
+    .gz-mediahub .torrent-search--grouped__genres {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      gap: 10px;
+      width: 100%;
+    }
+    .gz-mediahub .torrent-search--grouped__genre {
+      border: 0;
+      padding: 0;
+      font-size: 12px;
+      background: transparent;
+    }
+    .gz-mediahub .torrent-search--grouped__plot {
+      width: 100%;
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .gz-mediahub > section { overflow-x: auto; }
+    .gz-mediahub .torrent-search--grouped__dropdown { margin: 0; padding: 0; border: 0; }
+    .gz-mediahub .torrent-search--grouped__dropdown > summary {
+      padding: 6px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      background: var(--torrent-group-header-bg, #333);
+      border-bottom: 1px solid var(--panel-border, #444);
+    }
+    .gz-mediahub .torrent-search--grouped__dropdown .torrent-search--grouped__dropdown > summary { display: none; }
+    .gz-mediahub .torrent-search--grouped__torrents {
+      display: table;
+      table-layout: auto;
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 760px;
+      border: 0;
+    }
+    .gz-mediahub .torrent-search--grouped__torrents > tbody { display: table-row-group; }
+    .gz-mediahub .torrent-search--grouped__torrents > tbody > tr { display: table-row; }
+    .gz-mediahub .torrent-search--grouped__torrents > tbody > tr > :is(td, th) {
+      display: table-cell;
+      width: auto;
+      height: auto;
+      padding: 8px 6px;
+      font-size: 12px;
+      border-bottom: 1px solid var(--panel-border, #444);
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .gz-mediahub .torrent-search--grouped__torrents > tbody > tr > .torrent-search--grouped__overview {
+      width: 100%;
+      white-space: normal;
+    }
+    .gz-mediahub .torrent-search--grouped__overview > div { display: block; }
+    .gz-mediahub .torrent-search--grouped__name { display: inline; font-size: inherit; }
+    .gz-mediahub .torrent-search--grouped__name > a { display: inline; padding: 0; font-weight: 400; }
+    .gz-mediahub .gz-search-title { display: inline; }
+    .gz-mediahub .gz-search-title__subheading { display: inline; line-height: 1.5; }
+    .gz-mediahub .torrent-icons { display: inline-flex; vertical-align: middle; margin: 0 0 0 8px; }
+    .gz-mediahub .gz-dropdown-row > td { white-space: normal !important; }
+    .gz-mediahub .gz-mediahub-hidden { display: none !important; }
+    .gz-mediahub-more {
+      display: block;
+      margin: 10px auto 0;
+      padding: 6px 12px;
+      border: 1px solid var(--panel-border, #555);
+      border-radius: 3px;
+      background: var(--torrent-group-header-bg, #333);
+      color: inherit;
+      cursor: pointer;
+    }
+    .gz-mediahub :is(a, button, summary):focus-visible { outline: 2px solid var(--link-color, #55bbee); outline-offset: 2px; }
+    @media (max-width: 700px) {
+      .gz-mediahub.gz-mediahub--poster { padding: 10px; }
+      .gz-mediahub--poster .torrent-search--grouped__header { padding-left: 76px; min-height: 100px; align-content: start; }
+      .gz-mediahub--poster .torrent-search--grouped__poster { width: 64px; top: 10px; left: 10px; }
+      .gz-mediahub .torrent-search--grouped__poster img { width: 64px; max-height: 96px; }
+      .gz-mediahub .torrent-search--grouped__plot { line-height: 1.3; }
+    }
   `;

@@ -215,5 +215,5 @@
     searchBox: 'search',
     layout: '.gz-similar-layout',
     torrentTable: '.similar-torrents__torrents',
-    searchResults: '.torrent-search--list__name',
+    searchResults: '.torrent-search--list__name, .torrent-search--grouped__name > a',
   });

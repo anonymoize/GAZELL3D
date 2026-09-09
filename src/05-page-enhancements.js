@@ -38,7 +38,10 @@ const gazellifySearchResults = () => {
       const popupYearText = popupYear ? popupYear.textContent.replace(/[()]/g, '').trim() : '';
       const raw = normalizeText(link.dataset.gzOriginal || link.textContent || '');
       if (!raw) return;
-      const { heading, subtitle } = popupHeading
+      const groupedRow = link.closest('.torrent-search--grouped__torrents tr');
+      const { heading, subtitle } = groupedRow
+        ? { heading: raw, subtitle: torrentNaming.format(raw, { typeLabel: getSearchGroupTypeCell(groupedRow)?.textContent.trim(), hideSeasonEpisode: false }) }
+        : popupHeading
         ? {
           heading: popupYearText ? `${popupHeading} (${popupYearText})` : popupHeading,
           subtitle: torrentNaming.format(raw),
@@ -52,7 +55,8 @@ const gazellifySearchResults = () => {
       headingEl.textContent = heading;
       const subEl = create('div', 'gz-search-title__subheading');
       applyUnknownHighlight(subEl, subtitle);
-      wrapper.append(headingEl, subEl);
+      if (!groupedRow) wrapper.appendChild(headingEl);
+      wrapper.appendChild(subEl);
 
       // Add a visually-hidden span with the original release name for Seadex compatibility
       // Seadex's getReleaseByReleaseName reads innerText to match release groups
@@ -330,18 +334,41 @@ const getSearchResultTorrentId = (row, link) => {
     return torrentIdMatch ? torrentIdMatch[1] : null;
   };
 
+  // Grouped search type headings span release rows, including an open dropdown.
+  const getSearchGroupTypeCell = (row) => {
+    if (!row.closest('.torrent-search--grouped__torrents')) return null;
+    let current = row;
+    while (current) {
+      const cell = current.querySelector('.torrent-search--grouped__type');
+      if (cell) return cell;
+      current = current.previousElementSibling;
+    }
+    return null;
+  };
+
   const getSearchDropdownColSpan = (row) => {
-    const rowCells = row?.children?.length || 0;
+    const rowCells = Array.from(row?.cells || []).reduce((total, cell) =>
+      total + (cell.matches('.torrent-search--grouped__type') ? 0 : cell.colSpan), 0);
     if (rowCells > 0) return rowCells;
     const headerCells = row?.closest('table')?.querySelectorAll('thead th').length || 0;
     return headerCells > 0 ? headerCells : 1;
   };
 
+  const searchDropdownAttachments = new Map();
+
   const enhanceSearchTorrentDropdowns = () => {
+    for (const [link, attachment] of searchDropdownAttachments) {
+      if (!link.isConnected || !attachment.row.contains(link)) {
+        attachment.detach();
+        delete link.dataset.gzSearchDropdown;
+        searchDropdownAttachments.delete(link);
+      }
+    }
     if (!CONFIG.enableTorrentDropdowns) return;
 
-    $$('.torrent-search--list__row').forEach((row) => {
-      const link = $('.torrent-search--list__name', row);
+    $$(SELECTORS.searchResults).forEach((link) => {
+      const row = link.closest('tr');
+      if (!row) return;
       if (!link || link.dataset.gzSearchDropdown === '1') return;
 
       const torrentId = getSearchResultTorrentId(row, link);
@@ -349,17 +376,25 @@ const getSearchResultTorrentId = (row, link) => {
 
       link.dataset.torrentId = torrentId;
       link.dataset.gzSearchDropdown = '1';
-      torrentDropdowns.attach({
+      const detach = torrentDropdowns.attach({
         row,
         link,
         load: () => torrentRepository.byId(torrentId),
         colSpan: () => getSearchDropdownColSpan(row),
+        onOpen: () => {
+          const typeCell = getSearchGroupTypeCell(row);
+          if (!typeCell || typeCell.rowSpan === 0) return;
+          typeCell.rowSpan += 1;
+          return () => { typeCell.rowSpan -= 1; };
+        },
         getTrumpableReason: () => extractTrumpableReasonFromElement(row),
       });
+      searchDropdownAttachments.set(link, { row, detach });
     });
   };
 
   const refreshSearchResults = () => {
+    buildMediahubLayouts();
     if (CONFIG.enableGazellifySearch) {
       gazellifySearchResults();
     }
@@ -369,7 +404,7 @@ const getSearchResultTorrentId = (row, link) => {
   };
 
   const watchSearchResults = () => {
-    if (!CONFIG.enableGazellifySearch && !CONFIG.enableTorrentDropdowns) return;
+    if (!CONFIG.enableGazellifySearch && !CONFIG.enableTorrentDropdowns && !CONFIG.enableGazelleTorrentLayout) return;
     if (searchResultsObserver) {
       searchResultsObserver.disconnect();
       searchResultsObserver = null;

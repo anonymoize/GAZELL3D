@@ -68,8 +68,11 @@ Page dispatch uses the selectors in `01-config-and-storage.js`:
   Grouped dropdowns acquire a TMDB group and select the clicked torrent from it.
 - **Torrent detail:** optionally format the release title, then assemble columns
   while keeping the original torrent tags discoverable by Seadex.
-- **Torrent search:** enhance each result in place and observe later results.
-  Dropdowns fetch individual torrents by ID; this path does not use the side layout.
+- **Torrent search (including Mediahub grouped view):** enhance each release in
+  place and observe later results. The Gazelle table setting gives Mediahub compact
+  season tables and a short initial release list; the side layout setting adds a
+  poster rail. Original rows, controls and group associations remain intact.
+  Dropdowns fetch individual torrents by ID; this path retains the individual-torrent retrieval flow.
 - **User-group requirements:** parse the site's class/requirement/perk markup,
   consolidate shared classes, and replace the article with the requirements view.
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      2.1.0
+// @version      2.1.1
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -237,7 +237,7 @@
     searchBox: 'search',
     layout: '.gz-similar-layout',
     torrentTable: '.similar-torrents__torrents',
-    searchResults: '.torrent-search--list__name',
+    searchResults: '.torrent-search--list__name, .torrent-search--grouped__name > a',
   });
 
   const STYLE = `
@@ -2494,12 +2494,32 @@ transform: scale(2.35);
       transition: opacity 0.15s ease;
     }
 
+    .torrent-search--grouped__name > a:hover .gz-search-title__subheading,
     .torrent-search--list__name:hover .gz-search-title__heading,
     .torrent-search--list__name:hover .gz-search-title__subheading {
       opacity: 1;
     }
 
+    .torrent-search--grouped__name .gz-search-title__subheading {
+      font-size: 1em;
+      margin-top: 0;
+      opacity: 1;
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 900px) {
+      .torrent-search--grouped__torrents > tbody > .gz-dropdown-row {
+        display: block;
+      }
+      .torrent-search--grouped__torrents > tbody > .gz-dropdown-row > td {
+        display: block;
+        width: 100%;
+        min-width: 0;
+      }
+    }
+
     /* Position context for the hidden original text span (for Seadex compatibility) */
+    .torrent-search--grouped__name > a[data-gz-search],
     .torrent-search--list__name {
       position: relative;
     }
@@ -4001,6 +4021,127 @@ transform: scale(2.35);
     .comparison__text { font-weight: 700; margin-bottom: 8px; }
     .comparison__divider { font-weight: 300; color: rgba(255,255,255,0.4); }
     .comparison__button { font-weight: 300; background-color: transparent; color: #5dade2; border: none; cursor: pointer; text-decoration: underline; padding: 0 4px; }
+
+    /* Mediahub: compact poster rail and flat, native release tables. */
+    .gz-mediahub {
+      position: relative;
+      margin: 0 0 16px;
+      padding: 12px;
+      border: 1px solid var(--panel-border, #444);
+      border-radius: 3px;
+      background: var(--torrent-group-table-stripe-odd, #252525);
+      min-width: 0;
+    }
+    .gz-mediahub.gz-mediahub--poster { padding-left: 140px; min-height: 190px; }
+    .gz-mediahub .torrent-search--grouped__header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 6px 12px;
+      height: auto;
+      min-height: 0;
+      padding: 0 0 10px;
+      background: transparent;
+    }
+    .gz-mediahub--poster .torrent-search--grouped__poster {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      width: 112px;
+    }
+    .gz-mediahub .torrent-search--grouped__poster img {
+      width: 112px;
+      height: auto;
+      max-height: 170px;
+      object-fit: cover;
+      border-radius: 2px;
+    }
+    .gz-mediahub .torrent-search--grouped__title-name {
+      font-size: 16px;
+      margin: 0;
+      flex: 1 1 auto;
+    }
+    .gz-mediahub .torrent-search--grouped__directors { font-size: 12px; }
+    .gz-mediahub .torrent-search--grouped__genres {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      gap: 10px;
+      width: 100%;
+    }
+    .gz-mediahub .torrent-search--grouped__genre {
+      border: 0;
+      padding: 0;
+      font-size: 12px;
+      background: transparent;
+    }
+    .gz-mediahub .torrent-search--grouped__plot {
+      width: 100%;
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .gz-mediahub > section { overflow-x: auto; }
+    .gz-mediahub .torrent-search--grouped__dropdown { margin: 0; padding: 0; border: 0; }
+    .gz-mediahub .torrent-search--grouped__dropdown > summary {
+      padding: 6px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      background: var(--torrent-group-header-bg, #333);
+      border-bottom: 1px solid var(--panel-border, #444);
+    }
+    .gz-mediahub .torrent-search--grouped__dropdown .torrent-search--grouped__dropdown > summary { display: none; }
+    .gz-mediahub .torrent-search--grouped__torrents {
+      display: table;
+      table-layout: auto;
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 760px;
+      border: 0;
+    }
+    .gz-mediahub .torrent-search--grouped__torrents > tbody { display: table-row-group; }
+    .gz-mediahub .torrent-search--grouped__torrents > tbody > tr { display: table-row; }
+    .gz-mediahub .torrent-search--grouped__torrents > tbody > tr > :is(td, th) {
+      display: table-cell;
+      width: auto;
+      height: auto;
+      padding: 8px 6px;
+      font-size: 12px;
+      border-bottom: 1px solid var(--panel-border, #444);
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .gz-mediahub .torrent-search--grouped__torrents > tbody > tr > .torrent-search--grouped__overview {
+      width: 100%;
+      white-space: normal;
+    }
+    .gz-mediahub .torrent-search--grouped__overview > div { display: block; }
+    .gz-mediahub .torrent-search--grouped__name { display: inline; font-size: inherit; }
+    .gz-mediahub .torrent-search--grouped__name > a { display: inline; padding: 0; font-weight: 400; }
+    .gz-mediahub .gz-search-title { display: inline; }
+    .gz-mediahub .gz-search-title__subheading { display: inline; line-height: 1.5; }
+    .gz-mediahub .torrent-icons { display: inline-flex; vertical-align: middle; margin: 0 0 0 8px; }
+    .gz-mediahub .gz-dropdown-row > td { white-space: normal !important; }
+    .gz-mediahub .gz-mediahub-hidden { display: none !important; }
+    .gz-mediahub-more {
+      display: block;
+      margin: 10px auto 0;
+      padding: 6px 12px;
+      border: 1px solid var(--panel-border, #555);
+      border-radius: 3px;
+      background: var(--torrent-group-header-bg, #333);
+      color: inherit;
+      cursor: pointer;
+    }
+    .gz-mediahub :is(a, button, summary):focus-visible { outline: 2px solid var(--link-color, #55bbee); outline-offset: 2px; }
+    @media (max-width: 700px) {
+      .gz-mediahub.gz-mediahub--poster { padding: 10px; }
+      .gz-mediahub--poster .torrent-search--grouped__header { padding-left: 76px; min-height: 100px; align-content: start; }
+      .gz-mediahub--poster .torrent-search--grouped__poster { width: 64px; top: 10px; left: 10px; }
+      .gz-mediahub .torrent-search--grouped__poster img { width: 64px; max-height: 96px; }
+      .gz-mediahub .torrent-search--grouped__plot { line-height: 1.3; }
+    }
   `;
 
   // Preserve the original host DOM while projecting icons into the visible layout.
@@ -4714,7 +4855,10 @@ const gazellifySearchResults = () => {
       const popupYearText = popupYear ? popupYear.textContent.replace(/[()]/g, '').trim() : '';
       const raw = normalizeText(link.dataset.gzOriginal || link.textContent || '');
       if (!raw) return;
-      const { heading, subtitle } = popupHeading
+      const groupedRow = link.closest('.torrent-search--grouped__torrents tr');
+      const { heading, subtitle } = groupedRow
+        ? { heading: raw, subtitle: torrentNaming.format(raw, { typeLabel: getSearchGroupTypeCell(groupedRow)?.textContent.trim(), hideSeasonEpisode: false }) }
+        : popupHeading
         ? {
           heading: popupYearText ? `${popupHeading} (${popupYearText})` : popupHeading,
           subtitle: torrentNaming.format(raw),
@@ -4728,7 +4872,8 @@ const gazellifySearchResults = () => {
       headingEl.textContent = heading;
       const subEl = create('div', 'gz-search-title__subheading');
       applyUnknownHighlight(subEl, subtitle);
-      wrapper.append(headingEl, subEl);
+      if (!groupedRow) wrapper.appendChild(headingEl);
+      wrapper.appendChild(subEl);
 
       // Add a visually-hidden span with the original release name for Seadex compatibility
       // Seadex's getReleaseByReleaseName reads innerText to match release groups
@@ -5006,18 +5151,41 @@ const getSearchResultTorrentId = (row, link) => {
     return torrentIdMatch ? torrentIdMatch[1] : null;
   };
 
+  // Grouped search type headings span release rows, including an open dropdown.
+  const getSearchGroupTypeCell = (row) => {
+    if (!row.closest('.torrent-search--grouped__torrents')) return null;
+    let current = row;
+    while (current) {
+      const cell = current.querySelector('.torrent-search--grouped__type');
+      if (cell) return cell;
+      current = current.previousElementSibling;
+    }
+    return null;
+  };
+
   const getSearchDropdownColSpan = (row) => {
-    const rowCells = row?.children?.length || 0;
+    const rowCells = Array.from(row?.cells || []).reduce((total, cell) =>
+      total + (cell.matches('.torrent-search--grouped__type') ? 0 : cell.colSpan), 0);
     if (rowCells > 0) return rowCells;
     const headerCells = row?.closest('table')?.querySelectorAll('thead th').length || 0;
     return headerCells > 0 ? headerCells : 1;
   };
 
+  const searchDropdownAttachments = new Map();
+
   const enhanceSearchTorrentDropdowns = () => {
+    for (const [link, attachment] of searchDropdownAttachments) {
+      if (!link.isConnected || !attachment.row.contains(link)) {
+        attachment.detach();
+        delete link.dataset.gzSearchDropdown;
+        searchDropdownAttachments.delete(link);
+      }
+    }
     if (!CONFIG.enableTorrentDropdowns) return;
 
-    $$('.torrent-search--list__row').forEach((row) => {
-      const link = $('.torrent-search--list__name', row);
+    $$(SELECTORS.searchResults).forEach((link) => {
+      const row = link.closest('tr');
+      if (!row) return;
       if (!link || link.dataset.gzSearchDropdown === '1') return;
 
       const torrentId = getSearchResultTorrentId(row, link);
@@ -5025,17 +5193,25 @@ const getSearchResultTorrentId = (row, link) => {
 
       link.dataset.torrentId = torrentId;
       link.dataset.gzSearchDropdown = '1';
-      torrentDropdowns.attach({
+      const detach = torrentDropdowns.attach({
         row,
         link,
         load: () => torrentRepository.byId(torrentId),
         colSpan: () => getSearchDropdownColSpan(row),
+        onOpen: () => {
+          const typeCell = getSearchGroupTypeCell(row);
+          if (!typeCell || typeCell.rowSpan === 0) return;
+          typeCell.rowSpan += 1;
+          return () => { typeCell.rowSpan -= 1; };
+        },
         getTrumpableReason: () => extractTrumpableReasonFromElement(row),
       });
+      searchDropdownAttachments.set(link, { row, detach });
     });
   };
 
   const refreshSearchResults = () => {
+    buildMediahubLayouts();
     if (CONFIG.enableGazellifySearch) {
       gazellifySearchResults();
     }
@@ -5045,7 +5221,7 @@ const getSearchResultTorrentId = (row, link) => {
   };
 
   const watchSearchResults = () => {
-    if (!CONFIG.enableGazellifySearch && !CONFIG.enableTorrentDropdowns) return;
+    if (!CONFIG.enableGazellifySearch && !CONFIG.enableTorrentDropdowns && !CONFIG.enableGazelleTorrentLayout) return;
     if (searchResultsObserver) {
       searchResultsObserver.disconnect();
       searchResultsObserver = null;
@@ -6796,18 +6972,23 @@ const getSearchResultTorrentId = (row, link) => {
       return row;
     };
     return Object.freeze({
-      attach: ({ row, link, load, colSpan, getTrumpableReason = () => null }) => {
+      attach: ({ row, link, load, colSpan, getTrumpableReason = () => null, onOpen = () => {} }) => {
         if (attachments.has(link)) return attachments.get(link);
         let current = null;
+        let cleanupOpen = null;
         const click = async (event) => {
           if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
           event.stopPropagation();
           if (current?.isConnected) {
             current.remove();
+            cleanupOpen?.();
+            cleanupOpen = null;
             current = null;
             return;
           }
+          cleanupOpen?.();
+          cleanupOpen = onOpen();
           const columns = colSpan();
           const loading = makeRow(columns, 'gz-dropdown-loading', 'Loading...');
           current = loading;
@@ -6832,6 +7013,8 @@ const getSearchResultTorrentId = (row, link) => {
         const detach = () => {
           link.removeEventListener('click', click);
           current?.remove();
+          cleanupOpen?.();
+          cleanupOpen = null;
           current = null;
           link.classList.remove('gz-clickable');
           attachments.delete(link);
@@ -7723,6 +7906,58 @@ const getSearchResultTorrentId = (row, link) => {
     panels.forEach(panel => right.appendChild(panel));
 
     return true;
+  };
+
+  // Keep the host's rows and controls intact: Livewire and other userscripts own them.
+  const buildMediahubLayouts = () => {
+    if (!CONFIG.enableGazelleTorrentLayout) return;
+    $$('.torrent-search--grouped__result', $(SELECTORS.torrentSearchPage)).forEach(article => {
+      article.classList.add('gz-mediahub');
+      article.classList.toggle('gz-mediahub--poster', CONFIG.enableSideLayout);
+      const releases = article.querySelector(':scope > section');
+      if (releases) {
+        releases.tabIndex = 0;
+        releases.setAttribute('role', 'region');
+        releases.setAttribute('aria-label', 'Torrent releases');
+      }
+      const tables = Array.from(article.querySelectorAll('.torrent-search--grouped__torrents'));
+      let shown = 0;
+      let total = 0;
+      const expanded = article.dataset.gzMediahubExpanded === '1';
+      tables.forEach(table => {
+        const count = table.querySelectorAll('.torrent-search--grouped__name > a').length;
+        const visible = expanded || shown < 15;
+        table.classList.toggle('gz-mediahub-hidden', !visible);
+        if (visible) shown += count;
+        total += count;
+      });
+      article.querySelectorAll('details.torrent-search--grouped__dropdown').forEach(details => {
+        if (!details.dataset.gzMediahubOpen) {
+          details.open = true;
+          details.dataset.gzMediahubOpen = '1';
+        }
+        const visible = Array.from(details.querySelectorAll('.torrent-search--grouped__torrents'))
+          .some(table => !table.classList.contains('gz-mediahub-hidden'));
+        details.classList.toggle('gz-mediahub-hidden', !visible);
+      });
+      let more = article.querySelector(':scope > .gz-mediahub-more');
+      if (total > shown || expanded) {
+        if (!more) {
+          more = create('button', 'gz-mediahub-more');
+          more.type = 'button';
+          more.addEventListener('click', () => {
+            article.dataset.gzMediahubExpanded = article.dataset.gzMediahubExpanded === '1' ? '0' : '1';
+            buildMediahubLayouts();
+          });
+          article.appendChild(more);
+        }
+        const label = expanded ? 'Show fewer releases' : `Show all ${total} releases`;
+        if (more.textContent !== label) more.textContent = label;
+        more.setAttribute('aria-expanded', String(expanded));
+      } else {
+        more?.remove();
+      }
+    });
   };
 
   const initPage = () => {
