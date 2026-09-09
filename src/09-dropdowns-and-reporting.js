@@ -231,6 +231,7 @@
       },
       {
         heading: 'Flags',
+        className: 'gz-details-section--flags',
         rows: [
           { label: 'Double Upload', value: torrentData.double_upload, kind: 'flag' },
           { label: 'Freeleech', value: torrentData.freeleech, kind: 'freeleech' },
@@ -257,6 +258,7 @@
       rawLines.push(`${sectionConfig.heading}:`);
 
       const section = create('section', 'gz-details-section');
+      if (sectionConfig.className) section.classList.add(sectionConfig.className);
       const heading = create('h3', 'gz-details-heading');
       heading.textContent = sectionConfig.heading;
       section.appendChild(heading);
@@ -373,6 +375,12 @@
       } else if (config.id === 'filelist') {
         panel.classList.add('gz-dropdown-filelist');
 
+        const escapeFileText = (value) => {
+          const span = create('span');
+          span.textContent = String(value);
+          return span.innerHTML;
+        };
+
         // Build raw file list content for copying
         const fileLines = [];
         if (torrentData.folder) {
@@ -391,7 +399,7 @@
         // Show root folder name if available
         if (torrentData.folder) {
           const folderInfo = create('div', 'gz-filelist-root-info');
-          folderInfo.innerHTML = `<strong>Folder:</strong> ${torrentData.folder}`;
+          folderInfo.innerHTML = `<strong>Folder:</strong> ${escapeFileText(torrentData.folder)}`;
           panel.appendChild(folderInfo);
         }
 
@@ -400,7 +408,7 @@
 
         // Build a nested tree structure
         const buildTree = (files) => {
-          const root = { folders: {}, files: [] };
+          const root = { folders: Object.create(null), files: [] };
 
           files.forEach(file => {
             const filePath = file.name || file;
@@ -411,7 +419,7 @@
             for (let i = 0; i < parts.length - 1; i++) {
               const folderName = parts[i];
               if (!current.folders[folderName]) {
-                current.folders[folderName] = { folders: {}, files: [] };
+                current.folders[folderName] = { folders: Object.create(null), files: [] };
               }
               current = current.folders[folderName];
             }
@@ -439,7 +447,7 @@
         let folderIdCounter = 0;
         const renderTree = (node, depth = 0, parentId = null) => {
           const rows = [];
-          const indentPx = depth * 28; // Indentation in pixels (bigger for visibility)
+          const indentPx = Math.min(depth, 6) * 20;
 
           // Get sorted folder names and file names
           const folderNames = Object.keys(node.folders).sort(naturalSort);
@@ -456,11 +464,12 @@
             rows.push(`
               <tr class="gz-filelist-folder-row" data-folder-id="${folderId}" ${parentId ? `data-parent="${parentId}"` : ''} data-depth="${depth}" ${isHidden ? 'style="display:none;"' : ''}>
                 <td>
-                  <span class="gz-tree-indent" style="display:inline-block; width:${indentPx}px; min-width:${indentPx}px;"></span>
-                  <span class="gz-folder-toggle">▶</span>
-                  <span class="gz-folder-icon">📁</span>
-                  <span class="gz-folder-name">${folderName}</span>
-                  <span class="gz-folder-count">(${fileCount} files)</span>
+                  <button type="button" class="gz-folder-button" aria-expanded="false" style="padding-left:${indentPx}px">
+                    <span class="gz-folder-toggle" aria-hidden="true">›</span>
+                    <svg class="gz-folder-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7V5a1 1 0 0 1 1-1h5l2 3h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Z"/></svg>
+                    <span class="gz-folder-name">${escapeFileText(folderName)}</span>
+                    <span class="gz-folder-count">${fileCount} ${fileCount === 1 ? 'file' : 'files'}</span>
+                  </button>
                 </td>
                 <td></td>
               </tr>
@@ -479,8 +488,10 @@
             rows.push(`
               <tr class="gz-filelist-file-row" ${parentId ? `data-parent="${parentId}"` : ''} data-depth="${depth}" ${isHidden ? 'style="display:none;"' : ''}>
                 <td>
-                  <span class="gz-tree-indent" style="display:inline-block; width:${fileIndentPx}px; min-width:${fileIndentPx}px;"></span>
-                  ${file.name}
+                  <div class="gz-file-name" style="padding-left:${fileIndentPx}px">
+                    <svg class="gz-file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 3H5v18h14V8l-5-5Zm0 0v6h5"/></svg>
+                    <span>${escapeFileText(file.name)}</span>
+                  </div>
                 </td>
                 <td>${formatBytes(file.size)}</td>
               </tr>
@@ -496,7 +507,7 @@
           <thead>
             <tr>
               <th>Name</th>
-              <th style="text-align: right; width: 100px;">Size</th>
+              <th class="gz-file-size-heading">Size</th>
             </tr>
           </thead>
           <tbody>
@@ -508,8 +519,8 @@
         table.querySelectorAll('.gz-filelist-folder-row').forEach(folderRow => {
           folderRow.addEventListener('click', () => {
             const folderId = folderRow.dataset.folderId;
-            const toggle = folderRow.querySelector('.gz-folder-toggle');
-            const isExpanded = toggle.textContent === '▼';
+            const button = folderRow.querySelector('.gz-folder-button');
+            const isExpanded = button.getAttribute('aria-expanded') === 'true';
 
             if (isExpanded) {
               // Collapse: hide all nested rows recursively
@@ -518,20 +529,19 @@
                   row.style.display = 'none';
                   // Also collapse any expanded subfolders
                   if (row.classList.contains('gz-filelist-folder-row')) {
-                    const nestedToggle = row.querySelector('.gz-folder-toggle');
-                    if (nestedToggle) nestedToggle.textContent = '▶';
+                    row.querySelector('.gz-folder-button').setAttribute('aria-expanded', 'false');
                     hideRecursive(row.dataset.folderId);
                   }
                 });
               };
               hideRecursive(folderId);
-              toggle.textContent = '▶';
+              button.setAttribute('aria-expanded', 'false');
             } else {
               // Expand: show direct children only
               table.querySelectorAll(`tr[data-parent="${folderId}"]`).forEach(row => {
                 row.style.display = '';
               });
-              toggle.textContent = '▼';
+              button.setAttribute('aria-expanded', 'true');
             }
           });
         });

@@ -2548,14 +2548,30 @@ transform: scale(2.35);
 
     .gz-dropdown-details {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+      gap: 12px;
+      padding: 4px 0;
+      line-height: 1.5;
       font-size: 0.9em;
       color: rgba(255, 255, 255, 0.85);
     }
 
     .gz-details-section {
       min-width: 0;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .gz-details-section--flags .gz-details-grid {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
+      gap: 6px 16px;
+    }
+
+    .gz-details-section--flags .gz-details-row {
+      border-bottom: 0;
+      padding: 6px 0;
     }
 
     .gz-trump-report-alert-host {
@@ -2682,66 +2698,92 @@ transform: scale(2.35);
     }
 
     .gz-details-heading {
-      margin: 0 0 8px;
-      font-size: 0.78em;
-      line-height: 1.2;
+      margin: 0 0 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      font-size: 0.75em;
+      line-height: 1.3;
+      letter-spacing: 0.09em;
       text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.52);
-      font-weight: 700;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 600;
     }
 
     .gz-details-grid {
       display: grid;
-      gap: 6px;
       margin: 0;
     }
 
     .gz-details-row {
       display: grid;
-      grid-template-columns: minmax(92px, 0.8fr) minmax(0, 1fr);
-      gap: 10px;
-      align-items: baseline;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
       min-width: 0;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+    }
+
+    .gz-details-row:last-child {
+      border-bottom: 0;
     }
 
     .gz-details-label {
-      color: rgba(255, 255, 255, 0.55);
-      font-weight: 600;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 400;
       min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .gz-details-value {
       margin: 0;
       min-width: 0;
+      max-width: 20ch;
+      text-align: right;
       overflow-wrap: anywhere;
+      font-variant-numeric: tabular-nums;
       color: rgba(255, 255, 255, 0.9);
     }
 
     .gz-details-link {
-      color: #eaeeecff;
+      color: #b7d6e7;
       text-decoration: none;
+      border-radius: 3px;
+    }
+
+    .gz-details-link::after {
+      content: ' ↗';
+      font-size: 0.85em;
+      opacity: 0.55;
     }
 
     .gz-details-link:hover {
+      color: #d9eef9;
       text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .gz-details-link:focus-visible {
+      outline: 2px solid #b7d6e7;
+      outline-offset: 4px;
     }
 
     .gz-details-value--flag {
-      justify-self: start;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-weight: 700;
-      font-size: 0.9em;
+      justify-self: end;
+      padding: 1px 7px;
+      border-radius: 5px;
+      font-weight: 500;
+      font-size: 0.85em;
     }
 
     .gz-details-value--active {
-      color: #dff7e8;
-      background: rgba(70, 160, 105, 0.22);
+      color: #b6edcc;
+      background: rgba(70, 160, 105, 0.18);
     }
 
     .gz-details-value--inactive {
-      color: rgba(255, 255, 255, 0.58);
-      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.035);
     }
 
     .gz-dropdown-description {
@@ -2764,32 +2806,54 @@ transform: scale(2.35);
     }
 
     .gz-dropdown-filelist {
-    }
-
-    .gz-dropdown-mediainfo {
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 10px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.02);
     }
 
     .gz-dropdown-filelist table {
       width: 100%;
+      margin: 0;
+      table-layout: fixed;
       border-collapse: collapse;
       font-size: 0.85em;
+      line-height: 1.5;
     }
 
-    .gz-dropdown-filelist th,
-    .gz-dropdown-filelist td {
-      padding: 6px 10px;
+    .gz-dropdown-filelist table th,
+    .gz-dropdown-filelist table td {
+      padding: 9px 14px !important;
       text-align: left;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      vertical-align: middle;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.045);
     }
 
-    .gz-dropdown-filelist th {
-      color: rgba(255, 255, 255, 0.6);
+    .gz-dropdown-filelist table th {
+      padding-top: 12px !important;
+      padding-bottom: 12px !important;
+      color: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.025);
+      font-size: 0.82em;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
       font-weight: 600;
     }
 
-    .gz-dropdown-filelist td:last-child {
+    .gz-dropdown-filelist table .gz-file-size-heading {
+      width: 100px;
+      text-align: right;
+    }
+
+    .gz-dropdown-filelist table td:last-child:not([colspan]) {
       text-align: right;
       white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .gz-dropdown-filelist tbody tr:hover {
+      background: rgba(255, 255, 255, 0.035);
     }
 
     .gz-dropdown-mediainfo pre {
@@ -3000,60 +3064,94 @@ transform: scale(2.35);
 
     /* File List Tree Styles */
     .gz-filelist-root-info {
-      margin-bottom: 10px;
-      padding: 8px 12px;
-      background: rgba(118, 219, 166, 0.06);
-      border-radius: 4px;
-      font-size: 0.9em;
-      color: rgba(255, 255, 255, 0.8);
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      font-size: 0.85em;
+      overflow-wrap: anywhere;
+      color: rgba(255, 255, 255, 0.7);
     }
 
     .gz-filelist-root-info strong {
-      color: rgba(118, 219, 166, 0.9);
+      font-weight: 500;
+      color: #b7d6e7;
     }
 
     .gz-filelist-folder-row {
       cursor: pointer;
+      background: rgba(255, 255, 255, 0.025);
     }
 
-    .gz-filelist-folder-row:hover {
-      background: rgba(255, 255, 255, 0.03);
+    .gz-folder-button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .gz-folder-button:focus-visible {
+      outline: 2px solid #b7d6e7;
+      outline-offset: 4px;
+      border-radius: 3px;
     }
 
     .gz-folder-toggle {
-      display: inline-block;
-      width: 12px;
-      margin-right: 4px;
-      font-size: 0.8em;
-      color: rgba(255, 255, 255, 0.6);
-      transition: transform 0.15s ease;
+      flex: 0 0 12px;
+      text-align: center;
+      font-size: 1.3em;
+      line-height: 1;
+      color: rgba(255, 255, 255, 0.5);
     }
 
-    .gz-folder-icon {
-      margin-right: 6px;
+    .gz-folder-button[aria-expanded="true"] .gz-folder-toggle {
+      transform: rotate(90deg);
+    }
+
+    .gz-folder-icon,
+    .gz-file-icon {
+      width: 17px;
+      height: 17px;
+      flex: 0 0 17px;
+      color: #9bb9cb;
     }
 
     .gz-folder-name {
-      font-weight: 600;
-      color: rgba(255, 255, 255, 0.95);
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.9);
+      overflow-wrap: anywhere;
+      min-width: 0;
     }
 
     .gz-folder-count {
       font-weight: 400;
-      color: rgba(255, 255, 255, 0.5);
-      font-size: 0.9em;
-      margin-left: 6px;
+      color: rgba(255, 255, 255, 0.45);
+      font-size: 0.85em;
+      white-space: nowrap;
+      margin-left: auto;
     }
 
-    .gz-filelist-file-row td:first-child {
-      color: rgba(255, 255, 255, 0.85);
+    .gz-file-name {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      color: rgba(255, 255, 255, 0.8);
     }
 
-    .gz-tree-indent {
-      display: inline-block !important;
-      flex-shrink: 0;
-      height: 1em;
-      vertical-align: middle;
+    .gz-file-name > span {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .gz-file-icon {
+      align-self: flex-start;
+      margin-top: 2px;
+      color: rgba(255, 255, 255, 0.3);
     }
 
     /* MediaInfo Summary Styles */

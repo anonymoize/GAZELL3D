@@ -2801,14 +2801,30 @@ transform: scale(2.35);
 
     .gz-dropdown-details {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+      gap: 12px;
+      padding: 4px 0;
+      line-height: 1.5;
       font-size: 0.9em;
       color: rgba(255, 255, 255, 0.85);
     }
 
     .gz-details-section {
       min-width: 0;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .gz-details-section--flags .gz-details-grid {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
+      gap: 6px 16px;
+    }
+
+    .gz-details-section--flags .gz-details-row {
+      border-bottom: 0;
+      padding: 6px 0;
     }
 
     .gz-trump-report-alert-host {
@@ -2935,66 +2951,92 @@ transform: scale(2.35);
     }
 
     .gz-details-heading {
-      margin: 0 0 8px;
-      font-size: 0.78em;
-      line-height: 1.2;
+      margin: 0 0 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      font-size: 0.75em;
+      line-height: 1.3;
+      letter-spacing: 0.09em;
       text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.52);
-      font-weight: 700;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 600;
     }
 
     .gz-details-grid {
       display: grid;
-      gap: 6px;
       margin: 0;
     }
 
     .gz-details-row {
       display: grid;
-      grid-template-columns: minmax(92px, 0.8fr) minmax(0, 1fr);
-      gap: 10px;
-      align-items: baseline;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
       min-width: 0;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+    }
+
+    .gz-details-row:last-child {
+      border-bottom: 0;
     }
 
     .gz-details-label {
-      color: rgba(255, 255, 255, 0.55);
-      font-weight: 600;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 400;
       min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .gz-details-value {
       margin: 0;
       min-width: 0;
+      max-width: 20ch;
+      text-align: right;
       overflow-wrap: anywhere;
+      font-variant-numeric: tabular-nums;
       color: rgba(255, 255, 255, 0.9);
     }
 
     .gz-details-link {
-      color: #eaeeecff;
+      color: #b7d6e7;
       text-decoration: none;
+      border-radius: 3px;
+    }
+
+    .gz-details-link::after {
+      content: ' ↗';
+      font-size: 0.85em;
+      opacity: 0.55;
     }
 
     .gz-details-link:hover {
+      color: #d9eef9;
       text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .gz-details-link:focus-visible {
+      outline: 2px solid #b7d6e7;
+      outline-offset: 4px;
     }
 
     .gz-details-value--flag {
-      justify-self: start;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-weight: 700;
-      font-size: 0.9em;
+      justify-self: end;
+      padding: 1px 7px;
+      border-radius: 5px;
+      font-weight: 500;
+      font-size: 0.85em;
     }
 
     .gz-details-value--active {
-      color: #dff7e8;
-      background: rgba(70, 160, 105, 0.22);
+      color: #b6edcc;
+      background: rgba(70, 160, 105, 0.18);
     }
 
     .gz-details-value--inactive {
-      color: rgba(255, 255, 255, 0.58);
-      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.035);
     }
 
     .gz-dropdown-description {
@@ -3017,32 +3059,54 @@ transform: scale(2.35);
     }
 
     .gz-dropdown-filelist {
-    }
-
-    .gz-dropdown-mediainfo {
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 10px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.02);
     }
 
     .gz-dropdown-filelist table {
       width: 100%;
+      margin: 0;
+      table-layout: fixed;
       border-collapse: collapse;
       font-size: 0.85em;
+      line-height: 1.5;
     }
 
-    .gz-dropdown-filelist th,
-    .gz-dropdown-filelist td {
-      padding: 6px 10px;
+    .gz-dropdown-filelist table th,
+    .gz-dropdown-filelist table td {
+      padding: 9px 14px !important;
       text-align: left;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      vertical-align: middle;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.045);
     }
 
-    .gz-dropdown-filelist th {
-      color: rgba(255, 255, 255, 0.6);
+    .gz-dropdown-filelist table th {
+      padding-top: 12px !important;
+      padding-bottom: 12px !important;
+      color: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.025);
+      font-size: 0.82em;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
       font-weight: 600;
     }
 
-    .gz-dropdown-filelist td:last-child {
+    .gz-dropdown-filelist table .gz-file-size-heading {
+      width: 100px;
+      text-align: right;
+    }
+
+    .gz-dropdown-filelist table td:last-child:not([colspan]) {
       text-align: right;
       white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .gz-dropdown-filelist tbody tr:hover {
+      background: rgba(255, 255, 255, 0.035);
     }
 
     .gz-dropdown-mediainfo pre {
@@ -3253,60 +3317,94 @@ transform: scale(2.35);
 
     /* File List Tree Styles */
     .gz-filelist-root-info {
-      margin-bottom: 10px;
-      padding: 8px 12px;
-      background: rgba(118, 219, 166, 0.06);
-      border-radius: 4px;
-      font-size: 0.9em;
-      color: rgba(255, 255, 255, 0.8);
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      font-size: 0.85em;
+      overflow-wrap: anywhere;
+      color: rgba(255, 255, 255, 0.7);
     }
 
     .gz-filelist-root-info strong {
-      color: rgba(118, 219, 166, 0.9);
+      font-weight: 500;
+      color: #b7d6e7;
     }
 
     .gz-filelist-folder-row {
       cursor: pointer;
+      background: rgba(255, 255, 255, 0.025);
     }
 
-    .gz-filelist-folder-row:hover {
-      background: rgba(255, 255, 255, 0.03);
+    .gz-folder-button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .gz-folder-button:focus-visible {
+      outline: 2px solid #b7d6e7;
+      outline-offset: 4px;
+      border-radius: 3px;
     }
 
     .gz-folder-toggle {
-      display: inline-block;
-      width: 12px;
-      margin-right: 4px;
-      font-size: 0.8em;
-      color: rgba(255, 255, 255, 0.6);
-      transition: transform 0.15s ease;
+      flex: 0 0 12px;
+      text-align: center;
+      font-size: 1.3em;
+      line-height: 1;
+      color: rgba(255, 255, 255, 0.5);
     }
 
-    .gz-folder-icon {
-      margin-right: 6px;
+    .gz-folder-button[aria-expanded="true"] .gz-folder-toggle {
+      transform: rotate(90deg);
+    }
+
+    .gz-folder-icon,
+    .gz-file-icon {
+      width: 17px;
+      height: 17px;
+      flex: 0 0 17px;
+      color: #9bb9cb;
     }
 
     .gz-folder-name {
-      font-weight: 600;
-      color: rgba(255, 255, 255, 0.95);
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.9);
+      overflow-wrap: anywhere;
+      min-width: 0;
     }
 
     .gz-folder-count {
       font-weight: 400;
-      color: rgba(255, 255, 255, 0.5);
-      font-size: 0.9em;
-      margin-left: 6px;
+      color: rgba(255, 255, 255, 0.45);
+      font-size: 0.85em;
+      white-space: nowrap;
+      margin-left: auto;
     }
 
-    .gz-filelist-file-row td:first-child {
-      color: rgba(255, 255, 255, 0.85);
+    .gz-file-name {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      color: rgba(255, 255, 255, 0.8);
     }
 
-    .gz-tree-indent {
-      display: inline-block !important;
-      flex-shrink: 0;
-      height: 1em;
-      vertical-align: middle;
+    .gz-file-name > span {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .gz-file-icon {
+      align-self: flex-start;
+      margin-top: 2px;
+      color: rgba(255, 255, 255, 0.3);
     }
 
     /* MediaInfo Summary Styles */
@@ -6938,6 +7036,7 @@ const getSearchResultTorrentId = (row, link) => {
       },
       {
         heading: 'Flags',
+        className: 'gz-details-section--flags',
         rows: [
           { label: 'Double Upload', value: torrentData.double_upload, kind: 'flag' },
           { label: 'Freeleech', value: torrentData.freeleech, kind: 'freeleech' },
@@ -6964,6 +7063,7 @@ const getSearchResultTorrentId = (row, link) => {
       rawLines.push(`${sectionConfig.heading}:`);
 
       const section = create('section', 'gz-details-section');
+      if (sectionConfig.className) section.classList.add(sectionConfig.className);
       const heading = create('h3', 'gz-details-heading');
       heading.textContent = sectionConfig.heading;
       section.appendChild(heading);
@@ -7080,6 +7180,12 @@ const getSearchResultTorrentId = (row, link) => {
       } else if (config.id === 'filelist') {
         panel.classList.add('gz-dropdown-filelist');
 
+        const escapeFileText = (value) => {
+          const span = create('span');
+          span.textContent = String(value);
+          return span.innerHTML;
+        };
+
         // Build raw file list content for copying
         const fileLines = [];
         if (torrentData.folder) {
@@ -7098,7 +7204,7 @@ const getSearchResultTorrentId = (row, link) => {
         // Show root folder name if available
         if (torrentData.folder) {
           const folderInfo = create('div', 'gz-filelist-root-info');
-          folderInfo.innerHTML = `<strong>Folder:</strong> ${torrentData.folder}`;
+          folderInfo.innerHTML = `<strong>Folder:</strong> ${escapeFileText(torrentData.folder)}`;
           panel.appendChild(folderInfo);
         }
 
@@ -7107,7 +7213,7 @@ const getSearchResultTorrentId = (row, link) => {
 
         // Build a nested tree structure
         const buildTree = (files) => {
-          const root = { folders: {}, files: [] };
+          const root = { folders: Object.create(null), files: [] };
 
           files.forEach(file => {
             const filePath = file.name || file;
@@ -7118,7 +7224,7 @@ const getSearchResultTorrentId = (row, link) => {
             for (let i = 0; i < parts.length - 1; i++) {
               const folderName = parts[i];
               if (!current.folders[folderName]) {
-                current.folders[folderName] = { folders: {}, files: [] };
+                current.folders[folderName] = { folders: Object.create(null), files: [] };
               }
               current = current.folders[folderName];
             }
@@ -7146,7 +7252,7 @@ const getSearchResultTorrentId = (row, link) => {
         let folderIdCounter = 0;
         const renderTree = (node, depth = 0, parentId = null) => {
           const rows = [];
-          const indentPx = depth * 28; // Indentation in pixels (bigger for visibility)
+          const indentPx = Math.min(depth, 6) * 20;
 
           // Get sorted folder names and file names
           const folderNames = Object.keys(node.folders).sort(naturalSort);
@@ -7163,11 +7269,12 @@ const getSearchResultTorrentId = (row, link) => {
             rows.push(`
               <tr class="gz-filelist-folder-row" data-folder-id="${folderId}" ${parentId ? `data-parent="${parentId}"` : ''} data-depth="${depth}" ${isHidden ? 'style="display:none;"' : ''}>
                 <td>
-                  <span class="gz-tree-indent" style="display:inline-block; width:${indentPx}px; min-width:${indentPx}px;"></span>
-                  <span class="gz-folder-toggle">▶</span>
-                  <span class="gz-folder-icon">📁</span>
-                  <span class="gz-folder-name">${folderName}</span>
-                  <span class="gz-folder-count">(${fileCount} files)</span>
+                  <button type="button" class="gz-folder-button" aria-expanded="false" style="padding-left:${indentPx}px">
+                    <span class="gz-folder-toggle" aria-hidden="true">›</span>
+                    <svg class="gz-folder-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7V5a1 1 0 0 1 1-1h5l2 3h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Z"/></svg>
+                    <span class="gz-folder-name">${escapeFileText(folderName)}</span>
+                    <span class="gz-folder-count">${fileCount} ${fileCount === 1 ? 'file' : 'files'}</span>
+                  </button>
                 </td>
                 <td></td>
               </tr>
@@ -7186,8 +7293,10 @@ const getSearchResultTorrentId = (row, link) => {
             rows.push(`
               <tr class="gz-filelist-file-row" ${parentId ? `data-parent="${parentId}"` : ''} data-depth="${depth}" ${isHidden ? 'style="display:none;"' : ''}>
                 <td>
-                  <span class="gz-tree-indent" style="display:inline-block; width:${fileIndentPx}px; min-width:${fileIndentPx}px;"></span>
-                  ${file.name}
+                  <div class="gz-file-name" style="padding-left:${fileIndentPx}px">
+                    <svg class="gz-file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 3H5v18h14V8l-5-5Zm0 0v6h5"/></svg>
+                    <span>${escapeFileText(file.name)}</span>
+                  </div>
                 </td>
                 <td>${formatBytes(file.size)}</td>
               </tr>
@@ -7203,7 +7312,7 @@ const getSearchResultTorrentId = (row, link) => {
           <thead>
             <tr>
               <th>Name</th>
-              <th style="text-align: right; width: 100px;">Size</th>
+              <th class="gz-file-size-heading">Size</th>
             </tr>
           </thead>
           <tbody>
@@ -7215,8 +7324,8 @@ const getSearchResultTorrentId = (row, link) => {
         table.querySelectorAll('.gz-filelist-folder-row').forEach(folderRow => {
           folderRow.addEventListener('click', () => {
             const folderId = folderRow.dataset.folderId;
-            const toggle = folderRow.querySelector('.gz-folder-toggle');
-            const isExpanded = toggle.textContent === '▼';
+            const button = folderRow.querySelector('.gz-folder-button');
+            const isExpanded = button.getAttribute('aria-expanded') === 'true';
 
             if (isExpanded) {
               // Collapse: hide all nested rows recursively
@@ -7225,20 +7334,19 @@ const getSearchResultTorrentId = (row, link) => {
                   row.style.display = 'none';
                   // Also collapse any expanded subfolders
                   if (row.classList.contains('gz-filelist-folder-row')) {
-                    const nestedToggle = row.querySelector('.gz-folder-toggle');
-                    if (nestedToggle) nestedToggle.textContent = '▶';
+                    row.querySelector('.gz-folder-button').setAttribute('aria-expanded', 'false');
                     hideRecursive(row.dataset.folderId);
                   }
                 });
               };
               hideRecursive(folderId);
-              toggle.textContent = '▶';
+              button.setAttribute('aria-expanded', 'false');
             } else {
               // Expand: show direct children only
               table.querySelectorAll(`tr[data-parent="${folderId}"]`).forEach(row => {
                 row.style.display = '';
               });
-              toggle.textContent = '▼';
+              button.setAttribute('aria-expanded', 'true');
             }
           });
         });
