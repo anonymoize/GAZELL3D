@@ -302,7 +302,7 @@
   };
 
   // Render the dropdown content for a torrent
-  const renderTorrentDropdown = (torrentData, colSpan) => {
+  const renderTorrentDropdown = (torrentData) => {
     const container = create('div', 'gz-dropdown-container');
 
     // Header: Uploaded by X on Date
@@ -326,14 +326,8 @@
       { id: 'filelist', label: 'Files', hasContent: torrentData.files && torrentData.files.length > 0 }
     ];
 
-    // Mediainfo / Bdinfo - show whichever is not empty, prefer mediainfo if both exist
-    const hasMediainfo = torrentData.media_info && torrentData.media_info.trim();
-    const hasBdinfo = torrentData.bd_info && torrentData.bd_info.trim();
-    if (hasMediainfo) {
-      tabsConfig.push({ id: 'mediainfo', label: 'MediaInfo', hasContent: true, content: torrentData.media_info });
-    } else if (hasBdinfo) {
-      tabsConfig.push({ id: 'bdinfo', label: 'BDInfo', hasContent: true, content: torrentData.bd_info });
-    }
+    const mediaSummary = renderMediaSummary(torrentData);
+    if (mediaSummary) tabsConfig.push({ id: mediaSummary.id, label: mediaSummary.label, hasContent: true, mediaSummary });
 
     // Create tabs and panels
     tabsConfig.forEach((config, index) => {
@@ -358,7 +352,7 @@
         rawCopyContent = details.rawContent;
         panel.appendChild(details.element);
         if (details.torrentId && details.trumpReportHost) {
-          fetchTrumpReportsForTorrent(details.torrentId)
+          torrentRepository.reportsFor(details.torrentId)
             .then((reports) => {
               const rawReportContent = renderTrumpReportAlert(details.trumpReportHost, reports);
               panel.dataset.rawContent = [details.rawContent, rawReportContent].filter(Boolean).join('\n\n');
@@ -552,22 +546,10 @@
         console.log('GAZELL3D: File tree rendered. Total rows:', allRows.length, 'Hidden:', hiddenRows.length);
 
         panel.appendChild(table);
-      } else if (config.id === 'mediainfo' || config.id === 'bdinfo') {
+      } else if (config.mediaSummary) {
         panel.classList.add('gz-dropdown-mediainfo');
-        rawCopyContent = config.content;
-
-        // Parse and display summary based on type
-        if (config.id === 'bdinfo') {
-          const parsed = parseBDInfo(config.content);
-          if (parsed.summary) {
-            panel.appendChild(renderBDInfoSummary(parsed.summary, config.content));
-          }
-        } else {
-          const parsed = parseMediaInfo(config.content);
-          if (parsed.summary) {
-            panel.appendChild(renderMediaInfoSummary(parsed.summary, config.content));
-          }
-        }
+        rawCopyContent = config.mediaSummary.rawContent;
+        panel.appendChild(config.mediaSummary.element);
       }
 
       // Store raw content on the panel for later
@@ -619,25 +601,68 @@
     return container;
   };
 
-  // Create a loading dropdown row
-  const createLoadingDropdownRow = (colSpan) => {
-    const dropdownRow = create('tr', 'gz-dropdown-row');
-    const td = create('td');
-    td.setAttribute('colspan', colSpan);
-    td.innerHTML = '<div class="gz-dropdown-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
-    dropdownRow.appendChild(td);
-    return dropdownRow;
+  const createTorrentDropdowns = ({ render }) => {
+    const attachments = new WeakMap();
+    const makeRow = (colSpan, className, message) => {
+      const row = create('tr', 'gz-dropdown-row');
+      const cell = create('td');
+      cell.colSpan = colSpan;
+      const content = create('div', className);
+      content.textContent = message;
+      cell.appendChild(content);
+      row.appendChild(cell);
+      return row;
+    };
+    return Object.freeze({
+      attach: ({ row, link, load, colSpan, getTrumpableReason = () => null }) => {
+        if (attachments.has(link)) return attachments.get(link);
+        let current = null;
+        const click = async (event) => {
+          if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (current?.isConnected) {
+            current.remove();
+            current = null;
+            return;
+          }
+          const columns = colSpan();
+          const loading = makeRow(columns, 'gz-dropdown-loading', 'Loading...');
+          current = loading;
+          row.insertAdjacentElement('afterend', loading);
+          const isCurrent = () => current === loading && row.isConnected && loading.isConnected && row.nextElementSibling === loading;
+          try {
+            const data = await load();
+            if (!isCurrent()) return;
+            if (!data) throw new Error('Torrent data not found in response.');
+            const reason = getTrumpableReason();
+            const result = makeRow(columns, '', '');
+            result.firstElementChild.replaceChildren(render(reason ? { ...data, trumpable_reason: reason } : data));
+            loading.replaceWith(result);
+            current = result;
+          } catch (error) {
+            if (!isCurrent()) return;
+            const result = makeRow(columns, 'gz-dropdown-error', `Failed to fetch torrent data: ${error?.message || 'Unknown error'}`);
+            loading.replaceWith(result);
+            current = result;
+          }
+        };
+        const detach = () => {
+          link.removeEventListener('click', click);
+          current?.remove();
+          current = null;
+          link.classList.remove('gz-clickable');
+          attachments.delete(link);
+        };
+        link.classList.add('gz-clickable');
+        link.addEventListener('click', click);
+        attachments.set(link, detach);
+        return detach;
+      },
+    });
   };
 
-  // Create an error dropdown row
-  const createErrorDropdownRow = (colSpan, message) => {
-    const dropdownRow = create('tr', 'gz-dropdown-row');
-    const td = create('td');
-    td.setAttribute('colspan', colSpan);
-    td.innerHTML = `<div class="gz-dropdown-error">${message}</div>`;
-    dropdownRow.appendChild(td);
-    return dropdownRow;
-  };
+  const torrentDropdowns = createTorrentDropdowns({ render: renderTorrentDropdown });
 
   // ============================================
   // Trump Report Feature
@@ -678,32 +703,6 @@
       toast.style.animation = 'gz-toast-slide-in 0.3s ease reverse';
       setTimeout(() => toast.remove(), 300);
     }, duration);
-  };
-
-  // Submit Trump Report to API
-  const submitTrumpReport = async (payload) => {
-    const url = 'https://aither.cc/api/trumping-reports/create';
-
-    try {
-      const response = await gmFetchJson(
-        url,
-        {
-          headers: {
-            'Authorization': `Bearer ${AITHER_API_KEY}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          data: JSON.stringify(payload)
-        },
-        'POST',
-        30000
-      );
-
-      return response;
-    } catch (error) {
-      console.error('GAZELL3D: Trump report submission failed:', error);
-      throw error;
-    }
   };
 
   // Show Trump Report Modal
@@ -812,7 +811,7 @@
           payload.screenshots_trumping_torrent = screenshotsTrumping;
         }
 
-        const response = await submitTrumpReport(payload);
+        const response = await torrentRepository.submitReport(payload);
 
         closeModal();
 

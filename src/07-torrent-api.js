@@ -1,14 +1,119 @@
-  // =====================
-  // Torrent Dropdown Feature
-  // =====================
+  // Cache and pending work are private to a credential-scoped repository.
+  const createTorrentRepository = ({ request, getApiKey }) => {
+    let credential = null;
+    let cache = new Map();
+    let pending = new Map();
+    const session = () => {
+      const key = getApiKey();
+      if (key !== credential) {
+        credential = key;
+        cache = new Map();
+        pending = new Map();
+      }
+      if (!key || key === 'YOUR_API_KEY_HERE') throw new Error('Aither API key not configured.');
+      return { key, cache, pending };
+    };
+    const fetchJson = (state, path, payload) => request(
+      `https://aither.cc/api/${path}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${state.key}`,
+        },
+        ...(payload === undefined ? {} : { data: JSON.stringify(payload) }),
+      },
+      payload === undefined ? 'GET' : 'POST',
+      payload === undefined ? 15000 : 30000
+    );
+    const lookup = async (key, load) => {
+      const state = session();
+      if (state.cache.has(key)) return state.cache.get(key);
+      if (state.pending.has(key)) return state.pending.get(key);
+      // Defer load so pending is registered even for a synchronous adapter.
+      const promise = Promise.resolve().then(() => load(state)).then((result) => {
+        if (state.pending.get(key) === promise) state.cache.set(key, result);
+        return result;
+      }).finally(() => {
+        if (state.pending.get(key) === promise) state.pending.delete(key);
+      });
+      state.pending.set(key, promise);
+      return promise;
+    };
+    const resource = (value, fallbackId) => {
+      if (!value?.attributes || typeof value.attributes !== 'object') {
+        throw new Error(value?.message || 'Empty torrent response.');
+      }
+      return { ...value.attributes, id: value.attributes.id ?? value.id ?? fallbackId };
+    };
+    const reportItems = (response) => {
+      const payload = response?.data ?? response;
+      if (Array.isArray(payload)) return payload;
+      if (Array.isArray(payload?.data)) return payload.data;
+      if (payload && typeof payload === 'object' && (
+        payload.id || payload.title || payload.solved !== undefined ||
+        payload.reported_torrents || payload.trumping_torrent
+      )) return [payload];
+      if (response?.message) throw new Error(response.message);
+      return [];
+    };
+    return Object.freeze({
+      byId: (torrentId) => {
+        const id = String(torrentId ?? '').trim();
+        if (!id) return Promise.reject(new Error('Torrent ID is required.'));
+        return lookup(`torrent:${id}`, async (state) => {
+          const response = await fetchJson(state, `torrents/${encodeURIComponent(id)}`);
+          return resource(response?.data?.attributes ? response.data : response, id);
+        });
+      },
+      byTmdb: (tmdbId) => {
+        const id = String(tmdbId ?? '').trim();
+        if (!id) return Promise.reject(new Error('Could not detect TMDB ID'));
+        return lookup(`tmdb:${id}`, async (state) => {
+          const torrents = new Map();
+          for (let page = 1; page <= 20; page++) {
+            const query = new URLSearchParams({ perPage: '100', page: String(page), tmdbId: id });
+            const response = await fetchJson(state, `torrents/filter?${query}`);
+            if (!Array.isArray(response?.data)) throw new Error(response?.message || 'Empty torrent response.');
+            response.data.forEach((torrent) => torrents.set(String(torrent.id), resource(torrent, torrent.id)));
+            if (response.data.length < 100) return torrents;
+          }
+          // Never cache a partial group as a complete result.
+          throw new Error('Torrent group exceeds the 20-page limit.');
+        });
+      },
+      reportsFor: (torrentId) => {
+        const id = String(torrentId ?? '').trim();
+        if (!id) return Promise.resolve([]);
+        return lookup(`reports:${id}`, async (state) => {
+          const reports = new Map();
+          for (let page = 1; page <= 20; page++) {
+            const query = new URLSearchParams({ reported_torrent_id: id, page: String(page) });
+            const response = await fetchJson(state, `trumping-reports/filter?${query}`);
+            reportItems(response).filter(Boolean).forEach((report) => {
+              reports.set(report.id ?? JSON.stringify(report), report);
+            });
+            const lastPage = Number(response?.meta?.last_page || 0);
+            const hasMore = lastPage ? page < lastPage : Boolean(response?.links?.next);
+            if (!hasMore) return Array.from(reports.values());
+          }
+          throw new Error('Trump reports exceed the 20-page limit.');
+        });
+      },
+      submitReport: async (payload) => {
+        const state = session();
+        const response = await fetchJson(state, 'trumping-reports/create', payload);
+        if (response?.success) {
+          const key = `reports:${payload.reported_torrent_id}`;
+          state.cache.delete(key);
+          state.pending.delete(key);
+        }
+        return response;
+      },
+    });
+  };
 
-  // Cache for fetched torrent data
-  let torrentDataCache = null;
-  let torrentDataPromise = null;
-  const torrentByIdCache = new Map();
-  const torrentByIdPromises = new Map();
-  const trumpReportsByTorrentCache = new Map();
-  const trumpReportsByTorrentPromises = new Map();
+  const torrentRepository = createTorrentRepository({ request: gmFetchJson, getApiKey: () => AITHER_API_KEY });
 
   // Extract TMDB ID from the page
   const getTmdbIdFromPage = () => {
@@ -18,216 +123,6 @@
       if (match) return parseInt(match[1], 10);
     }
     return null;
-  };
-
-  // Fetch all torrents for a given TMDB ID (with pagination support)
-  const fetchTorrentsByTmdb = async (tmdbId) => {
-    if (torrentDataCache) return torrentDataCache;
-    if (torrentDataPromise) return torrentDataPromise;
-
-    if (!AITHER_API_KEY || AITHER_API_KEY === 'YOUR_API_KEY_HERE') {
-      console.warn('GAZELL3D: Aither API key not configured');
-      return null;
-    }
-
-    torrentDataPromise = (async () => {
-      try {
-        const dataMap = new Map();
-        let currentPage = 1;
-        let hasMorePages = true;
-        const perPage = 100;
-
-        while (hasMorePages) {
-          const response = await gmFetchJson(
-            `https://aither.cc/api/torrents/filter?perPage=${perPage}&page=${currentPage}&tmdbId=${tmdbId}`,
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${AITHER_API_KEY}`
-              }
-            }
-          );
-
-          if (!response || !response.data) {
-            if (currentPage === 1) {
-              console.warn('GAZELL3D: Empty API response');
-              return null;
-            }
-            // No more data on subsequent page, we're done
-            break;
-          }
-
-          // Add torrents from this page to the map
-          response.data.forEach(torrent => {
-            const attributes = torrent.attributes || {};
-            dataMap.set(String(torrent.id), {
-              ...attributes,
-              id: attributes.id ?? torrent.id
-            });
-          });
-
-          // Check if there are more pages to fetch
-          // If we got fewer results than perPage, we've reached the last page
-          if (response.data.length < perPage) {
-            hasMorePages = false;
-          } else {
-            currentPage++;
-            // Safety limit to prevent infinite loops (max 20 pages = 2000 torrents)
-            if (currentPage > 20) {
-              console.warn('GAZELL3D: Reached maximum page limit (20 pages)');
-              hasMorePages = false;
-            }
-          }
-        }
-
-        if (dataMap.size > 0) {
-          console.log(`GAZELL3D: Fetched ${dataMap.size} torrents across ${currentPage} page(s)`);
-        }
-
-        torrentDataCache = dataMap;
-        return dataMap;
-      } catch (err) {
-        console.error('GAZELL3D: Failed to fetch torrent data', err);
-        return null;
-      }
-    })();
-
-    return torrentDataPromise;
-  };
-
-  // Fetch one torrent's full detail payload by ID
-  const fetchTorrentById = async (torrentId) => {
-    const id = String(torrentId || '').trim();
-    if (!id) return null;
-    if (torrentByIdCache.has(id)) return torrentByIdCache.get(id);
-    if (torrentByIdPromises.has(id)) return torrentByIdPromises.get(id);
-
-    if (!AITHER_API_KEY || AITHER_API_KEY === 'YOUR_API_KEY_HERE') {
-      console.warn('GAZELL3D: Aither API key not configured');
-      throw new Error('Aither API key not configured.');
-    }
-
-    const promise = (async () => {
-      try {
-        const response = await gmFetchJson(
-          `https://aither.cc/api/torrents/${encodeURIComponent(id)}`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${AITHER_API_KEY}`
-            }
-          }
-        );
-
-        const torrentResource = response?.data?.attributes ? response.data : response;
-        const torrentData = torrentResource?.attributes || null;
-        if (!torrentData) {
-          const message = response?.message || 'Empty torrent API response.';
-          throw new Error(message);
-        }
-
-        const normalizedTorrentData = {
-          ...torrentData,
-          id: torrentData.id ?? torrentResource.id ?? id
-        };
-        torrentByIdCache.set(id, normalizedTorrentData);
-        return normalizedTorrentData;
-      } finally {
-        torrentByIdPromises.delete(id);
-      }
-    })();
-
-    torrentByIdPromises.set(id, promise);
-    return promise;
-  };
-
-  const normalizeTrumpReportData = (response) => {
-    const payload = response?.data ?? response;
-    if (Array.isArray(payload)) return payload;
-    if (Array.isArray(payload?.data)) return payload.data;
-    if (payload && typeof payload === 'object' && (
-      payload.id ||
-      payload.title ||
-      payload.solved !== undefined ||
-      payload.reported_torrents ||
-      payload.trumping_torrent
-    )) {
-      return [payload];
-    }
-    return [];
-  };
-
-  // Fetch existing trump reports filed against a torrent.
-  const fetchTrumpReportsForTorrent = async (torrentId) => {
-    const id = String(torrentId || '').trim();
-    if (!id) return [];
-    if (trumpReportsByTorrentCache.has(id)) return trumpReportsByTorrentCache.get(id);
-    if (trumpReportsByTorrentPromises.has(id)) return trumpReportsByTorrentPromises.get(id);
-
-    if (!AITHER_API_KEY || AITHER_API_KEY === 'YOUR_API_KEY_HERE') {
-      console.warn('GAZELL3D: Aither API key not configured');
-      throw new Error('Aither API key not configured.');
-    }
-
-    const promise = (async () => {
-      try {
-        const reports = [];
-        const seenReportIds = new Set();
-        let currentPage = 1;
-        let hasMorePages = true;
-
-        while (hasMorePages) {
-          const url = new URL('https://aither.cc/api/trumping-reports/filter');
-          url.searchParams.set('reported_torrent_id', id);
-          url.searchParams.set('page', String(currentPage));
-
-          const response = await gmFetchJson(
-            url,
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${AITHER_API_KEY}`
-              }
-            }
-          );
-
-          if (response?.message && response.data === undefined) {
-            throw new Error(response.message);
-          }
-
-          normalizeTrumpReportData(response).forEach((report) => {
-            const reportId = report?.id ?? JSON.stringify(report);
-            if (seenReportIds.has(reportId)) return;
-            seenReportIds.add(reportId);
-            reports.push(report);
-          });
-
-          const lastPage = Number(response?.meta?.last_page || 0);
-          if (lastPage) {
-            hasMorePages = currentPage < lastPage;
-          } else {
-            hasMorePages = Boolean(response?.links?.next);
-          }
-
-          currentPage++;
-          if (currentPage > 20) {
-            console.warn('GAZELL3D: Reached maximum trump report page limit (20 pages)');
-            hasMorePages = false;
-          }
-        }
-
-        trumpReportsByTorrentCache.set(id, reports);
-        return reports;
-      } finally {
-        trumpReportsByTorrentPromises.delete(id);
-      }
-    })();
-
-    trumpReportsByTorrentPromises.set(id, promise);
-    return promise;
   };
 
   // Format bytes to human readable

@@ -1,6 +1,6 @@
   const gazellifyTorrentLayout = (article) => {
     const section = $(SELECTORS.torrentGroup, article);
-    if (!section) return;
+    if (!section || section.querySelector('.gz-torrent-table')) return;
 
     // Clear the trump torrent registry for fresh population
     trumpTorrentRegistry.clear();
@@ -33,6 +33,7 @@
     }
 
     const newTable = create('table', 'gz-torrent-table');
+    const iconEntries = [];
 
     const thead = create('thead');
     // Conditionally include Actions header
@@ -53,7 +54,6 @@
     newTable.appendChild(thead);
 
     const tbody = create('tbody');
-    let rowIdCounter = 0;
 
     // Shared row processing logic
     // seasonGroup: identifier for the season (e.g., 'S01', 'S02') used for trump report filtering
@@ -82,12 +82,7 @@
         const nameLink = row.querySelector('.torrent-search--grouped__name a');
         if (!nameLink) return;
 
-        // Assign Sync ID
-        const syncId = `gz-sync-${++rowIdCounter}`;
-        row.dataset.gzSyncId = syncId;
-
         const newRow = create('tr');
-        newRow.dataset.gzSyncId = syncId;
 
         // 1. Episode/Season Column -> REMOVED (Replaced by header)
 
@@ -103,43 +98,8 @@
         const tdName = create('td', 'gz-col-name');
         const iconSpan = create('span', 'gz-torrent-icons');
 
-        const updateIcons = () => {
-          iconSpan.innerHTML = '';
-          const originalIcons = row.querySelector('.torrent-icons');
-          if (originalIcons) {
-            // Create a copy of children array since we may modify the original
-            const iconsToProcess = Array.from(originalIcons.children);
-            iconsToProcess.forEach(icon => {
-              // Filter text nodes but keep elements
-              if (icon.nodeType !== 1) return;
-
-              // Check if this is a Seadex icon - these need special handling
-              const isSeadex = icon.hasAttribute('data-seadex');
-
-              // Apply filtering logic
-              const isKeep = isSeadex ||
-                icon.classList.contains('torrent-icons__torrent-trump') ||
-                icon.classList.contains('torrent-icons__personal-release') ||
-                icon.classList.contains('torrent-icons__internal');
-
-              if (CONFIG.removeTorrentIcons && !isKeep) {
-                return;
-              }
-
-              // Skip comment icon always
-              if (icon.classList.contains('fa-comment-alt-plus') || icon.classList.contains('torrent-icons__comments')) return;
-
-              // For Seadex icons: MOVE them instead of cloning to preserve event listeners
-              // The original table is hidden anyway, so this is safe
-              if (isSeadex) {
-                iconSpan.appendChild(icon);
-              } else {
-                iconSpan.appendChild(icon.cloneNode(true));
-              }
-            });
-          }
-        };
-        updateIcons(); // Initial population
+        const originalIcons = row.querySelector('.torrent-icons');
+        if (originalIcons) iconEntries.push({ source: originalIcons, target: iconSpan });
 
         const newLink = nameLink.cloneNode(true);
         newLink.className = 'torrent-name-link';
@@ -154,7 +114,6 @@
         const typePart = currentType ? `[${currentType}]` : '';
         const episodePart = episodeId ? `${episodeId} ` : '';
         const torrentDisplayName = `${episodePart}${typePart} ${torrentName}`.trim();
-        const trumpableReason = extractTrumpableReasonFromElement(row);
 
         // Register torrent in the trump report registry for season-aware filtering
         if (torrentId) {
@@ -163,62 +122,18 @@
 
         // Add dropdown functionality if enabled
         if (CONFIG.enableTorrentDropdowns && torrentId) {
-          newLink.classList.add('gz-clickable');
           newLink.dataset.torrentId = torrentId;
-
-          newLink.addEventListener('click', async (e) => {
-            // Ctrl+click or Cmd+click: let the browser handle it natively
-            // (the browser already opens <a> links in a new tab on Ctrl/Cmd+click)
-            if (e.ctrlKey || e.metaKey) {
-              return;
-            }
-
-            e.preventDefault();
-            e.stopPropagation();
-
-            const colSpan = CONFIG.enableGazelleButtons ? 7 : 6;
-            const existingDropdown = newRow.nextElementSibling;
-
-            // Toggle existing dropdown
-            if (existingDropdown && existingDropdown.classList.contains('gz-dropdown-row')) {
-              existingDropdown.remove();
-              return;
-            }
-
-            // Create loading state
-            const loadingRow = createLoadingDropdownRow(colSpan);
-            newRow.insertAdjacentElement('afterend', loadingRow);
-
-            // Fetch torrent data
-            const tmdbId = getTmdbIdFromPage();
-            if (!tmdbId) {
-              loadingRow.replaceWith(createErrorDropdownRow(colSpan, 'Could not detect TMDB ID'));
-              return;
-            }
-
-            const torrentDataMap = await fetchTorrentsByTmdb(tmdbId);
-            if (!torrentDataMap) {
-              loadingRow.replaceWith(createErrorDropdownRow(colSpan, 'Failed to fetch torrent data. Check API key.'));
-              return;
-            }
-
-            const torrentData = torrentDataMap.get(torrentId);
-            if (!torrentData) {
-              loadingRow.replaceWith(createErrorDropdownRow(colSpan, 'Torrent data not found in API response'));
-              return;
-            }
-
-            // Render dropdown
-            const dropdownRow = create('tr', 'gz-dropdown-row');
-            const td = create('td');
-            td.setAttribute('colspan', colSpan);
-            const dropdownTorrentData = trumpableReason
-              ? { ...torrentData, trumpable_reason: trumpableReason }
-              : torrentData;
-            td.appendChild(renderTorrentDropdown(dropdownTorrentData, colSpan));
-            dropdownRow.appendChild(td);
-
-            loadingRow.replaceWith(dropdownRow);
+          torrentDropdowns.attach({
+            row: newRow,
+            link: newLink,
+            colSpan: () => CONFIG.enableGazelleButtons ? 7 : 6,
+            getTrumpableReason: () => extractTrumpableReasonFromElement(row),
+            load: async () => {
+              const tmdbId = getTmdbIdFromPage();
+              if (!tmdbId) throw new Error('Could not detect TMDB ID');
+              const torrents = await torrentRepository.byTmdb(tmdbId);
+              return torrents.get(torrentId);
+            },
           });
         }
 
@@ -544,59 +459,12 @@
 
     wrapper.appendChild(newTable);
 
-    // Observe the original hidden wrapper for changes (like Async Seadex icons)
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach(mutation => {
-        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-          // Only process when nodes are ADDED, not removed
-          // This prevents race conditions when we move icons (which triggers remove mutations)
-          const target = mutation.target;
-          if (target.matches && (target.matches('.torrent-icons') || target.closest('.torrent-icons'))) {
-            const row = target.closest('tr');
-            const syncId = row ? row.dataset.gzSyncId : null;
-            if (syncId) {
-              const newRow = newTable.querySelector(`tr[data-gz-sync-id="${syncId}"]`);
-              if (newRow) {
-                const iconSpan = newRow.querySelector('.gz-torrent-icons');
-                if (iconSpan) {
-                  // Process only the newly added nodes, don't rebuild everything
-                  mutation.addedNodes.forEach(node => {
-                    if (node.nodeType !== 1) return;
-
-                    // Check if this is a Seadex icon (or contains one)
-                    const isSeadexDirect = node.hasAttribute && node.hasAttribute('data-seadex');
-                    const containsSeadex = node.querySelector && node.querySelector('[data-seadex]');
-                    const seadexElement = isSeadexDirect ? node : containsSeadex;
-
-                    if (seadexElement) {
-                      // For Seadex icons: MOVE them to preserve event listeners
-                      // Find the containing li if wrapped, otherwise move the element directly
-                      const elementToMove = seadexElement.closest('li') || seadexElement;
-                      iconSpan.appendChild(elementToMove);
-                    } else {
-                      // Check if it's another "keep" icon
-                      const isKeep = node.classList && (
-                        node.classList.contains('torrent-icons__torrent-trump') ||
-                        node.classList.contains('torrent-icons__personal-release') ||
-                        node.classList.contains('torrent-icons__internal')
-                      );
-
-                      if (!CONFIG.removeTorrentIcons || isKeep) {
-                        // Skip comment icons
-                        if (node.classList && (node.classList.contains('fa-comment-alt-plus') || node.classList.contains('torrent-icons__comments'))) return;
-                        iconSpan.appendChild(node.cloneNode(true));
-                      }
-                    }
-                  });
-                }
-              }
-            }
-          }
-        }
-      });
+    liveTorrentIcons.project({
+      sourceRoot: section,
+      targetRoot: newTable,
+      entries: iconEntries,
+      removeIcons: CONFIG.removeTorrentIcons,
     });
-
-    observer.observe(wrapper, { childList: true, subtree: true });
 
     // Remove "Expand all" button
     const expandBtn = section.querySelector('.panel__actions button[x-bind="all"]');
@@ -827,29 +695,12 @@
       // Hide the original but keep it for Seadex to find
       torrentTags.style.display = 'none';
 
-      // Observe the hidden original for Seadex icons
-      const tagsObserver = new MutationObserver((mutations) => {
-        mutations.forEach(mutation => {
-          if (mutation.type === 'childList') {
-            mutation.addedNodes.forEach(node => {
-              // Check if a Seadex icon was added (it has data-seadex attribute)
-              if (node.nodeType === 1) {
-                const seadexIcon = node.querySelector ?
-                  (node.hasAttribute('data-seadex') ? node : node.querySelector('[data-seadex]')) :
-                  null;
-                if (seadexIcon || (node.hasAttribute && node.hasAttribute('data-seadex'))) {
-                  // Move the Seadex element to visible tags (preserves click handlers)
-                  const elementToMove = seadexIcon || node;
-                  // Find the corresponding li in visible tags, or append to visible tags
-                  visibleTags.appendChild(elementToMove.closest('li') || elementToMove);
-                }
-              }
-            });
-          }
-        });
+      liveTorrentIcons.project({
+        sourceRoot: article,
+        targetRoot: visibleTags,
+        entries: [{ source: torrentTags, target: visibleTags }],
+        kind: 'tags',
       });
-
-      tagsObserver.observe(torrentTags, { childList: true, subtree: true });
     }
 
     const { panels } = createMetaPanels(meta, false);

@@ -13,11 +13,6 @@
   const removeNode = (node) => {
     if (node) node.remove();
   };
-  const tokenizeWords = (text) =>
-    (text || '')
-      .split(/[^A-Za-z0-9]+/)
-      .map((token) => token.trim().toUpperCase())
-      .filter(Boolean);
   const setOriginalTitle = (element, originalText) => {
     if (!element || element.dataset.gzOriginal) return;
     const source = originalText ?? element.textContent ?? '';
@@ -76,59 +71,9 @@
       }
     });
   };
-  const findMetadataStartIndex = (text = '') => {
-    // 1. TV Shows: Priority on Season/Episode patterns.
-    // This allows unique title modifiers (like "AKA Title") to exist between Year and Season.
-    const tvPattern = /\b(?:S\d{1,3}(?:E\d{1,3})?|E\d{1,3}|Season\s*\d+|Complete(?:\s*Series)?|OVA|OAD|NCED|NCOP)\b/i;
-    const tvMatch = text.match(tvPattern);
-    if (tvMatch) {
-      return tvMatch.index;
-    }
-
-    // 2. Movies: Priority on Year.
-    // If a Year is present, we assume everything after it is metadata.
-    // This handles cases like "Movie Title 1999 Language 1080p..."
-    const yearMatch = text.match(/\b(?:19|20)\d{2}\b/);
-    if (yearMatch) {
-      return yearMatch.index + yearMatch[0].length;
-    }
-
-    // 3. Fallback: If no Season or Year, look for the start of common technical tags.
-    const patterns = [
-      /\b(?:2160p|4320p|1080p|720p|576p|480p|1080i|720i|576i|480i|360p|240p|144p|8K|4K|2K|SD)\b/i,
-      /\b(?:Blu-?ray|WEB(?:-?DL|Rip)?|HDTV|UHD|DVD(?:\d|R)?|BD|BRRip|BDRip|DVDRip|NTSC|PAL|SECAM|LaserDisc|VHS|PPV|VOD|REMUX|ISO|3D)\b/i,
-      /\b(?:H\.?26[45]|HEVC|AVC|MVC|x265|x264|MPEG-?2|MPEG-?4|VP9|AV1|VC-?1|XviD|DivX)\b/i,
-      /\b(?:DTS(?::?X|-?HD)?|TrueHD|Atmos|DD(?:\+|P|-?EX)?|Dolby(?:[\s\.]?Digital)?|FLAC|AAC|AC-?3|E-?AC-?3|PCM|LPCM|Opus|Vorbis|WMA|MP3)\b/i,
-      /\b(?:HDR10\+?|DV|HLG|SDR|10.?bit)\b/i,
-      /\b(?:JAPANESE|ENGLISH|KOREAN|FRENCH|GERMAN|SPANISH|ITALIAN|RUSSIAN|HINDI|THAI|CHINESE|MANDARIN|CANTONESE|PORTUGUESE|POLISH|FINNISH|SWEDISH|NORWEGIAN|DANISH|DUTCH|TURKISH|LATINO|MULTI(?:-?AUDIO)?|DUAL(?:-?AUDIO)?)\b/i,
-      /\b(?:MKV|MP4|AVI|WMV|M4V|TS)\b/i,
-    ];
-
-    let startIndex = Number.POSITIVE_INFINITY;
-    for (const pattern of patterns) {
-      const match = pattern.exec(text);
-      if (match && match.index < startIndex) {
-        startIndex = match.index;
-      }
-    }
-
-    if (!Number.isFinite(startIndex)) return 0;
-    return startIndex;
-  };
-  const normalizeSceneGroupName = (value = '') =>
-    String(value)
-      .replace(/[^A-Za-z0-9]+/g, '')
-      .toUpperCase();
   const CONFIG_URL = 'https://raw.githubusercontent.com/anonymoize/GAZELL3D/main/config.json';
   const CACHE_KEY = typeof GM_info !== 'undefined' ? 'GAZELL3D_CONFIG_' + GM_info.script.version : 'GAZELL3D_CONFIG_V2';
   const CACHE_EXPIRY = 24 * 60 * 60 * 1000;
-
-  let SCENE_RELEASE_GROUPS = new Set();
-  let SERVICE_TOKENS = [];
-  let COUNTRY_MAP = {};
-  let LANGUAGE_MAP = {};
-  let TAG_STYLES = {};
-  let RELEASE_GROUP_BLOCK_TOKENS = new Set();
 
   const loadConfig = async () => {
     try {
@@ -144,54 +89,13 @@
       console.warn('GAZELL3D: Cache read error', e);
     }
 
-    console.log('GAZELL3D: Fetching config...');
-    return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({
-        method: 'GET',
-        url: CONFIG_URL,
-        onload: (response) => {
-          if (response.status >= 200 && response.status < 300) {
-            try {
-              const data = JSON.parse(response.responseText);
-              try {
-                localStorage.setItem(CACHE_KEY, JSON.stringify({
-                  timestamp: Date.now(),
-                  data
-                }));
-              } catch (e) {
-                console.warn('GAZELL3D: Cache write error', e);
-              }
-              resolve(data);
-            } catch (e) {
-              reject(new Error('Config parse failed: ' + e.message));
-            }
-          } else {
-            reject(new Error('Config fetch failed with status: ' + response.status));
-          }
-        },
-        onerror: (err) => reject(new Error('Config fetch error: ' + err))
-      });
-    });
-  };
-
-  const initReleaseGroupBlockTokens = () => {
-    const tokens = new Set([
-      'WEB', 'DL', 'DUAL', 'AUDIO', 'SUBBED', 'DUBBED', 'MULTI', 'MULTISUB',
-      'REMUX', 'REPACK', 'PROPER', 'LIMITED', 'COMPLETE', 'UNCENSORED',
-      'UNRATED', 'THEATRICAL', 'EXTENDED', 'PACK', 'COLLECTION', 'SAMPLE',
-      'HDR', 'SDR', 'ATMOS', 'DOLBY', 'TRUEHD', 'COMMENTARY', '3D', 'MVC',
-    ]);
-    const addTokens = (values) => {
-      values.forEach((value) => tokenizeWords(value).forEach((token) => tokens.add(token)));
-    };
-    addTokens(RESOLUTIONS);
-    addTokens(SERVICE_TOKENS);
-    addTokens(SOURCE_PATTERNS.map((pattern) => pattern.value));
-    addTokens(VIDEO_CODEC_PATTERNS.map((pattern) => pattern.value));
-    addTokens(AUDIO_CODEC_PATTERNS.map((pattern) => pattern.value));
-    addTokens(HDR_PATTERNS.map((pattern) => pattern.value));
-    addTokens(CUT_PATTERNS.map((pattern) => pattern.value));
-    return tokens;
+    const data = await gmFetchJson(CONFIG_URL);
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data }));
+    } catch (error) {
+      console.warn('GAZELL3D: Cache write error', error);
+    }
+    return data;
   };
 
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);

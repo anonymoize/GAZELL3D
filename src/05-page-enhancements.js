@@ -11,7 +11,7 @@
     const yearText = yearNode ? yearNode.textContent.replace(/[()]/g, '').trim() : '';
     const heading = yearText ? `${titleText} (${yearText})` : titleText;
     const originalHeadline = headline.dataset.gzOriginal || headline.textContent || '';
-    const subtitle = formatTorrentName(originalHeadline);
+    const subtitle = torrentNaming.format(originalHeadline);
     if (!subtitle || subtitle.length === 0) return;
 
     const wrapper = create('div', 'gz-detail-title');
@@ -41,9 +41,9 @@ const gazellifySearchResults = () => {
       const { heading, subtitle } = popupHeading
         ? {
           heading: popupYearText ? `${popupHeading} (${popupYearText})` : popupHeading,
-          subtitle: formatTorrentName(raw),
+          subtitle: torrentNaming.format(raw),
         }
-        : buildSearchDisplay(raw);
+        : torrentNaming.searchDisplay(raw);
       if (!heading || !subtitle || subtitle.length === 0) return;
 
       link.textContent = '';
@@ -347,56 +347,14 @@ const getSearchResultTorrentId = (row, link) => {
       const torrentId = getSearchResultTorrentId(row, link);
       if (!torrentId) return;
 
-      link.classList.add('gz-clickable');
       link.dataset.torrentId = torrentId;
       link.dataset.gzSearchDropdown = '1';
-
-      link.addEventListener('click', async (e) => {
-        if (e.button !== 0 || e.ctrlKey || e.metaKey) {
-          return;
-        }
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        const existingDropdown = row.nextElementSibling;
-        if (existingDropdown && existingDropdown.classList.contains('gz-dropdown-row')) {
-          existingDropdown.remove();
-          return;
-        }
-
-        const colSpan = getSearchDropdownColSpan(row);
-        const loadingRow = createLoadingDropdownRow(colSpan);
-        row.insertAdjacentElement('afterend', loadingRow);
-
-        let torrentData = null;
-        let errorMessage = 'Failed to fetch torrent data. Check API key.';
-        try {
-          torrentData = await fetchTorrentById(torrentId);
-        } catch (err) {
-          errorMessage = err?.message
-            ? `Failed to fetch torrent data: ${err.message}`
-            : errorMessage;
-          console.error(`GAZELL3D: Failed to fetch torrent data for ${torrentId}`, err);
-        }
-        if (!loadingRow.isConnected) return;
-
-        if (!torrentData) {
-          loadingRow.replaceWith(createErrorDropdownRow(colSpan, errorMessage));
-          return;
-        }
-
-        const dropdownRow = create('tr', 'gz-dropdown-row');
-        const td = create('td');
-        td.setAttribute('colspan', colSpan);
-        const trumpableReason = extractTrumpableReasonFromElement(row);
-        const dropdownTorrentData = trumpableReason
-          ? { ...torrentData, trumpable_reason: trumpableReason }
-          : torrentData;
-        td.appendChild(renderTorrentDropdown(dropdownTorrentData, colSpan));
-        dropdownRow.appendChild(td);
-
-        loadingRow.replaceWith(dropdownRow);
+      torrentDropdowns.attach({
+        row,
+        link,
+        load: () => torrentRepository.byId(torrentId),
+        colSpan: () => getSearchDropdownColSpan(row),
+        getTrumpableReason: () => extractTrumpableReasonFromElement(row),
       });
     });
   };
@@ -443,8 +401,9 @@ const getSearchResultTorrentId = (row, link) => {
       if (!link) return;
       setOriginalTitle(link);
       const sourceText = link.dataset.gzOriginal || link.textContent || '';
-      const formatted = formatTorrentName(sourceText, {
+      const formatted = torrentNaming.format(sourceText, {
         typeLabel: findTorrentTypeForHeading(heading),
+        hideSeasonEpisode: CONFIG.enableGazelleTorrentLayout,
       });
       if (formatted && formatted.length > 0) {
         applyUnknownHighlight(link, formatted);
@@ -457,20 +416,7 @@ const getSearchResultTorrentId = (row, link) => {
   let searchResultsObserver;
 
   const stripTorrentDecorations = () => {
-    $$('.torrent-icons').forEach((node) => {
-      Array.from(node.childNodes).forEach((child) => {
-        if (
-          child.nodeType === 1 &&
-          (child.hasAttribute('data-seadex') ||
-            child.classList.contains('torrent-icons__torrent-trump') ||
-            child.classList.contains('torrent-icons__personal-release') ||
-            child.classList.contains('torrent-icons__internal'))
-        ) {
-          return;
-        }
-        child.remove();
-      });
-    });
+    $$('.torrent-icons').forEach((node) => liveTorrentIcons.filter(node));
 
     if (!CONFIG.showEditButton) {
       $$('.torrent-search--grouped__edit a[title="Edit"]').forEach((node) => node.remove());

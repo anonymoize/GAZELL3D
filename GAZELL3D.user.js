@@ -111,47 +111,35 @@
   let AITHER_API_KEY = loadApiKey();
 
 
-  // Utility for making authenticated API calls
-  const gmFetchJson = (url, opts = {}, method = 'GET', timeout = 15000) => {
-    return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({
+  // Production and tests use the same status/JSON handling through this seam.
+  const createJsonRequest = (send) => (url, opts = {}, method = 'GET', timeout = 15000) =>
+    new Promise((resolve, reject) => {
+      send({
+        ...opts,
         method,
         timeout,
-        ...opts,
         url: url.toString(),
         ontimeout: () => reject(new Error(`Request timed out after ${timeout}ms`)),
-        onerror: (err) => reject(err || new Error('Failed to fetch')),
+        onerror: () => reject(new Error('Failed to fetch')),
         onload: (response) => {
+          let data;
           try {
-            resolve(JSON.parse(response.responseText));
-          } catch (e) {
-            reject(new Error('Failed to parse JSON response'));
+            data = JSON.parse(response.responseText);
+          } catch {
+            reject(new Error(response.status >= 200 && response.status < 300
+              ? 'Failed to parse JSON response' : `HTTP Error ${response.status}`));
+            return;
           }
-        }
+          if (response.status < 200 || response.status >= 300) {
+            reject(new Error(data?.message || `HTTP Error ${response.status}`));
+            return;
+          }
+          resolve(data);
+        },
       });
     });
-  };
 
-  // Utility for fetching raw HTML/text
-  const gmFetchText = (url, opts = {}, method = 'GET', timeout = 15000) => {
-    return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({
-        method,
-        timeout,
-        ...opts,
-        url: url.toString(),
-        ontimeout: () => reject(new Error(`Request timed out after ${timeout}ms`)),
-        onerror: (err) => reject(err || new Error('Failed to fetch')),
-        onload: (response) => {
-          if (response.status >= 200 && response.status < 300) {
-            resolve(response.responseText);
-          } else {
-            reject(new Error(`HTTP Error ${response.status}`));
-          }
-        }
-      });
-    });
-  };
+  const gmFetchJson = createJsonRequest((options) => GM_xmlhttpRequest(options));
 
   // Default sequence order - can be customized by user
   const DEFAULT_GAZELLIFY_SEQUENCE = Object.freeze([
@@ -4205,6 +4193,85 @@ transform: scale(2.35);
     .comparison__button { font-weight: 300; background-color: transparent; color: #5dade2; border: none; cursor: pointer; text-decoration: underline; padding: 0 4px; }
   `;
 
+  // Preserve the original host DOM while projecting icons into the visible layout.
+  const createLiveTorrentIcons = () => {
+    const projections = new Map();
+    let lifetimeObserver = null;
+    const seadexMarker = (node) => node.nodeType === 1
+      ? (node.matches('[data-seadex]') ? node : node.querySelector('[data-seadex]')) : null;
+    const keep = (node, removeIcons) => {
+      if (node.nodeType !== 1) return false;
+      if (seadexMarker(node)) return true;
+      if (node.matches('.fa-comment-alt-plus, .torrent-icons__comments')) return false;
+      return !removeIcons || node.matches('.torrent-icons__torrent-trump, .torrent-icons__personal-release, .torrent-icons__internal');
+    };
+    const filter = (source, removeIcons = true) => {
+      Array.from(source.childNodes).forEach((node) => {
+        if (!keep(node, removeIcons)) node.remove();
+      });
+    };
+    const project = ({ sourceRoot, targetRoot, entries, kind = 'icons', removeIcons = true }) => {
+      if (projections.has(targetRoot)) return projections.get(targetRoot);
+      const clones = new Map();
+      const sync = (entry) => {
+        let copied = clones.get(entry);
+        if (!copied) {
+          copied = new Map();
+          clones.set(entry, copied);
+          entry.target.replaceChildren();
+        }
+        // Ordinary icons stay in the source; Seadex nodes move with their handlers.
+        for (const [original, clone] of copied) {
+          if (original.parentNode !== entry.source || (kind === 'icons' && !keep(original, removeIcons))) {
+            clone.remove();
+            copied.delete(original);
+          }
+        }
+        Array.from(entry.source.children).forEach((node) => {
+          if (kind === 'icons' && !keep(node, removeIcons)) return;
+          if (seadexMarker(node)) {
+            copied.get(node)?.remove();
+            copied.delete(node);
+            entry.target.appendChild(node);
+          } else {
+            const copy = node.cloneNode(true);
+            if (copied.has(node)) copied.get(node).replaceWith(copy);
+            else entry.target.appendChild(copy);
+            copied.set(node, copy);
+          }
+        });
+      };
+      entries.forEach(sync);
+      const observer = new MutationObserver((mutations) => {
+        entries.forEach((entry) => {
+          if (mutations.some((mutation) => entry.source === mutation.target || entry.source.contains(mutation.target))) sync(entry);
+        });
+      });
+      observer.observe(sourceRoot, { childList: true, subtree: true, attributes: true, characterData: true });
+      const dispose = () => {
+        observer.disconnect();
+        projections.delete(targetRoot);
+        if (!projections.size && lifetimeObserver) {
+          lifetimeObserver.disconnect();
+          lifetimeObserver = null;
+        }
+      };
+      projections.set(targetRoot, dispose);
+      if (!lifetimeObserver) {
+        lifetimeObserver = new MutationObserver(() => {
+          for (const [target, disconnect] of projections) {
+            if (!target.isConnected) disconnect();
+          }
+        });
+        lifetimeObserver.observe(document.body, { childList: true, subtree: true });
+      }
+      return dispose;
+    };
+    return Object.freeze({ filter, project });
+  };
+
+  const liveTorrentIcons = createLiveTorrentIcons();
+
   const READY_STATES = ['complete', 'interactive'];
 
   const $ = (selector, scope = document) => (scope ? scope.querySelector(selector) : null);
@@ -4220,11 +4287,6 @@ transform: scale(2.35);
   const removeNode = (node) => {
     if (node) node.remove();
   };
-  const tokenizeWords = (text) =>
-    (text || '')
-      .split(/[^A-Za-z0-9]+/)
-      .map((token) => token.trim().toUpperCase())
-      .filter(Boolean);
   const setOriginalTitle = (element, originalText) => {
     if (!element || element.dataset.gzOriginal) return;
     const source = originalText ?? element.textContent ?? '';
@@ -4283,59 +4345,9 @@ transform: scale(2.35);
       }
     });
   };
-  const findMetadataStartIndex = (text = '') => {
-    // 1. TV Shows: Priority on Season/Episode patterns.
-    // This allows unique title modifiers (like "AKA Title") to exist between Year and Season.
-    const tvPattern = /\b(?:S\d{1,3}(?:E\d{1,3})?|E\d{1,3}|Season\s*\d+|Complete(?:\s*Series)?|OVA|OAD|NCED|NCOP)\b/i;
-    const tvMatch = text.match(tvPattern);
-    if (tvMatch) {
-      return tvMatch.index;
-    }
-
-    // 2. Movies: Priority on Year.
-    // If a Year is present, we assume everything after it is metadata.
-    // This handles cases like "Movie Title 1999 Language 1080p..."
-    const yearMatch = text.match(/\b(?:19|20)\d{2}\b/);
-    if (yearMatch) {
-      return yearMatch.index + yearMatch[0].length;
-    }
-
-    // 3. Fallback: If no Season or Year, look for the start of common technical tags.
-    const patterns = [
-      /\b(?:2160p|4320p|1080p|720p|576p|480p|1080i|720i|576i|480i|360p|240p|144p|8K|4K|2K|SD)\b/i,
-      /\b(?:Blu-?ray|WEB(?:-?DL|Rip)?|HDTV|UHD|DVD(?:\d|R)?|BD|BRRip|BDRip|DVDRip|NTSC|PAL|SECAM|LaserDisc|VHS|PPV|VOD|REMUX|ISO|3D)\b/i,
-      /\b(?:H\.?26[45]|HEVC|AVC|MVC|x265|x264|MPEG-?2|MPEG-?4|VP9|AV1|VC-?1|XviD|DivX)\b/i,
-      /\b(?:DTS(?::?X|-?HD)?|TrueHD|Atmos|DD(?:\+|P|-?EX)?|Dolby(?:[\s\.]?Digital)?|FLAC|AAC|AC-?3|E-?AC-?3|PCM|LPCM|Opus|Vorbis|WMA|MP3)\b/i,
-      /\b(?:HDR10\+?|DV|HLG|SDR|10.?bit)\b/i,
-      /\b(?:JAPANESE|ENGLISH|KOREAN|FRENCH|GERMAN|SPANISH|ITALIAN|RUSSIAN|HINDI|THAI|CHINESE|MANDARIN|CANTONESE|PORTUGUESE|POLISH|FINNISH|SWEDISH|NORWEGIAN|DANISH|DUTCH|TURKISH|LATINO|MULTI(?:-?AUDIO)?|DUAL(?:-?AUDIO)?)\b/i,
-      /\b(?:MKV|MP4|AVI|WMV|M4V|TS)\b/i,
-    ];
-
-    let startIndex = Number.POSITIVE_INFINITY;
-    for (const pattern of patterns) {
-      const match = pattern.exec(text);
-      if (match && match.index < startIndex) {
-        startIndex = match.index;
-      }
-    }
-
-    if (!Number.isFinite(startIndex)) return 0;
-    return startIndex;
-  };
-  const normalizeSceneGroupName = (value = '') =>
-    String(value)
-      .replace(/[^A-Za-z0-9]+/g, '')
-      .toUpperCase();
   const CONFIG_URL = 'https://raw.githubusercontent.com/anonymoize/GAZELL3D/main/config.json';
   const CACHE_KEY = typeof GM_info !== 'undefined' ? 'GAZELL3D_CONFIG_' + GM_info.script.version : 'GAZELL3D_CONFIG_V2';
   const CACHE_EXPIRY = 24 * 60 * 60 * 1000;
-
-  let SCENE_RELEASE_GROUPS = new Set();
-  let SERVICE_TOKENS = [];
-  let COUNTRY_MAP = {};
-  let LANGUAGE_MAP = {};
-  let TAG_STYLES = {};
-  let RELEASE_GROUP_BLOCK_TOKENS = new Set();
 
   const loadConfig = async () => {
     try {
@@ -4351,54 +4363,13 @@ transform: scale(2.35);
       console.warn('GAZELL3D: Cache read error', e);
     }
 
-    console.log('GAZELL3D: Fetching config...');
-    return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({
-        method: 'GET',
-        url: CONFIG_URL,
-        onload: (response) => {
-          if (response.status >= 200 && response.status < 300) {
-            try {
-              const data = JSON.parse(response.responseText);
-              try {
-                localStorage.setItem(CACHE_KEY, JSON.stringify({
-                  timestamp: Date.now(),
-                  data
-                }));
-              } catch (e) {
-                console.warn('GAZELL3D: Cache write error', e);
-              }
-              resolve(data);
-            } catch (e) {
-              reject(new Error('Config parse failed: ' + e.message));
-            }
-          } else {
-            reject(new Error('Config fetch failed with status: ' + response.status));
-          }
-        },
-        onerror: (err) => reject(new Error('Config fetch error: ' + err))
-      });
-    });
-  };
-
-  const initReleaseGroupBlockTokens = () => {
-    const tokens = new Set([
-      'WEB', 'DL', 'DUAL', 'AUDIO', 'SUBBED', 'DUBBED', 'MULTI', 'MULTISUB',
-      'REMUX', 'REPACK', 'PROPER', 'LIMITED', 'COMPLETE', 'UNCENSORED',
-      'UNRATED', 'THEATRICAL', 'EXTENDED', 'PACK', 'COLLECTION', 'SAMPLE',
-      'HDR', 'SDR', 'ATMOS', 'DOLBY', 'TRUEHD', 'COMMENTARY', '3D', 'MVC',
-    ]);
-    const addTokens = (values) => {
-      values.forEach((value) => tokenizeWords(value).forEach((token) => tokens.add(token)));
-    };
-    addTokens(RESOLUTIONS);
-    addTokens(SERVICE_TOKENS);
-    addTokens(SOURCE_PATTERNS.map((pattern) => pattern.value));
-    addTokens(VIDEO_CODEC_PATTERNS.map((pattern) => pattern.value));
-    addTokens(AUDIO_CODEC_PATTERNS.map((pattern) => pattern.value));
-    addTokens(HDR_PATTERNS.map((pattern) => pattern.value));
-    addTokens(CUT_PATTERNS.map((pattern) => pattern.value));
-    return tokens;
+    const data = await gmFetchJson(CONFIG_URL);
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data }));
+    } catch (error) {
+      console.warn('GAZELL3D: Cache write error', error);
+    }
+    return data;
   };
 
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -4555,295 +4526,374 @@ transform: scale(2.35);
     return $$('section.panelV2').find((panel) => getText(panel.querySelector('.panel__heading')).toLowerCase() === target);
   };
 
-  const VIDEO_CODEC_PATTERNS = [
-    { regex: /\bHEVC\b|\bH\.?265\b|\bH265\b|\bx265\b/i, value: 'H.265' },
-    { regex: /\bAVC\b|\bH\.?264\b|\bH264\b|\bx264\b/i, value: 'H.264' },
-    { regex: /\bVVC\b|\bH\.?266\b|\bH266\b|\bx266\b/i, value: 'H.266' },
-    { regex: /\bMVC\b/i, value: 'H.264/MVC' },
-    { regex: /\bAV1\b/i, value: 'AV1' },
-    { regex: /\bVC-?1\b/i, value: 'VC-1' },
-    { regex: /\bMPEG-?2\b/i, value: 'MPEG-2' },
-    { regex: /\bMPEG-?1\b/i, value: 'MPEG-1' },
-    { regex: /\bMPEG\b/i, value: 'MPEG' },
-    { regex: /\bXvid\b/i, value: 'Xvid' },
-    { regex: /\bDivX\b/i, value: 'DivX' },
-    { regex: /\bJPEG2000\b/i, value: 'JPEG2000' },
-  ];
+  // Immutable naming context: callers supply page presentation choices explicitly.
+  const createTorrentNaming = ({ catalog = {}, sequence = [] } = {}) => {
+    const VIDEO_CODEC_PATTERNS = [
+      { regex: /\bHEVC\b|\bH\.?265\b|\bH265\b|\bx265\b/i, value: 'H.265' },
+      { regex: /\bAVC\b|\bH\.?264\b|\bH264\b|\bx264\b/i, value: 'H.264' },
+      { regex: /\bVVC\b|\bH\.?266\b|\bH266\b|\bx266\b/i, value: 'H.266' },
+      { regex: /\bMVC\b/i, value: 'H.264/MVC' },
+      { regex: /\bAV1\b/i, value: 'AV1' },
+      { regex: /\bVC-?1\b/i, value: 'VC-1' },
+      { regex: /\bMPEG-?2\b/i, value: 'MPEG-2' },
+      { regex: /\bMPEG-?1\b/i, value: 'MPEG-1' },
+      { regex: /\bMPEG\b/i, value: 'MPEG' },
+      { regex: /\bXvid\b/i, value: 'Xvid' },
+      { regex: /\bDivX\b/i, value: 'DivX' },
+      { regex: /\bJPEG2000\b/i, value: 'JPEG2000' },
+    ];
 
-  const RESOLUTIONS = ['4320p', '2160p', '1080p', '1080i', '720p', '576p', '576i', '540p', '480p', '480i', "360p", '240p', '144p'];
+    const RESOLUTIONS = ['4320p', '2160p', '1080p', '1080i', '720p', '576p', '576i', '540p', '480p', '480i', "360p", '240p', '144p'];
 
-  const SOURCE_PATTERNS = [
-    { regex: /\bUHD[\s-]*Blu-?ray\b/i, value: 'UHD BluRay' },
-    { regex: /\b(?:3D[\s\.-]*Blu-?ray|Blu-?ray[\s\.-]*3D|3D)\b/i, value: '3D BluRay' },
-    { regex: /\bBlu-?ray\b/i, value: 'BluRay' },
-    { regex: /\bWEB[-\s]?DL\b/i, value: 'WEB-DL' },
-    { regex: /\bWEBRip\b/i, value: 'WEBRip' },
-    { regex: /\bDVD(?:Rip)?\b|\bNTSC DVD[59]\b|\bPAL DVD[59]\b|\bDVD[59]\b/i, value: 'DVD' },
-    { regex: /\bHD-?DVD\b|\bHDDVD\b/i, value: 'HD DVD' },
-    { regex: /\bHDTV\b/i, value: 'HDTV' },
-    { regex: /\bLaserDisc\b/i, value: 'LaserDisc' },
-    { regex: /\bVHS\b/i, value: 'VHS' },
-    { regex: /\bTV[-\s]?Rip\b|\bTV\b/i, value: 'TV' },
-    { regex: /\bDCP\b/i, value: 'DCP' },
-  ];
+    const SOURCE_PATTERNS = [
+      { regex: /\bUHD[\s-]*Blu-?ray\b/i, value: 'UHD BluRay' },
+      { regex: /\b(?:3D[\s\.-]*Blu-?ray|Blu-?ray[\s\.-]*3D|3D)\b/i, value: '3D BluRay' },
+      { regex: /\bBlu-?ray\b/i, value: 'BluRay' },
+      { regex: /\bWEB[-\s]?DL\b/i, value: 'WEB-DL' },
+      { regex: /\bWEBRip\b/i, value: 'WEBRip' },
+      { regex: /\bDVD(?:Rip)?\b|\bNTSC DVD[59]\b|\bPAL DVD[59]\b|\bDVD[59]\b/i, value: 'DVD' },
+      { regex: /\bHD-?DVD\b|\bHDDVD\b/i, value: 'HD DVD' },
+      { regex: /\bHDTV\b/i, value: 'HDTV' },
+      { regex: /\bLaserDisc\b/i, value: 'LaserDisc' },
+      { regex: /\bVHS\b/i, value: 'VHS' },
+      { regex: /\bTV[-\s]?Rip\b|\bTV\b/i, value: 'TV' },
+      { regex: /\bDCP\b/i, value: 'DCP' },
+    ];
 
-  const AUDIO_CHANNEL_PATTERN = /\b(?:1\.0|2\.0|2\.1|3\.0|3\.1|4\.0|4\.1|5\.0|5\.1|6\.1|7\.1)\b/i;
+    const AUDIO_CHANNEL_PATTERN = /\b(?:1\.0|2\.0|2\.1|3\.0|3\.1|4\.0|4\.1|5\.0|5\.1|6\.1|7\.1)\b/i;
 
-  const AUDIO_CODEC_PATTERNS = [
-    { regex: /\bDTS-?HD\s*MA\b/i, value: 'DTS-HD MA' },
-    { regex: /\bDTS-?HD\s*HRA\b/i, value: 'DTS-HD HRA' },
-    { regex: /\bDTS-?HD\b/i, value: 'DTS-HD' },
-    { regex: /\bDTS:?X\b/i, value: 'DTS:X' },
-    { regex: /\bDTS-?ES\b/i, value: 'DTS-ES' },
-    { regex: /\bDTS\b/i, value: 'DTS' },
-    { regex: /\bTrueHD\b/i, value: 'TrueHD' },
-    { regex: /\bDolby\s+Digital\s+EX\b|\bDD-?EX\b/i, value: 'DD-EX' },
-    { regex: /DD\+|DDP|\bE-?AC-?3\b/i, value: 'DD+' },
-    { regex: /\bDD\b|\bDolby Digital\b/i, value: 'DD' },
-    { regex: /\bAAC\b/i, value: 'AAC' },
-    { regex: /\bOpus\b/i, value: 'Opus' },
-    { regex: /\bFLAC\b/i, value: 'FLAC' },
-    { regex: /\bVorbis\b/i, value: 'Vorbis' },
-    { regex: /\bLPCM\b|\bPCM\b/i, value: 'LPCM' },
-    { regex: /\bMP3\b/i, value: 'MP3' },
-    { regex: /\bMP2\b/i, value: 'MP2' }
-  ];
+    const AUDIO_CODEC_PATTERNS = [
+      { regex: /\bDTS-?HD\s*MA\b/i, value: 'DTS-HD MA' },
+      { regex: /\bDTS-?HD\s*HRA\b/i, value: 'DTS-HD HRA' },
+      { regex: /\bDTS-?HD\b/i, value: 'DTS-HD' },
+      { regex: /\bDTS:?X\b/i, value: 'DTS:X' },
+      { regex: /\bDTS-?ES\b/i, value: 'DTS-ES' },
+      { regex: /\bDTS\b/i, value: 'DTS' },
+      { regex: /\bTrueHD\b/i, value: 'TrueHD' },
+      { regex: /\bDolby\s+Digital\s+EX\b|\bDD-?EX\b/i, value: 'DD-EX' },
+      { regex: /DD\+|DDP|\bE-?AC-?3\b/i, value: 'DD+' },
+      { regex: /\bDD\b|\bDolby Digital\b/i, value: 'DD' },
+      { regex: /\bAAC\b/i, value: 'AAC' },
+      { regex: /\bOpus\b/i, value: 'Opus' },
+      { regex: /\bFLAC\b/i, value: 'FLAC' },
+      { regex: /\bVorbis\b/i, value: 'Vorbis' },
+      { regex: /\bLPCM\b|\bPCM\b/i, value: 'LPCM' },
+      { regex: /\bMP3\b/i, value: 'MP3' },
+      { regex: /\bMP2\b/i, value: 'MP2' }
+    ];
 
-  const HDR_PATTERNS = [
-    { regex: /\bDV\s+HDR10\+/i, value: 'DV HDR10+' },
-    { regex: /\bDV\s+HDR\b/i, value: 'DV HDR' },
-    { regex: /\bHDR10\+/i, value: 'HDR10+' },
-    { regex: /\bHLG\b/i, value: 'HLG' },
-    { regex: /\bDV\b/i, value: 'DV' },
-    { regex: /\bHDR\b/i, value: 'HDR' },
-  ];
+    const HDR_PATTERNS = [
+      { regex: /\bDV\s+HDR10\+/i, value: 'DV HDR10+' },
+      { regex: /\bDV\s+HDR\b/i, value: 'DV HDR' },
+      { regex: /\bHDR10\+/i, value: 'HDR10+' },
+      { regex: /\bHLG\b/i, value: 'HLG' },
+      { regex: /\bDV\b/i, value: 'DV' },
+      { regex: /\bHDR\b/i, value: 'HDR' },
+    ];
 
-  const CUT_PATTERNS = [
-    { regex: /Director'?s\s+Cut/i, value: "Director's Cut" },
-    { regex: /\bTheatrical\b/i, value: 'Theatrical' },
-    { regex: /\bExtended\b/i, value: 'Extended' },
-    { regex: /\bUnrated\b/i, value: 'Unrated' },
-    { regex: /\bRegraded\b/i, value: 'Regraded' },
-    { regex: /\bRedux\b/i, value: 'Redux' },
-    { regex: /\bSpecial\s+Edition\b/i, value: 'Special Edition' },
-    { regex: /\bSuper\s+Duper\s+Cut\b/i, value: 'Super Duper Cut' },
-    { regex: /\bOpen\s+Matte\b/i, value: 'Open Matte' },
-    { regex: /\bUncensored\b/i, value: 'Uncensored' },
-    { regex: /\bUncut\b/i, value: 'Uncut' },
-    { regex: /\bRemastered\b/i, value: 'Remastered' },
-    { regex: /\bRestored\b/i, value: 'Restored' },
-    { regex: /\bAnniversary\s+Edition\b/i, value: 'Anniversary Edition' },
-    { regex: /\bUltimate\s+Edition\b/i, value: 'Ultimate Edition' },
-    { regex: /\bCollector'?s\s+Edition\b/i, value: "Collector's Edition" },
-    { regex: /\bFinal\s+Cut\b/i, value: 'Final Cut' },
-    { regex: /\bIMAX\b/i, value: 'IMAX' },
-    { regex: /\bWorkprint\b/i, value: 'Workprint' },
-  ];
+    const CUT_PATTERNS = [
+      { regex: /Director'?s\s+Cut/i, value: "Director's Cut" },
+      { regex: /\bTheatrical\b/i, value: 'Theatrical' },
+      { regex: /\bExtended\b/i, value: 'Extended' },
+      { regex: /\bUnrated\b/i, value: 'Unrated' },
+      { regex: /\bRegraded\b/i, value: 'Regraded' },
+      { regex: /\bRedux\b/i, value: 'Redux' },
+      { regex: /\bSpecial\s+Edition\b/i, value: 'Special Edition' },
+      { regex: /\bSuper\s+Duper\s+Cut\b/i, value: 'Super Duper Cut' },
+      { regex: /\bOpen\s+Matte\b/i, value: 'Open Matte' },
+      { regex: /\bUncensored\b/i, value: 'Uncensored' },
+      { regex: /\bUncut\b/i, value: 'Uncut' },
+      { regex: /\bRemastered\b/i, value: 'Remastered' },
+      { regex: /\bRestored\b/i, value: 'Restored' },
+      { regex: /\bAnniversary\s+Edition\b/i, value: 'Anniversary Edition' },
+      { regex: /\bUltimate\s+Edition\b/i, value: 'Ultimate Edition' },
+      { regex: /\bCollector'?s\s+Edition\b/i, value: "Collector's Edition" },
+      { regex: /\bFinal\s+Cut\b/i, value: 'Final Cut' },
+      { regex: /\bIMAX\b/i, value: 'IMAX' },
+      { regex: /\bWorkprint\b/i, value: 'Workprint' },
+    ];
 
 
 
-  const isBlockedReleaseToken = (token) => {
-    const value = token ? token.toUpperCase() : '';
-    if (!value) return false;
-    if (RELEASE_GROUP_BLOCK_TOKENS.has(value)) return true;
-    if (/^\d{1,4}$/.test(value)) return true;
-    if (/^(?:S|E)\d{1,3}$/i.test(value)) return true;
-    return false;
-  };
+    const tokenizeWords = (text) =>
+      (text || '')
+        .split(/[^A-Za-z0-9]+/)
+        .map((token) => token.trim().toUpperCase())
+        .filter(Boolean);
+    const findMetadataStartIndex = (text = '') => {
+      // 1. TV Shows: Priority on Season/Episode patterns.
+      // This allows unique title modifiers (like "AKA Title") to exist between Year and Season.
+      const tvPattern = /\b(?:S\d{1,3}(?:E\d{1,3})?|E\d{1,3}|Season\s*\d+|Complete(?:\s*Series)?|OVA|OAD|NCED|NCOP)\b/i;
+      const tvMatch = text.match(tvPattern);
+      if (tvMatch) {
+        return tvMatch.index;
+      }
 
-  const getReleaseGroupTokens = (candidate) => {
-    const tokens = tokenizeWords(candidate);
-    if (!tokens.length) return null;
-    return tokens.some((token) => isBlockedReleaseToken(token)) ? null : tokens;
-  };
+      // 2. Movies: Priority on Year.
+      // If a Year is present, we assume everything after it is metadata.
+      // This handles cases like "Movie Title 1999 Language 1080p..."
+      const yearMatch = text.match(/\b(?:19|20)\d{2}\b/);
+      if (yearMatch) {
+        return yearMatch.index + yearMatch[0].length;
+      }
 
-  const extractReleaseGroup = (normalized) => {
-    let best = null;
-    let index = normalized.indexOf('-');
-    while (index !== -1) {
-      const candidate = normalized.slice(index + 1).trim();
-      const tokens = candidate && /\w/.test(candidate) ? getReleaseGroupTokens(candidate) : null;
-      if (tokens) {
-        const score = tokens.length * 100 + candidate.length;
-        if (!best || score > best.score) {
-          best = { score, value: candidate, index };
+      // 3. Fallback: If no Season or Year, look for the start of common technical tags.
+      const patterns = [
+        /\b(?:2160p|4320p|1080p|720p|576p|480p|1080i|720i|576i|480i|360p|240p|144p|8K|4K|2K|SD)\b/i,
+        /\b(?:Blu-?ray|WEB(?:-?DL|Rip)?|HDTV|UHD|DVD(?:\d|R)?|BD|BRRip|BDRip|DVDRip|NTSC|PAL|SECAM|LaserDisc|VHS|PPV|VOD|REMUX|ISO|3D)\b/i,
+        /\b(?:H\.?26[45]|HEVC|AVC|MVC|x265|x264|MPEG-?2|MPEG-?4|VP9|AV1|VC-?1|XviD|DivX)\b/i,
+        /\b(?:DTS(?::?X|-?HD)?|TrueHD|Atmos|DD(?:\+|P|-?EX)?|Dolby(?:[\s\.]?Digital)?|FLAC|AAC|AC-?3|E-?AC-?3|PCM|LPCM|Opus|Vorbis|WMA|MP3)\b/i,
+        /\b(?:HDR10\+?|DV|HLG|SDR|10.?bit)\b/i,
+        /\b(?:JAPANESE|ENGLISH|KOREAN|FRENCH|GERMAN|SPANISH|ITALIAN|RUSSIAN|HINDI|THAI|CHINESE|MANDARIN|CANTONESE|PORTUGUESE|POLISH|FINNISH|SWEDISH|NORWEGIAN|DANISH|DUTCH|TURKISH|LATINO|MULTI(?:-?AUDIO)?|DUAL(?:-?AUDIO)?)\b/i,
+        /\b(?:MKV|MP4|AVI|WMV|M4V|TS)\b/i,
+      ];
+
+      let startIndex = Number.POSITIVE_INFINITY;
+      for (const pattern of patterns) {
+        const match = pattern.exec(text);
+        if (match && match.index < startIndex) {
+          startIndex = match.index;
         }
       }
-      index = normalized.indexOf('-', index + 1);
-    }
-    if (best) {
-      return {
-        group: best.value,
-        baseTitle: normalized.slice(0, best.index).trim(),
+
+      if (!Number.isFinite(startIndex)) return 0;
+      return startIndex;
+    };
+    const normalizeSceneGroupName = (value = '') =>
+      String(value)
+        .replace(/[^A-Za-z0-9]+/g, '')
+        .toUpperCase();
+    const SCENE_RELEASE_GROUPS = new Set((catalog.SCENE_RELEASE_GROUPS || []).map(normalizeSceneGroupName));
+    const SERVICE_TOKENS = [...(catalog.SERVICE_TOKENS || [])];
+    const COUNTRY_MAP = { ...(catalog.COUNTRY_MAP || {}) };
+    const LANGUAGE_MAP = { ...(catalog.LANGUAGE_MAP || {}) };
+    const sequenceOrder = [...sequence];
+    const initReleaseGroupBlockTokens = () => {
+      const tokens = new Set([
+        'WEB', 'DL', 'DUAL', 'AUDIO', 'SUBBED', 'DUBBED', 'MULTI', 'MULTISUB',
+        'REMUX', 'REPACK', 'PROPER', 'LIMITED', 'COMPLETE', 'UNCENSORED',
+        'UNRATED', 'THEATRICAL', 'EXTENDED', 'PACK', 'COLLECTION', 'SAMPLE',
+        'HDR', 'SDR', 'ATMOS', 'DOLBY', 'TRUEHD', 'COMMENTARY', '3D', 'MVC',
+      ]);
+      const addTokens = (values) => {
+        values.forEach((value) => tokenizeWords(value).forEach((token) => tokens.add(token)));
       };
-    }
-    return { group: 'NOGRP', baseTitle: normalized };
-  };
-
-  const formatTorrentName = (name, { typeLabel } = {}) => {
-    if (!name) return '';
-    const normalized = name.replace(/\s+/g, ' ').trim();
-    if (!normalized) return '';
-
-    const { group, baseTitle } = extractReleaseGroup(normalized);
-
-    const getMatchFromPatterns = (patterns, text) => {
-      const found = patterns.find((pattern) => pattern.regex.test(text));
-      return found ? found.value : '';
+      addTokens(RESOLUTIONS);
+      addTokens(SERVICE_TOKENS);
+      addTokens(SOURCE_PATTERNS.map((pattern) => pattern.value));
+      addTokens(VIDEO_CODEC_PATTERNS.map((pattern) => pattern.value));
+      addTokens(AUDIO_CODEC_PATTERNS.map((pattern) => pattern.value));
+      addTokens(HDR_PATTERNS.map((pattern) => pattern.value));
+      addTokens(CUT_PATTERNS.map((pattern) => pattern.value));
+      return tokens;
     };
 
-    const videoCodec = getMatchFromPatterns(VIDEO_CODEC_PATTERNS, baseTitle) || 'UNKNOWN';
-    const bitDepth =
-      /\bHi10P\b.*\bx264\b/i.test(baseTitle) ? 'Hi10P' : '';
-    const resolution =
-      RESOLUTIONS.find((res) => new RegExp(`\\b${res}\\b`, 'i').test(baseTitle)) || 'UNKNOWN';
-    const source = (() => {
-      const discPattern = /\b(?:(NTSC|PAL)\s*)?(?:([1-9]\d*)x)?DVD([59])\b/gi;
-      const discMatches = Array.from(baseTitle.matchAll(discPattern));
-      if (discMatches.length) {
-        const parts = discMatches.map(([, region, count, size]) =>
-          region ? `${region} ${count ? `${count}x` : ''}DVD${size}` : `${count ? `${count}x` : ''}DVD${size}`
+    const RELEASE_GROUP_BLOCK_TOKENS = initReleaseGroupBlockTokens();
+
+    const isBlockedReleaseToken = (token) => {
+      const value = token ? token.toUpperCase() : '';
+      if (!value) return false;
+      if (RELEASE_GROUP_BLOCK_TOKENS.has(value)) return true;
+      if (/^\d{1,4}$/.test(value)) return true;
+      if (/^(?:S|E)\d{1,3}$/i.test(value)) return true;
+      return false;
+    };
+
+    const getReleaseGroupTokens = (candidate) => {
+      const tokens = tokenizeWords(candidate);
+      if (!tokens.length) return null;
+      return tokens.some((token) => isBlockedReleaseToken(token)) ? null : tokens;
+    };
+
+    const extractReleaseGroup = (normalized) => {
+      let best = null;
+      let index = normalized.indexOf('-');
+      while (index !== -1) {
+        const candidate = normalized.slice(index + 1).trim();
+        const tokens = candidate && /\w/.test(candidate) ? getReleaseGroupTokens(candidate) : null;
+        if (tokens) {
+          const score = tokens.length * 100 + candidate.length;
+          if (!best || score > best.score) {
+            best = { score, value: candidate, index };
+          }
+        }
+        index = normalized.indexOf('-', index + 1);
+      }
+      if (best) {
+        return {
+          group: best.value,
+          baseTitle: normalized.slice(0, best.index).trim(),
+        };
+      }
+      return { group: 'NOGRP', baseTitle: normalized };
+    };
+
+    const formatTorrentName = (name, { typeLabel, hideSeasonEpisode = false } = {}) => {
+      if (!name) return [];
+      const normalized = name.replace(/\s+/g, ' ').trim();
+      if (!normalized) return [];
+
+      const { group, baseTitle } = extractReleaseGroup(normalized);
+
+      const getMatchFromPatterns = (patterns, text) => {
+        const found = patterns.find((pattern) => pattern.regex.test(text));
+        return found ? found.value : '';
+      };
+
+      const videoCodec = getMatchFromPatterns(VIDEO_CODEC_PATTERNS, baseTitle) || 'UNKNOWN';
+      const bitDepth =
+        /\bHi10P\b.*\bx264\b/i.test(baseTitle) ? 'Hi10P' : '';
+      const resolution =
+        RESOLUTIONS.find((res) => new RegExp(`\\b${res}\\b`, 'i').test(baseTitle)) || 'UNKNOWN';
+      const source = (() => {
+        const discPattern = /\b(?:(NTSC|PAL)\s*)?(?:([1-9]\d*)x)?DVD([59])\b/gi;
+        const discMatches = Array.from(baseTitle.matchAll(discPattern));
+        if (discMatches.length) {
+          const parts = discMatches.map(([, region, count, size]) =>
+            region ? `${region} ${count ? `${count}x` : ''}DVD${size}` : `${count ? `${count}x` : ''}DVD${size}`
+          );
+          const uniqueParts = parts.filter((value, index, arr) => arr.indexOf(value) === index);
+          return uniqueParts.join(' / ');
+        }
+        return getMatchFromPatterns(SOURCE_PATTERNS, baseTitle) || 'UNKNOWN';
+      })();
+
+      const isWebSource = /\bWEB(?:[-\s]?DL|Rip)\b/i.test(baseTitle);
+      const metadataStart = findMetadataStartIndex(baseTitle);
+      const metadataSlice = metadataStart ? baseTitle.slice(metadataStart) : baseTitle;
+      const service =
+        isWebSource && SERVICE_TOKENS.length
+          ? (() => {
+            const serviceRegex = new RegExp(
+              `\\b(${SERVICE_TOKENS.join('|')})\\b(?=[^\\n]*\\bWEB(?:-?DL|Rip)\\b)`,
+              'i'
+            );
+            const fallbackRegex = new RegExp(`\\b(${SERVICE_TOKENS.join('|')})\\b`, 'i');
+            const match = serviceRegex.exec(metadataSlice) || fallbackRegex.exec(metadataSlice);
+            if (!match) return '';
+            const token = match[1];
+            return SERVICE_TOKENS.find((candidate) => candidate.toLowerCase() === token.toLowerCase()) || token;
+          })()
+          : '';
+
+      const isFullDisc =
+        typeof typeLabel === 'string' && typeLabel.trim().toLowerCase().includes('full disc');
+      const hasDiscContext = /\b(?:PAL|NTSC|SECAM|DVD\d?|Blu-ray|BD|UHD)\b/i.test(baseTitle);
+      const country =
+        (isFullDisc || hasDiscContext) && Object.keys(COUNTRY_MAP).length
+          ? (() => {
+            const countryRegex = new RegExp(
+              `\\b(${Object.keys(COUNTRY_MAP).join('|')})\\b`,
+              'i'
+            );
+            const match = countryRegex.exec(baseTitle);
+            if (!match) return '';
+            const token = match[1].toUpperCase();
+            return COUNTRY_MAP[token] || token;
+          })()
+          : '';
+
+      const seasonEpisode = (() => {
+        const patterns = [
+          /S\d{2}E\d{2}(?:E\d{2})+/i,
+          /S\d{2}E\d{2}-E\d{2}/i,
+          /S\d{2}E\d{2}/i,
+          /S\d{2}-S\d{2}/i,
+          /S\d{2}/i,
+        ];
+        const matchPattern = patterns.find((pattern) => pattern.test(baseTitle));
+        return matchPattern ? baseTitle.match(matchPattern)[0].toUpperCase() : '';
+      })();
+
+      const language = (() => {
+        if (/Dual[-\s]?Audio/i.test(baseTitle)) {
+          return 'Dual-Audio';
+        }
+        if (/\bDubbed\b/i.test(baseTitle)) {
+          return 'Dubbed';
+        }
+        if (!Object.keys(LANGUAGE_MAP).length) return '';
+        const languageRegex = new RegExp(
+          `\\b(${Object.keys(LANGUAGE_MAP).join('|')})\\b`,
+          'i'
         );
-        const uniqueParts = parts.filter((value, index, arr) => arr.indexOf(value) === index);
-        return uniqueParts.join(' / ');
-      }
-      return getMatchFromPatterns(SOURCE_PATTERNS, baseTitle) || 'UNKNOWN';
-    })();
+        const match = languageRegex.exec(metadataSlice);
+        if (!match) return '';
+        const key = match[1].toUpperCase();
+        if (service && key === service) {
+          return '';
+        }
+        return LANGUAGE_MAP[key] || match[1];
+      })();
 
-    const isWebSource = /\bWEB(?:[-\s]?DL|Rip)\b/i.test(baseTitle);
-    const metadataStart = findMetadataStartIndex(baseTitle);
-    const metadataSlice = metadataStart ? baseTitle.slice(metadataStart) : baseTitle;
-    const service =
-      isWebSource
-        ? (() => {
-          const serviceRegex = new RegExp(
-            `\\b(${SERVICE_TOKENS.join('|')})\\b(?=[^\\n]*\\bWEB(?:-?DL|Rip)\\b)`,
-            'i'
-          );
-          const fallbackRegex = new RegExp(`\\b(${SERVICE_TOKENS.join('|')})\\b`, 'i');
-          const match = serviceRegex.exec(metadataSlice) || fallbackRegex.exec(metadataSlice);
-          if (!match) return '';
-          const token = match[1];
-          return SERVICE_TOKENS.find((candidate) => candidate.toLowerCase() === token.toLowerCase()) || token;
-        })()
-        : '';
+      const audioCodec = getMatchFromPatterns(AUDIO_CODEC_PATTERNS, baseTitle) || 'UNKNOWN';
+      const audioChannels = (() => {
+        const match = AUDIO_CHANNEL_PATTERN.exec(baseTitle);
+        return match ? match[0].toUpperCase() : '';
+      })();
+      const audioCodecWithChannels = [audioCodec, audioChannels].filter(Boolean).join(' ');
+      const atmos = /\bAtmos\b/i.test(baseTitle) ? 'Atmos' : '';
+      const hdr = getMatchFromPatterns(HDR_PATTERNS, baseTitle);
+      const hybrid = /\bHybrid\b/i.test(baseTitle) ? 'Hybrid' : '';
+      const remux = /\bRemux\b/i.test(baseTitle) ? 'Remux' : '';
+      const repackProper = (() => {
+        const match = /\b(REPACK(?:\d+)?|PROPER(?:\d+)?)\b/i.exec(baseTitle);
+        return match ? match[1].toUpperCase() : '';
+      })();
+      const cut = getMatchFromPatterns(CUT_PATTERNS, baseTitle);
+      const scene = (() => {
+        if (!group || group === 'NOGRP') return '';
+        const normalizedGroupName = normalizeSceneGroupName(group);
+        if (!normalizedGroupName) return '';
+        return SCENE_RELEASE_GROUPS.has(normalizedGroupName) ? 'Scene' : '';
+      })();
 
-    const isFullDisc =
-      typeof typeLabel === 'string' && typeLabel.trim().toLowerCase().includes('full disc');
-    const hasDiscContext = /\b(?:PAL|NTSC|SECAM|DVD\d?|Blu-ray|BD|UHD)\b/i.test(baseTitle);
-    const country =
-      isFullDisc || hasDiscContext
-        ? (() => {
-          const countryRegex = new RegExp(
-            `\\b(${Object.keys(COUNTRY_MAP).join('|')})\\b`,
-            'i'
-          );
-          const match = countryRegex.exec(baseTitle);
-          if (!match) return '';
-          const token = match[1].toUpperCase();
-          return COUNTRY_MAP[token] || token;
-        })()
-        : '';
+      const partValues = {
+        videoCodec,
+        bitDepth,
+        resolution,
+        country,
+        service,
+        source,
+        remux,
+        seasonEpisode,
+        language,
+        audio: audioCodecWithChannels,
+        atmos,
+        hdr,
+        hybrid,
+        cut,
+        repack: repackProper,
+        scene,
+        group: group || 'NOGRP',
+      };
 
-    const seasonEpisode = (() => {
-      const patterns = [
-        /S\d{2}E\d{2}(?:E\d{2})+/i,
-        /S\d{2}E\d{2}-E\d{2}/i,
-        /S\d{2}E\d{2}/i,
-        /S\d{2}-S\d{2}/i,
-        /S\d{2}/i,
-      ];
-      const matchPattern = patterns.find((pattern) => pattern.test(baseTitle));
-      return matchPattern ? baseTitle.match(matchPattern)[0].toUpperCase() : '';
-    })();
-
-    const language = (() => {
-      if (/Dual[-\s]?Audio/i.test(baseTitle)) {
-        return 'Dual-Audio';
-      }
-      if (/\bDubbed\b/i.test(baseTitle)) {
-        return 'Dubbed';
-      }
-      const languageRegex = new RegExp(
-        `\\b(${Object.keys(LANGUAGE_MAP).join('|')})\\b`,
-        'i'
-      );
-      const match = languageRegex.exec(metadataSlice);
-      if (!match) return '';
-      const key = match[1].toUpperCase();
-      if (service && key === service) {
-        return '';
-      }
-      return LANGUAGE_MAP[key] || match[1];
-    })();
-
-    const audioCodec = getMatchFromPatterns(AUDIO_CODEC_PATTERNS, baseTitle) || 'UNKNOWN';
-    const audioChannels = (() => {
-      const match = AUDIO_CHANNEL_PATTERN.exec(baseTitle);
-      return match ? match[0].toUpperCase() : '';
-    })();
-    const audioCodecWithChannels = [audioCodec, audioChannels].filter(Boolean).join(' ');
-    const atmos = /\bAtmos\b/i.test(baseTitle) ? 'Atmos' : '';
-    const hdr = getMatchFromPatterns(HDR_PATTERNS, baseTitle);
-    const hybrid = /\bHybrid\b/i.test(baseTitle) ? 'Hybrid' : '';
-    const remux = /\bRemux\b/i.test(baseTitle) ? 'Remux' : '';
-    const repackProper = (() => {
-      const match = /\b(REPACK(?:\d+)?|PROPER(?:\d+)?)\b/i.exec(baseTitle);
-      return match ? match[1].toUpperCase() : '';
-    })();
-    const cut = getMatchFromPatterns(CUT_PATTERNS, baseTitle);
-    const scene = (() => {
-      if (!group || group === 'NOGRP') return '';
-      const normalizedGroupName = normalizeSceneGroupName(group);
-      if (!normalizedGroupName) return '';
-      return SCENE_RELEASE_GROUPS.has(normalizedGroupName) ? 'Scene' : '';
-    })();
-
-    const partValues = {
-      videoCodec,
-      bitDepth,
-      resolution,
-      country,
-      service,
-      source,
-      remux,
-      seasonEpisode,
-      language,
-      audio: audioCodecWithChannels,
-      atmos,
-      hdr,
-      hybrid,
-      cut,
-      repack: repackProper,
-      scene,
-      group: group || 'NOGRP',
+      return sequenceOrder
+        .filter((key) => !(hideSeasonEpisode && key === 'seasonEpisode'))
+        .map((key) => ({ category: key, value: partValues[key] }))
+        .filter((part) => Boolean(part.value));
     };
 
-    const isSimilarPage = window.location.pathname.includes('/similar');
-    const shouldHideSeasonEpisode = CONFIG.enableGazelleTorrentLayout && isSimilarPage;
+    const buildSearchDisplay = (text) => {
+      const normalized = normalizeText(text);
+      if (!normalized) return { heading: '', subtitle: [] };
+      const yearMatch = normalized.match(/\b(19|20)\d{2}\b/);
+      let headingTitle = normalized;
+      let yearText = '';
+      if (yearMatch) {
+        yearText = yearMatch[0];
+        headingTitle = normalized.slice(0, yearMatch.index).replace(/[-–_.]+$/g, '').trim();
+      }
+      if (!headingTitle) headingTitle = normalized;
 
-    return GAZELLIFY_SEQUENCE
-      .filter((key) => !(shouldHideSeasonEpisode && key === 'seasonEpisode'))
-      .map((key) => ({ category: key, value: partValues[key] }))
-      .filter((part) => Boolean(part.value));
+      const heading = yearText ? `${headingTitle} (${yearText})` : headingTitle;
+      const subtitle = formatTorrentName(normalized);
+      return { heading, subtitle };
+    };
+    return Object.freeze({ format: formatTorrentName, searchDisplay: buildSearchDisplay });
   };
 
-  const buildSearchDisplay = (text) => {
-    const normalized = normalizeText(text);
-    if (!normalized) return { heading: '', subtitle: [] };
-    const yearMatch = normalized.match(/\b(19|20)\d{2}\b/);
-    let headingTitle = normalized;
-    let yearText = '';
-    if (yearMatch) {
-      yearText = yearMatch[0];
-      headingTitle = normalized.slice(0, yearMatch.index).replace(/[-–_.]+$/g, '').trim();
-    }
-    if (!headingTitle) headingTitle = normalized;
-
-    const heading = yearText ? `${headingTitle} (${yearText})` : headingTitle;
-    const subtitle = formatTorrentName(normalized);
-    return { heading, subtitle };
-  };
+  let torrentNaming = createTorrentNaming({ sequence: GAZELLIFY_SEQUENCE });
 
   const updateDetailTitle = () => {
     if (!CONFIG.enableGazellifyDetail) return;
@@ -4858,7 +4908,7 @@ transform: scale(2.35);
     const yearText = yearNode ? yearNode.textContent.replace(/[()]/g, '').trim() : '';
     const heading = yearText ? `${titleText} (${yearText})` : titleText;
     const originalHeadline = headline.dataset.gzOriginal || headline.textContent || '';
-    const subtitle = formatTorrentName(originalHeadline);
+    const subtitle = torrentNaming.format(originalHeadline);
     if (!subtitle || subtitle.length === 0) return;
 
     const wrapper = create('div', 'gz-detail-title');
@@ -4888,9 +4938,9 @@ const gazellifySearchResults = () => {
       const { heading, subtitle } = popupHeading
         ? {
           heading: popupYearText ? `${popupHeading} (${popupYearText})` : popupHeading,
-          subtitle: formatTorrentName(raw),
+          subtitle: torrentNaming.format(raw),
         }
-        : buildSearchDisplay(raw);
+        : torrentNaming.searchDisplay(raw);
       if (!heading || !subtitle || subtitle.length === 0) return;
 
       link.textContent = '';
@@ -5194,56 +5244,14 @@ const getSearchResultTorrentId = (row, link) => {
       const torrentId = getSearchResultTorrentId(row, link);
       if (!torrentId) return;
 
-      link.classList.add('gz-clickable');
       link.dataset.torrentId = torrentId;
       link.dataset.gzSearchDropdown = '1';
-
-      link.addEventListener('click', async (e) => {
-        if (e.button !== 0 || e.ctrlKey || e.metaKey) {
-          return;
-        }
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        const existingDropdown = row.nextElementSibling;
-        if (existingDropdown && existingDropdown.classList.contains('gz-dropdown-row')) {
-          existingDropdown.remove();
-          return;
-        }
-
-        const colSpan = getSearchDropdownColSpan(row);
-        const loadingRow = createLoadingDropdownRow(colSpan);
-        row.insertAdjacentElement('afterend', loadingRow);
-
-        let torrentData = null;
-        let errorMessage = 'Failed to fetch torrent data. Check API key.';
-        try {
-          torrentData = await fetchTorrentById(torrentId);
-        } catch (err) {
-          errorMessage = err?.message
-            ? `Failed to fetch torrent data: ${err.message}`
-            : errorMessage;
-          console.error(`GAZELL3D: Failed to fetch torrent data for ${torrentId}`, err);
-        }
-        if (!loadingRow.isConnected) return;
-
-        if (!torrentData) {
-          loadingRow.replaceWith(createErrorDropdownRow(colSpan, errorMessage));
-          return;
-        }
-
-        const dropdownRow = create('tr', 'gz-dropdown-row');
-        const td = create('td');
-        td.setAttribute('colspan', colSpan);
-        const trumpableReason = extractTrumpableReasonFromElement(row);
-        const dropdownTorrentData = trumpableReason
-          ? { ...torrentData, trumpable_reason: trumpableReason }
-          : torrentData;
-        td.appendChild(renderTorrentDropdown(dropdownTorrentData, colSpan));
-        dropdownRow.appendChild(td);
-
-        loadingRow.replaceWith(dropdownRow);
+      torrentDropdowns.attach({
+        row,
+        link,
+        load: () => torrentRepository.byId(torrentId),
+        colSpan: () => getSearchDropdownColSpan(row),
+        getTrumpableReason: () => extractTrumpableReasonFromElement(row),
       });
     });
   };
@@ -5290,8 +5298,9 @@ const getSearchResultTorrentId = (row, link) => {
       if (!link) return;
       setOriginalTitle(link);
       const sourceText = link.dataset.gzOriginal || link.textContent || '';
-      const formatted = formatTorrentName(sourceText, {
+      const formatted = torrentNaming.format(sourceText, {
         typeLabel: findTorrentTypeForHeading(heading),
+        hideSeasonEpisode: CONFIG.enableGazelleTorrentLayout,
       });
       if (formatted && formatted.length > 0) {
         applyUnknownHighlight(link, formatted);
@@ -5304,20 +5313,7 @@ const getSearchResultTorrentId = (row, link) => {
   let searchResultsObserver;
 
   const stripTorrentDecorations = () => {
-    $$('.torrent-icons').forEach((node) => {
-      Array.from(node.childNodes).forEach((child) => {
-        if (
-          child.nodeType === 1 &&
-          (child.hasAttribute('data-seadex') ||
-            child.classList.contains('torrent-icons__torrent-trump') ||
-            child.classList.contains('torrent-icons__personal-release') ||
-            child.classList.contains('torrent-icons__internal'))
-        ) {
-          return;
-        }
-        child.remove();
-      });
-    });
+    $$('.torrent-icons').forEach((node) => liveTorrentIcons.filter(node));
 
     if (!CONFIG.showEditButton) {
       $$('.torrent-search--grouped__edit a[title="Edit"]').forEach((node) => node.remove());
@@ -5727,17 +5723,122 @@ const getSearchResultTorrentId = (row, link) => {
     });
   };
 
-  // =====================
-  // Torrent Dropdown Feature
-  // =====================
+  // Cache and pending work are private to a credential-scoped repository.
+  const createTorrentRepository = ({ request, getApiKey }) => {
+    let credential = null;
+    let cache = new Map();
+    let pending = new Map();
+    const session = () => {
+      const key = getApiKey();
+      if (key !== credential) {
+        credential = key;
+        cache = new Map();
+        pending = new Map();
+      }
+      if (!key || key === 'YOUR_API_KEY_HERE') throw new Error('Aither API key not configured.');
+      return { key, cache, pending };
+    };
+    const fetchJson = (state, path, payload) => request(
+      `https://aither.cc/api/${path}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${state.key}`,
+        },
+        ...(payload === undefined ? {} : { data: JSON.stringify(payload) }),
+      },
+      payload === undefined ? 'GET' : 'POST',
+      payload === undefined ? 15000 : 30000
+    );
+    const lookup = async (key, load) => {
+      const state = session();
+      if (state.cache.has(key)) return state.cache.get(key);
+      if (state.pending.has(key)) return state.pending.get(key);
+      // Defer load so pending is registered even for a synchronous adapter.
+      const promise = Promise.resolve().then(() => load(state)).then((result) => {
+        if (state.pending.get(key) === promise) state.cache.set(key, result);
+        return result;
+      }).finally(() => {
+        if (state.pending.get(key) === promise) state.pending.delete(key);
+      });
+      state.pending.set(key, promise);
+      return promise;
+    };
+    const resource = (value, fallbackId) => {
+      if (!value?.attributes || typeof value.attributes !== 'object') {
+        throw new Error(value?.message || 'Empty torrent response.');
+      }
+      return { ...value.attributes, id: value.attributes.id ?? value.id ?? fallbackId };
+    };
+    const reportItems = (response) => {
+      const payload = response?.data ?? response;
+      if (Array.isArray(payload)) return payload;
+      if (Array.isArray(payload?.data)) return payload.data;
+      if (payload && typeof payload === 'object' && (
+        payload.id || payload.title || payload.solved !== undefined ||
+        payload.reported_torrents || payload.trumping_torrent
+      )) return [payload];
+      if (response?.message) throw new Error(response.message);
+      return [];
+    };
+    return Object.freeze({
+      byId: (torrentId) => {
+        const id = String(torrentId ?? '').trim();
+        if (!id) return Promise.reject(new Error('Torrent ID is required.'));
+        return lookup(`torrent:${id}`, async (state) => {
+          const response = await fetchJson(state, `torrents/${encodeURIComponent(id)}`);
+          return resource(response?.data?.attributes ? response.data : response, id);
+        });
+      },
+      byTmdb: (tmdbId) => {
+        const id = String(tmdbId ?? '').trim();
+        if (!id) return Promise.reject(new Error('Could not detect TMDB ID'));
+        return lookup(`tmdb:${id}`, async (state) => {
+          const torrents = new Map();
+          for (let page = 1; page <= 20; page++) {
+            const query = new URLSearchParams({ perPage: '100', page: String(page), tmdbId: id });
+            const response = await fetchJson(state, `torrents/filter?${query}`);
+            if (!Array.isArray(response?.data)) throw new Error(response?.message || 'Empty torrent response.');
+            response.data.forEach((torrent) => torrents.set(String(torrent.id), resource(torrent, torrent.id)));
+            if (response.data.length < 100) return torrents;
+          }
+          // Never cache a partial group as a complete result.
+          throw new Error('Torrent group exceeds the 20-page limit.');
+        });
+      },
+      reportsFor: (torrentId) => {
+        const id = String(torrentId ?? '').trim();
+        if (!id) return Promise.resolve([]);
+        return lookup(`reports:${id}`, async (state) => {
+          const reports = new Map();
+          for (let page = 1; page <= 20; page++) {
+            const query = new URLSearchParams({ reported_torrent_id: id, page: String(page) });
+            const response = await fetchJson(state, `trumping-reports/filter?${query}`);
+            reportItems(response).filter(Boolean).forEach((report) => {
+              reports.set(report.id ?? JSON.stringify(report), report);
+            });
+            const lastPage = Number(response?.meta?.last_page || 0);
+            const hasMore = lastPage ? page < lastPage : Boolean(response?.links?.next);
+            if (!hasMore) return Array.from(reports.values());
+          }
+          throw new Error('Trump reports exceed the 20-page limit.');
+        });
+      },
+      submitReport: async (payload) => {
+        const state = session();
+        const response = await fetchJson(state, 'trumping-reports/create', payload);
+        if (response?.success) {
+          const key = `reports:${payload.reported_torrent_id}`;
+          state.cache.delete(key);
+          state.pending.delete(key);
+        }
+        return response;
+      },
+    });
+  };
 
-  // Cache for fetched torrent data
-  let torrentDataCache = null;
-  let torrentDataPromise = null;
-  const torrentByIdCache = new Map();
-  const torrentByIdPromises = new Map();
-  const trumpReportsByTorrentCache = new Map();
-  const trumpReportsByTorrentPromises = new Map();
+  const torrentRepository = createTorrentRepository({ request: gmFetchJson, getApiKey: () => AITHER_API_KEY });
 
   // Extract TMDB ID from the page
   const getTmdbIdFromPage = () => {
@@ -5747,216 +5848,6 @@ const getSearchResultTorrentId = (row, link) => {
       if (match) return parseInt(match[1], 10);
     }
     return null;
-  };
-
-  // Fetch all torrents for a given TMDB ID (with pagination support)
-  const fetchTorrentsByTmdb = async (tmdbId) => {
-    if (torrentDataCache) return torrentDataCache;
-    if (torrentDataPromise) return torrentDataPromise;
-
-    if (!AITHER_API_KEY || AITHER_API_KEY === 'YOUR_API_KEY_HERE') {
-      console.warn('GAZELL3D: Aither API key not configured');
-      return null;
-    }
-
-    torrentDataPromise = (async () => {
-      try {
-        const dataMap = new Map();
-        let currentPage = 1;
-        let hasMorePages = true;
-        const perPage = 100;
-
-        while (hasMorePages) {
-          const response = await gmFetchJson(
-            `https://aither.cc/api/torrents/filter?perPage=${perPage}&page=${currentPage}&tmdbId=${tmdbId}`,
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${AITHER_API_KEY}`
-              }
-            }
-          );
-
-          if (!response || !response.data) {
-            if (currentPage === 1) {
-              console.warn('GAZELL3D: Empty API response');
-              return null;
-            }
-            // No more data on subsequent page, we're done
-            break;
-          }
-
-          // Add torrents from this page to the map
-          response.data.forEach(torrent => {
-            const attributes = torrent.attributes || {};
-            dataMap.set(String(torrent.id), {
-              ...attributes,
-              id: attributes.id ?? torrent.id
-            });
-          });
-
-          // Check if there are more pages to fetch
-          // If we got fewer results than perPage, we've reached the last page
-          if (response.data.length < perPage) {
-            hasMorePages = false;
-          } else {
-            currentPage++;
-            // Safety limit to prevent infinite loops (max 20 pages = 2000 torrents)
-            if (currentPage > 20) {
-              console.warn('GAZELL3D: Reached maximum page limit (20 pages)');
-              hasMorePages = false;
-            }
-          }
-        }
-
-        if (dataMap.size > 0) {
-          console.log(`GAZELL3D: Fetched ${dataMap.size} torrents across ${currentPage} page(s)`);
-        }
-
-        torrentDataCache = dataMap;
-        return dataMap;
-      } catch (err) {
-        console.error('GAZELL3D: Failed to fetch torrent data', err);
-        return null;
-      }
-    })();
-
-    return torrentDataPromise;
-  };
-
-  // Fetch one torrent's full detail payload by ID
-  const fetchTorrentById = async (torrentId) => {
-    const id = String(torrentId || '').trim();
-    if (!id) return null;
-    if (torrentByIdCache.has(id)) return torrentByIdCache.get(id);
-    if (torrentByIdPromises.has(id)) return torrentByIdPromises.get(id);
-
-    if (!AITHER_API_KEY || AITHER_API_KEY === 'YOUR_API_KEY_HERE') {
-      console.warn('GAZELL3D: Aither API key not configured');
-      throw new Error('Aither API key not configured.');
-    }
-
-    const promise = (async () => {
-      try {
-        const response = await gmFetchJson(
-          `https://aither.cc/api/torrents/${encodeURIComponent(id)}`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${AITHER_API_KEY}`
-            }
-          }
-        );
-
-        const torrentResource = response?.data?.attributes ? response.data : response;
-        const torrentData = torrentResource?.attributes || null;
-        if (!torrentData) {
-          const message = response?.message || 'Empty torrent API response.';
-          throw new Error(message);
-        }
-
-        const normalizedTorrentData = {
-          ...torrentData,
-          id: torrentData.id ?? torrentResource.id ?? id
-        };
-        torrentByIdCache.set(id, normalizedTorrentData);
-        return normalizedTorrentData;
-      } finally {
-        torrentByIdPromises.delete(id);
-      }
-    })();
-
-    torrentByIdPromises.set(id, promise);
-    return promise;
-  };
-
-  const normalizeTrumpReportData = (response) => {
-    const payload = response?.data ?? response;
-    if (Array.isArray(payload)) return payload;
-    if (Array.isArray(payload?.data)) return payload.data;
-    if (payload && typeof payload === 'object' && (
-      payload.id ||
-      payload.title ||
-      payload.solved !== undefined ||
-      payload.reported_torrents ||
-      payload.trumping_torrent
-    )) {
-      return [payload];
-    }
-    return [];
-  };
-
-  // Fetch existing trump reports filed against a torrent.
-  const fetchTrumpReportsForTorrent = async (torrentId) => {
-    const id = String(torrentId || '').trim();
-    if (!id) return [];
-    if (trumpReportsByTorrentCache.has(id)) return trumpReportsByTorrentCache.get(id);
-    if (trumpReportsByTorrentPromises.has(id)) return trumpReportsByTorrentPromises.get(id);
-
-    if (!AITHER_API_KEY || AITHER_API_KEY === 'YOUR_API_KEY_HERE') {
-      console.warn('GAZELL3D: Aither API key not configured');
-      throw new Error('Aither API key not configured.');
-    }
-
-    const promise = (async () => {
-      try {
-        const reports = [];
-        const seenReportIds = new Set();
-        let currentPage = 1;
-        let hasMorePages = true;
-
-        while (hasMorePages) {
-          const url = new URL('https://aither.cc/api/trumping-reports/filter');
-          url.searchParams.set('reported_torrent_id', id);
-          url.searchParams.set('page', String(currentPage));
-
-          const response = await gmFetchJson(
-            url,
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${AITHER_API_KEY}`
-              }
-            }
-          );
-
-          if (response?.message && response.data === undefined) {
-            throw new Error(response.message);
-          }
-
-          normalizeTrumpReportData(response).forEach((report) => {
-            const reportId = report?.id ?? JSON.stringify(report);
-            if (seenReportIds.has(reportId)) return;
-            seenReportIds.add(reportId);
-            reports.push(report);
-          });
-
-          const lastPage = Number(response?.meta?.last_page || 0);
-          if (lastPage) {
-            hasMorePages = currentPage < lastPage;
-          } else {
-            hasMorePages = Boolean(response?.links?.next);
-          }
-
-          currentPage++;
-          if (currentPage > 20) {
-            console.warn('GAZELL3D: Reached maximum trump report page limit (20 pages)');
-            hasMorePages = false;
-          }
-        }
-
-        trumpReportsByTorrentCache.set(id, reports);
-        return reports;
-      } finally {
-        trumpReportsByTorrentPromises.delete(id);
-      }
-    })();
-
-    trumpReportsByTorrentPromises.set(id, promise);
-    return promise;
   };
 
   // Format bytes to human readable
@@ -6211,597 +6102,304 @@ const getSearchResultTorrentId = (row, link) => {
     return `<div class="bbcode-rendered">${state.source}</div>`;
   };
 
-  // MediaInfo parser - extracts key info into a summary
-  const parseMediaInfo = (raw) => {
-    if (!raw) return { summary: null, raw: '' };
 
-    const lines = raw.split('\n');
-    const info = {
-      completeName: '',
-      format: '',
-      duration: '',
-      fileSize: '',
-      overallBitrate: '',
-      video: [],
-      audio: [],
-      subtitles: [],
-      encodingSettings: ''
-    };
+  // Parsing and format-specific presentation stay private to the media summary.
+  const renderMediaSummary = (() => {
+    // MediaInfo parser - extracts key info into a summary
+    const parseMediaInfo = (raw) => {
+      if (!raw) return { summary: null, raw: '' };
 
-    let currentSection = '';
+      const lines = raw.split('\n');
+      const info = {
+        completeName: '',
+        format: '',
+        duration: '',
+        fileSize: '',
+        overallBitrate: '',
+        video: [],
+        audio: [],
+        subtitles: [],
+        encodingSettings: ''
+      };
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
+      let currentSection = '';
 
-      // Detect section headers (handle both "Video" and "Video #1" formats)
-      if (/^General$/i.test(trimmed) || /^General\s/i.test(trimmed)) {
-        currentSection = 'general';
-      } else if (/^Video(?:\s|$)/i.test(trimmed)) {
-        currentSection = 'video';
-        info.video.push({});
-      } else if (/^Audio(?:\s|$)/i.test(trimmed)) {
-        currentSection = 'audio';
-        info.audio.push({});
-      } else if (/^Text(?:\s|$)/i.test(trimmed)) {
-        currentSection = 'text';
-        info.subtitles.push({});
-      } else if (/^Menu(?:\s|$)/i.test(trimmed)) {
-        currentSection = 'menu';
-      } else if (trimmed.includes(':')) {
-        // Parse key: value pairs, accounting for multi-colon values
-        const colonIdx = trimmed.indexOf(':');
-        const key = trimmed.substring(0, colonIdx).trim();
-        const value = trimmed.substring(colonIdx + 1).trim();
-        const keyLower = key.toLowerCase();
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
 
-        if (currentSection === 'general') {
-          if (keyLower === 'complete name') info.completeName = value;
-          if (keyLower === 'format') info.format = value;
-          if (keyLower === 'duration') info.duration = value;
-          if (keyLower === 'file size') info.fileSize = value;
-          if (keyLower === 'overall bit rate') info.overallBitrate = value;
-        } else if (currentSection === 'video' && info.video.length > 0) {
-          const v = info.video[info.video.length - 1];
-          if (keyLower === 'format') v.format = value;
-          if (keyLower === 'width') v.width = value;
-          if (keyLower === 'height') v.height = value;
-          if (keyLower === 'display aspect ratio') v.aspectRatio = value;
-          if (keyLower === 'bit depth') v.bitDepth = value;
-          if (keyLower === 'frame rate') v.frameRate = value;
-          if (keyLower === 'bit rate') v.bitrate = value;
-          if (keyLower === 'hdr format') v.hdr = value;
-          if (keyLower === 'encoding settings') {
-            v.encodingSettings = value;
-            info.encodingSettings = value;
+        // Detect section headers (handle both "Video" and "Video #1" formats)
+        if (/^General$/i.test(trimmed) || /^General\s/i.test(trimmed)) {
+          currentSection = 'general';
+        } else if (/^Video(?:\s|$)/i.test(trimmed)) {
+          currentSection = 'video';
+          info.video.push({});
+        } else if (/^Audio(?:\s|$)/i.test(trimmed)) {
+          currentSection = 'audio';
+          info.audio.push({});
+        } else if (/^Text(?:\s|$)/i.test(trimmed)) {
+          currentSection = 'text';
+          info.subtitles.push({});
+        } else if (/^Menu(?:\s|$)/i.test(trimmed)) {
+          currentSection = 'menu';
+        } else if (trimmed.includes(':')) {
+          // Parse key: value pairs, accounting for multi-colon values
+          const colonIdx = trimmed.indexOf(':');
+          const key = trimmed.substring(0, colonIdx).trim();
+          const value = trimmed.substring(colonIdx + 1).trim();
+          const keyLower = key.toLowerCase();
+
+          if (currentSection === 'general') {
+            if (keyLower === 'complete name') info.completeName = value;
+            if (keyLower === 'format') info.format = value;
+            if (keyLower === 'duration') info.duration = value;
+            if (keyLower === 'file size') info.fileSize = value;
+            if (keyLower === 'overall bit rate') info.overallBitrate = value;
+          } else if (currentSection === 'video' && info.video.length > 0) {
+            const v = info.video[info.video.length - 1];
+            if (keyLower === 'format') v.format = value;
+            if (keyLower === 'width') v.width = value;
+            if (keyLower === 'height') v.height = value;
+            if (keyLower === 'display aspect ratio') v.aspectRatio = value;
+            if (keyLower === 'bit depth') v.bitDepth = value;
+            if (keyLower === 'frame rate') v.frameRate = value;
+            if (keyLower === 'bit rate') v.bitrate = value;
+            if (keyLower === 'hdr format') v.hdr = value;
+            if (keyLower === 'encoding settings') {
+              v.encodingSettings = value;
+              info.encodingSettings = value;
+            }
+          } else if (currentSection === 'audio' && info.audio.length > 0) {
+            const a = info.audio[info.audio.length - 1];
+            if (keyLower === 'format') a.format = value;
+            if (keyLower === 'commercial name') a.name = value;
+            if (keyLower === 'channel(s)') a.channels = value;
+            if (keyLower === 'language') a.language = value;
+            if (keyLower === 'bit rate') a.bitrate = value;
+            if (keyLower === 'title') a.title = value;
+          } else if (currentSection === 'text' && info.subtitles.length > 0) {
+            const s = info.subtitles[info.subtitles.length - 1];
+            if (keyLower === 'format') s.format = value;
+            if (keyLower === 'language') s.language = value;
+            if (keyLower === 'title') s.title = value;
+            if (keyLower === 'forced') s.forced = value.toLowerCase() === 'yes';
+            if (keyLower === 'default') s.default = value.toLowerCase() === 'yes';
           }
-        } else if (currentSection === 'audio' && info.audio.length > 0) {
-          const a = info.audio[info.audio.length - 1];
-          if (keyLower === 'format') a.format = value;
-          if (keyLower === 'commercial name') a.name = value;
-          if (keyLower === 'channel(s)') a.channels = value;
-          if (keyLower === 'language') a.language = value;
-          if (keyLower === 'bit rate') a.bitrate = value;
-          if (keyLower === 'title') a.title = value;
-        } else if (currentSection === 'text' && info.subtitles.length > 0) {
-          const s = info.subtitles[info.subtitles.length - 1];
-          if (keyLower === 'format') s.format = value;
-          if (keyLower === 'language') s.language = value;
-          if (keyLower === 'title') s.title = value;
-          if (keyLower === 'forced') s.forced = value.toLowerCase() === 'yes';
-          if (keyLower === 'default') s.default = value.toLowerCase() === 'yes';
         }
       }
-    }
 
-    return { summary: info, raw };
-  };
-
-
-  // BDInfo parser - handles BDInfo format which is different from MediaInfo
-  const parseBDInfo = (raw) => {
-    if (!raw) return { summary: null, raw: '' };
-
-    const lines = raw.split('\n');
-    const info = {
-      discTitle: '',
-      discLabel: '',
-      discSize: '',
-      length: '',
-      totalBitrate: '',
-      video: [],
-      audio: [],
-      subtitles: []
+      return { summary: info, raw };
     };
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
 
-      // Parse key: value lines
-      if (trimmed.includes(':')) {
-        const colonIdx = trimmed.indexOf(':');
-        const key = trimmed.substring(0, colonIdx).trim().toLowerCase();
-        const value = trimmed.substring(colonIdx + 1).trim();
+    // BDInfo parser - handles BDInfo format which is different from MediaInfo
+    const parseBDInfo = (raw) => {
+      if (!raw) return { summary: null, raw: '' };
 
-        if (key === 'disc title') info.discTitle = value;
-        else if (key === 'disc label') info.discLabel = value;
-        else if (key === 'disc size') info.discSize = value;
-        else if (key === 'length') info.length = value;
-        else if (key === 'total bitrate') info.totalBitrate = value;
-        else if (key === 'video') {
-          // Video: MPEG-4 AVC Video / 35949 kbps / 1080p / 23.976 fps / 16:9 / High Profile 4.1
-          const parts = value.split('/').map(p => p.trim());
-          info.video.push({
-            format: parts[0] || '',
-            bitrate: parts[1] || '',
-            resolution: parts[2] || '',
-            frameRate: parts[3] || '',
-            aspectRatio: parts[4] || '',
-            profile: parts[5] || ''
-          });
-        } else if (key === 'audio') {
-          // Audio: Japanese / LPCM Audio / 2.0 / 48 kHz / 2304 kbps / 24-bit
-          const parts = value.split('/').map(p => p.trim());
-          info.audio.push({
-            language: parts[0] || '',
-            format: parts[1] || '',
-            channels: parts[2] || '',
-            sampleRate: parts[3] || '',
-            bitrate: parts[4] || '',
-            bitDepth: parts[5] || ''
-          });
-        } else if (key === 'subtitle') {
-          // Subtitle: English / 50.053 kbps
-          const parts = value.split('/').map(p => p.trim());
-          info.subtitles.push({
-            language: parts[0] || '',
-            bitrate: parts[1] || ''
-          });
+      const lines = raw.split('\n');
+      const info = {
+        discTitle: '',
+        discLabel: '',
+        discSize: '',
+        length: '',
+        totalBitrate: '',
+        video: [],
+        audio: [],
+        subtitles: []
+      };
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        // Parse key: value lines
+        if (trimmed.includes(':')) {
+          const colonIdx = trimmed.indexOf(':');
+          const key = trimmed.substring(0, colonIdx).trim().toLowerCase();
+          const value = trimmed.substring(colonIdx + 1).trim();
+
+          if (key === 'disc title') info.discTitle = value;
+          else if (key === 'disc label') info.discLabel = value;
+          else if (key === 'disc size') info.discSize = value;
+          else if (key === 'length') info.length = value;
+          else if (key === 'total bitrate') info.totalBitrate = value;
+          else if (key === 'video') {
+            // Video: MPEG-4 AVC Video / 35949 kbps / 1080p / 23.976 fps / 16:9 / High Profile 4.1
+            const parts = value.split('/').map(p => p.trim());
+            info.video.push({
+              format: parts[0] || '',
+              bitrate: parts[1] || '',
+              resolution: parts[2] || '',
+              frameRate: parts[3] || '',
+              aspectRatio: parts[4] || '',
+              profile: parts[5] || ''
+            });
+          } else if (key === 'audio') {
+            // Audio: Japanese / LPCM Audio / 2.0 / 48 kHz / 2304 kbps / 24-bit
+            const parts = value.split('/').map(p => p.trim());
+            info.audio.push({
+              language: parts[0] || '',
+              format: parts[1] || '',
+              channels: parts[2] || '',
+              sampleRate: parts[3] || '',
+              bitrate: parts[4] || '',
+              bitDepth: parts[5] || ''
+            });
+          } else if (key === 'subtitle') {
+            // Subtitle: English / 50.053 kbps
+            const parts = value.split('/').map(p => p.trim());
+            info.subtitles.push({
+              language: parts[0] || '',
+              bitrate: parts[1] || ''
+            });
+          }
         }
       }
-    }
 
-    return { summary: info, raw };
-  };
+      return { summary: info, raw };
+    };
 
-  // Render BDInfo summary as HTML (matches MediaInfo styling)
-  const renderBDInfoSummary = (info, rawContent = '') => {
-    const container = create('div', 'gz-mediainfo-summary');
 
-    // Disc title/label header (clickable to show/hide raw content)
-    const titleStr = info.discTitle || info.discLabel || 'BDInfo';
-
-    const title = create('div', 'gz-mediainfo-filename');
-    title.textContent = titleStr;
-    container.appendChild(title);
-
-    // Raw content section (hidden by default, appears between header and summary)
-    const rawSection = create('div', 'gz-mediainfo-raw-inline');
-    const rawPre = create('pre');
-    rawPre.textContent = rawContent;
-    rawSection.appendChild(rawPre);
-    container.appendChild(rawSection);
-
-    // Click handler to toggle raw content visibility
-    title.addEventListener('click', () => {
-      title.classList.toggle('expanded');
-      rawSection.classList.toggle('visible');
+    const textNode = (tag, className, text) => {
+      const node = create(tag, className);
+      node.textContent = text;
+      return node;
+    };
+    const mediaView = (info) => ({
+      title: info.completeName ? info.completeName.split(/[/\\]/).pop() || info.completeName : 'MediaInfo',
+      generalTitle: 'General',
+      general: [['Format', info.format], ['Duration', info.duration], ['Size', info.fileSize], ['Bit rate', info.overallBitrate]],
+      video: info.video.length ? [
+        ['Format', [info.video[0].format, info.video[0].bitDepth ? `(${info.video[0].bitDepth})` : ''].filter(Boolean).join(' ')],
+        ['Resolution', info.video[0].width && info.video[0].height ? `${info.video[0].width} × ${info.video[0].height}` : ''],
+        ['Aspect ratio', info.video[0].aspectRatio], ['Frame rate', info.video[0].frameRate],
+        ['Bit rate', info.video[0].bitrate], ['HDR', info.video[0].hdr],
+      ] : [],
+      audio: info.audio.map((track) => {
+        let channels = track.channels || '';
+        const match = channels.match(/(\d+)\s*channel/i);
+        if (match) {
+          const count = Number(match[1]);
+          channels = ({ 1: '1.0ch', 2: '2.0ch', 3: '2.1ch', 6: '5.1ch', 7: '6.1ch', 8: '7.1ch' })[count] || `${count}ch`;
+        }
+        return {
+          text: [track.language || 'Unknown', track.name || track.format || 'Unknown', channels, (track.bitrate || '').replace(/\s+/g, '')].filter(Boolean).join(' / '),
+          extra: track.title ? ` / ${track.title}` : '',
+        };
+      }),
+      subtitles: info.subtitles,
+      detailedSubtitles: true,
+      encodingSettings: info.encodingSettings,
     });
-
-    // Summary content wrapper
-    const summaryContent = create('div', 'gz-mediainfo-summary-content');
-
-    // Columns container (Disc Info + Video side by side)
-    const hasGeneral = info.discSize || info.length || info.totalBitrate;
-    const hasVideo = info.video.length > 0;
-
-    if (hasGeneral || hasVideo) {
+    const discView = (info) => {
+      const subtitles = new Map();
+      info.subtitles.forEach((track) => {
+        const language = track.language || 'Unknown';
+        const key = language.toLowerCase();
+        const entry = subtitles.get(key) || { language, count: 0 };
+        entry.count++;
+        subtitles.set(key, entry);
+      });
+      return {
+        title: info.discTitle || info.discLabel || 'BDInfo',
+        generalTitle: 'Disc Info',
+        general: [['Size', info.discSize], ['Length', info.length], ['Bitrate', info.totalBitrate]],
+        video: info.video.length ? [
+          ['Format', info.video[0].format], ['Resolution', info.video[0].resolution],
+          ['Aspect ratio', info.video[0].aspectRatio], ['Frame rate', info.video[0].frameRate],
+          ['Bit rate', info.video[0].bitrate], ['Profile', info.video[0].profile],
+        ] : [],
+        audio: info.audio.map((track) => {
+          const match = (track.channels || '').match(/(\d+(?:\.\d+)?)/);
+          const channels = match ? `${match[1]}ch` : track.channels;
+          const extended = [track.sampleRate, track.bitDepth].filter(Boolean);
+          return {
+            text: [track.language || 'Unknown', track.format || 'Unknown', channels, track.bitrate].filter(Boolean).join(' / '),
+            extra: extended.length ? ` (${extended.join(' / ')})` : '',
+          };
+        }),
+        subtitles: Array.from(subtitles.values()),
+        detailedSubtitles: false,
+      };
+    };
+    const formats = [
+      { id: 'mediainfo', label: 'MediaInfo', field: 'media_info', parse: parseMediaInfo, view: mediaView },
+      { id: 'bdinfo', label: 'BDInfo', field: 'bd_info', parse: parseBDInfo, view: discView },
+    ];
+    return (torrent) => {
+      const format = formats.find(({ field }) => typeof torrent[field] === 'string' && torrent[field].trim());
+      if (!format) return null;
+      const rawContent = torrent[format.field];
+      const view = format.view(format.parse(rawContent).summary);
+      const element = create('div', 'gz-mediainfo-summary');
+      const title = textNode('div', 'gz-mediainfo-filename', view.title);
+      const raw = create('div', 'gz-mediainfo-raw-inline');
+      raw.appendChild(textNode('pre', '', rawContent));
+      title.addEventListener('click', () => {
+        title.classList.toggle('expanded');
+        raw.classList.toggle('visible');
+      });
+      element.append(title, raw);
+      const summary = create('div', 'gz-mediainfo-summary-content');
       const columns = create('div', 'gz-mediainfo-columns');
-
-      // Disc Info column (like General in MediaInfo)
-      if (hasGeneral) {
-        const discCol = create('div', 'gz-mediainfo-column');
-        discCol.innerHTML = `<div class="gz-mediainfo-column-title">Disc Info</div>`;
-
-        if (info.discSize) {
-          discCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Size</span>
-              <span class="gz-mediainfo-row-value">${info.discSize}</span>
-            </div>`;
-        }
-        if (info.length) {
-          discCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Length</span>
-              <span class="gz-mediainfo-row-value">${info.length}</span>
-            </div>`;
-        }
-        if (info.totalBitrate) {
-          discCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Bitrate</span>
-              <span class="gz-mediainfo-row-value">${info.totalBitrate}</span>
-            </div>`;
-        }
-        columns.appendChild(discCol);
+      [[view.generalTitle, view.general], ['Video', view.video]].forEach(([heading, fields]) => {
+        const values = fields.filter(([, value]) => value);
+        if (!values.length) return;
+        const column = create('div', 'gz-mediainfo-column');
+        column.appendChild(textNode('div', 'gz-mediainfo-column-title', heading));
+        values.forEach(([label, value]) => {
+          const row = create('div', 'gz-mediainfo-row');
+          row.append(textNode('span', 'gz-mediainfo-row-label', label), textNode('span', 'gz-mediainfo-row-value', value));
+          column.appendChild(row);
+        });
+        columns.appendChild(column);
+      });
+      if (columns.children.length) summary.appendChild(columns);
+      if (view.audio.length) {
+        const section = create('div', 'gz-mediainfo-audio-section');
+        section.appendChild(textNode('div', 'gz-mediainfo-section-title', 'Audio'));
+        const list = create('div', 'gz-mediainfo-audio-list');
+        view.audio.forEach((track, index) => {
+          const item = create('div', 'gz-mediainfo-audio-item');
+          const details = textNode('span', 'gz-mediainfo-audio-details', track.text);
+          details.appendChild(textNode('span', 'gz-mediainfo-audio-title', track.extra));
+          item.append(textNode('span', 'gz-mediainfo-audio-num', `${index + 1}.`), details);
+          list.appendChild(item);
+        });
+        section.appendChild(list);
+        summary.appendChild(section);
       }
-
-      // Video column
-      if (hasVideo) {
-        const v = info.video[0]; // Use first video track
-        const videoCol = create('div', 'gz-mediainfo-column');
-        videoCol.innerHTML = `<div class="gz-mediainfo-column-title">Video</div>`;
-
-        if (v.format) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Format</span>
-              <span class="gz-mediainfo-row-value">${v.format}</span>
-            </div>`;
-        }
-        if (v.resolution) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Resolution</span>
-              <span class="gz-mediainfo-row-value">${v.resolution}</span>
-            </div>`;
-        }
-        if (v.aspectRatio) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Aspect ratio</span>
-              <span class="gz-mediainfo-row-value">${v.aspectRatio}</span>
-            </div>`;
-        }
-        if (v.frameRate) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Frame rate</span>
-              <span class="gz-mediainfo-row-value">${v.frameRate}</span>
-            </div>`;
-        }
-        if (v.bitrate) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Bit rate</span>
-              <span class="gz-mediainfo-row-value">${v.bitrate}</span>
-            </div>`;
-        }
-        if (v.profile) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Profile</span>
-              <span class="gz-mediainfo-row-value">${v.profile}</span>
-            </div>`;
-        }
-
-        columns.appendChild(videoCol);
+      if (view.subtitles.length) {
+        const section = create('div', 'gz-mediainfo-subtitles-section');
+        section.appendChild(textNode('div', 'gz-mediainfo-section-title', 'Subtitles'));
+        const list = create('div', 'gz-mediainfo-subtitles-list');
+        if (view.detailedSubtitles) list.classList.add('gz-mediainfo-subtitles-list--detailed');
+        view.subtitles.forEach((track, index) => {
+          const item = create(view.detailedSubtitles ? 'div' : 'span', 'gz-mediainfo-subtitle-item');
+          if (view.detailedSubtitles) {
+            item.classList.add('gz-mediainfo-subtitle-item--detailed');
+            const details = textNode('span', 'gz-mediainfo-subtitle-details', [track.language || 'Unknown', track.format].filter(Boolean).join(' '));
+            if (track.title) details.appendChild(textNode('span', 'gz-mediainfo-subtitle-title', ` [${track.title}]`));
+            const flags = [track.forced && 'forced', track.default && 'default'].filter(Boolean);
+            if (flags.length) details.appendChild(textNode('span', 'gz-mediainfo-subtitle-flags', ` (${flags.join(', ')})`));
+            item.append(textNode('span', 'gz-mediainfo-subtitle-num', `#${index + 1}:`), details);
+          } else {
+            item.textContent = track.language + (track.count > 1 ? ` (${track.count})` : '') + (index < view.subtitles.length - 1 ? ',' : '');
+          }
+          list.appendChild(item);
+        });
+        section.appendChild(list);
+        summary.appendChild(section);
       }
-
-      summaryContent.appendChild(columns);
-    }
-
-    // Audio section (numbered tracks like MediaInfo)
-    if (info.audio.length > 0) {
-      const audioSection = create('div', 'gz-mediainfo-audio-section');
-      audioSection.innerHTML = `<div class="gz-mediainfo-section-title">Audio</div>`;
-
-      const audioList = create('div', 'gz-mediainfo-audio-list');
-      info.audio.forEach((a, i) => {
-        const audioItem = create('div', 'gz-mediainfo-audio-item');
-        const num = `${i + 1}.`;
-        const lang = a.language || 'Unknown';
-        const format = a.format || 'Unknown';
-
-        // Parse channels to a cleaner format
-        let channels = a.channels || '';
-        const channelMatch = channels.match(/(\d+(?:\.\d+)?)/);
-        if (channelMatch) {
-          channels = `${channelMatch[1]}ch`;
-        }
-
-        // Format bitrate (remove 'kbps' redundancy if needed)
-        const bitrate = a.bitrate || '';
-        const sampleRate = a.sampleRate || '';
-        const bitDepth = a.bitDepth || '';
-
-        // Build the detail string
-        const detailParts = [lang, format, channels, bitrate].filter(Boolean);
-
-        // Add extended info if available
-        const extendedParts = [sampleRate, bitDepth].filter(Boolean);
-        const extendedInfo = extendedParts.length > 0 ? ` (${extendedParts.join(' / ')})` : '';
-
-        audioItem.innerHTML = `
-          <span class="gz-mediainfo-audio-num">${num}</span>
-          <span class="gz-mediainfo-audio-details">${detailParts.join(' / ')}<span class="gz-mediainfo-audio-title">${extendedInfo}</span></span>
-        `;
-        audioList.appendChild(audioItem);
-      });
-
-      audioSection.appendChild(audioList);
-      summaryContent.appendChild(audioSection);
-    }
-
-    // Subtitles section
-    if (info.subtitles.length > 0) {
-      const subSection = create('div', 'gz-mediainfo-subtitles-section');
-      subSection.innerHTML = `<div class="gz-mediainfo-section-title">Subtitles</div>`;
-
-      const subList = create('div', 'gz-mediainfo-subtitles-list');
-
-      // Group subtitles by language
-      const subtitleMap = new Map();
-      info.subtitles.forEach(s => {
-        const lang = s.language || 'Unknown';
-        const key = lang.toLowerCase();
-        if (!subtitleMap.has(key)) {
-          subtitleMap.set(key, { language: lang, count: 0 });
-        }
-        subtitleMap.get(key).count++;
-      });
-
-      // Render each unique language
-      const uniqueLanguages = Array.from(subtitleMap.values());
-      uniqueLanguages.forEach((sub, index) => {
-        const item = create('span', 'gz-mediainfo-subtitle-item');
-        let text = sub.language;
-
-        // Add count if more than 1
-        if (sub.count > 1) {
-          text += ` (${sub.count})`;
-        }
-
-        // Add separator except for last item
-        if (index < uniqueLanguages.length - 1) {
-          text += ',';
-        }
-
-        item.innerHTML = text;
-        subList.appendChild(item);
-      });
-
-      subSection.appendChild(subList);
-      summaryContent.appendChild(subSection);
-    }
-
-    container.appendChild(summaryContent);
-    return container;
-  };
-
-  // Render parsed MediaInfo as HTML
-  const renderMediaInfoSummary = (info, rawContent = '') => {
-    const container = create('div', 'gz-mediainfo-summary');
-
-    // Filename header (clickable to show/hide raw content)
-    const filenameStr = info.completeName
-      ? (info.completeName.split(/[/\\]/).pop() || info.completeName)
-      : 'MediaInfo';
-
-    const filename = create('div', 'gz-mediainfo-filename');
-    filename.textContent = filenameStr;
-    container.appendChild(filename);
-
-    // Raw content section (hidden by default, appears between header and summary)
-    const rawSection = create('div', 'gz-mediainfo-raw-inline');
-    const rawPre = create('pre');
-    rawPre.textContent = rawContent;
-    rawSection.appendChild(rawPre);
-    container.appendChild(rawSection);
-
-    // Click handler to toggle raw content visibility
-    filename.addEventListener('click', () => {
-      filename.classList.toggle('expanded');
-      rawSection.classList.toggle('visible');
-    });
-
-    // Summary content wrapper
-    const summaryContent = create('div', 'gz-mediainfo-summary-content');
-
-    // Columns container (General + Video side by side)
-    const hasGeneral = info.format || info.duration || info.overallBitrate || info.fileSize;
-    const hasVideo = info.video.length > 0;
-
-    if (hasGeneral || hasVideo) {
-      const columns = create('div', 'gz-mediainfo-columns');
-
-      // General column
-      if (hasGeneral) {
-        const generalCol = create('div', 'gz-mediainfo-column');
-        generalCol.innerHTML = `<div class="gz-mediainfo-column-title">General</div>`;
-
-        if (info.format) {
-          generalCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Format</span>
-              <span class="gz-mediainfo-row-value">${info.format}</span>
-            </div>`;
-        }
-        if (info.duration) {
-          generalCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Duration</span>
-              <span class="gz-mediainfo-row-value">${info.duration}</span>
-            </div>`;
-        }
-        if (info.overallBitrate) {
-          generalCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Bitrate</span>
-              <span class="gz-mediainfo-row-value">${info.overallBitrate}</span>
-            </div>`;
-        }
-        if (info.fileSize) {
-          generalCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Size</span>
-              <span class="gz-mediainfo-row-value">${info.fileSize}</span>
-            </div>`;
-        }
-        columns.appendChild(generalCol);
+      if (view.encodingSettings) {
+        const section = create('div', 'gz-mediainfo-encode-section');
+        section.append(textNode('div', 'gz-mediainfo-section-title', 'Encode Settings'), textNode('div', 'gz-mediainfo-encode-settings', view.encodingSettings));
+        summary.appendChild(section);
       }
-
-      // Video column
-      if (hasVideo) {
-        const v = info.video[0]; // Use first video track
-        const videoCol = create('div', 'gz-mediainfo-column');
-        videoCol.innerHTML = `<div class="gz-mediainfo-column-title">Video</div>`;
-
-        const formatStr = v.format ? `${v.format}${v.bitDepth ? ` (${v.bitDepth})` : ''}` : '';
-        if (formatStr) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Format</span>
-              <span class="gz-mediainfo-row-value">${formatStr}</span>
-            </div>`;
-        }
-
-        const resolution = v.width && v.height ? `${v.width} × ${v.height}` : '';
-        if (resolution) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Resolution</span>
-              <span class="gz-mediainfo-row-value">${resolution}</span>
-            </div>`;
-        }
-
-        if (v.aspectRatio) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Aspect ratio</span>
-              <span class="gz-mediainfo-row-value">${v.aspectRatio}</span>
-            </div>`;
-        }
-
-        if (v.frameRate) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Frame rate</span>
-              <span class="gz-mediainfo-row-value">${v.frameRate}</span>
-            </div>`;
-        }
-
-        if (v.bitrate) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Bit rate</span>
-              <span class="gz-mediainfo-row-value">${v.bitrate}</span>
-            </div>`;
-        }
-
-        if (v.hdr) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">HDR</span>
-              <span class="gz-mediainfo-row-value">${v.hdr}</span>
-            </div>`;
-        }
-
-        columns.appendChild(videoCol);
-      }
-
-      summaryContent.appendChild(columns);
-    }
-
-    // Audio section
-    if (info.audio.length > 0) {
-      const audioSection = create('div', 'gz-mediainfo-audio-section');
-      audioSection.innerHTML = `<div class="gz-mediainfo-section-title">Audio</div>`;
-
-      const audioList = create('div', 'gz-mediainfo-audio-list');
-      info.audio.forEach((a, i) => {
-        const audioItem = create('div', 'gz-mediainfo-audio-item');
-        const num = `${i + 1}.`;
-        const lang = a.language || 'Unknown';
-        const format = a.name || a.format || 'Unknown';
-
-        // Parse channels to a cleaner format (e.g., "8 channels" -> "8ch")
-        let channels = a.channels || '';
-        const channelMatch = channels.match(/(\d+)\s*channel/i);
-        if (channelMatch) {
-          const numChannels = parseInt(channelMatch[1], 10);
-          // Map common channel counts to standard formats
-          const channelMap = { 1: '1.0ch', 2: '2.0ch', 3: '2.1ch', 6: '5.1ch', 7: '6.1ch', 8: '7.1ch' };
-          channels = channelMap[numChannels] || `${numChannels}ch`;
-        }
-
-        // Format bitrate (e.g., "1 536 kb/s" -> "1536kb/s")
-        const bitrate = a.bitrate ? a.bitrate.replace(/\s+/g, '') : '';
-
-        // Build the detail string: Language / Format / Channels / Bitrate
-        const detailParts = [lang, format, channels, bitrate].filter(Boolean);
-
-        // Title/Description (for commentary tracks, etc.)
-        const title = a.title ? ` / ${a.title}` : '';
-
-        audioItem.innerHTML = `
-          <span class="gz-mediainfo-audio-num">${num}</span>
-          <span class="gz-mediainfo-audio-details">${detailParts.join(' / ')}<span class="gz-mediainfo-audio-title">${title}</span></span>
-        `;
-        audioList.appendChild(audioItem);
-      });
-
-      audioSection.appendChild(audioList);
-      summaryContent.appendChild(audioSection);
-    }
-
-    // Subtitles section - show each track individually with details
-    if (info.subtitles.length > 0) {
-      const subSection = create('div', 'gz-mediainfo-subtitles-section');
-      subSection.innerHTML = `<div class="gz-mediainfo-section-title">Subtitles</div>`;
-
-      const subList = create('div', 'gz-mediainfo-subtitles-list gz-mediainfo-subtitles-list--detailed');
-
-      // Render each subtitle track individually
-      info.subtitles.forEach((s, index) => {
-        const item = create('div', 'gz-mediainfo-subtitle-item gz-mediainfo-subtitle-item--detailed');
-
-        const trackNum = `#${index + 1}:`;
-        const lang = s.language || 'Unknown';
-        const format = s.format || '';
-        const title = s.title || '';
-
-        // Build flags array
-        const flags = [];
-        if (s.forced) flags.push('forced');
-        if (s.default) flags.push('default');
-
-        // Build the display text
-        let text = `<span class="gz-mediainfo-subtitle-num">${trackNum}</span>`;
-        text += `<span class="gz-mediainfo-subtitle-details">`;
-        text += `${lang}`;
-        if (format) text += ` ${format}`;
-        if (title) text += ` <span class="gz-mediainfo-subtitle-title">[${title}]</span>`;
-        if (flags.length > 0) {
-          text += ` <span class="gz-mediainfo-subtitle-flags">(${flags.join(', ')})</span>`;
-        }
-        text += `</span>`;
-
-        item.innerHTML = text;
-        subList.appendChild(item);
-      });
-
-      subSection.appendChild(subList);
-      summaryContent.appendChild(subSection);
-    }
-
-    // Encode Settings section
-    if (info.encodingSettings) {
-      const encodeSection = create('div', 'gz-mediainfo-encode-section');
-      encodeSection.innerHTML = `<div class="gz-mediainfo-section-title">Encode Settings</div>`;
-
-      const settingsBlock = create('div', 'gz-mediainfo-encode-settings');
-      settingsBlock.textContent = info.encodingSettings;
-      encodeSection.appendChild(settingsBlock);
-      summaryContent.appendChild(encodeSection);
-    }
-
-    container.appendChild(summaryContent);
-    return container;
-  };
-
+      element.appendChild(summary);
+      return { id: format.id, label: format.label, element, rawContent };
+    };
+  })();
 
   const formatDropdownDetailValue = (value) => {
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
@@ -7107,7 +6705,7 @@ const getSearchResultTorrentId = (row, link) => {
   };
 
   // Render the dropdown content for a torrent
-  const renderTorrentDropdown = (torrentData, colSpan) => {
+  const renderTorrentDropdown = (torrentData) => {
     const container = create('div', 'gz-dropdown-container');
 
     // Header: Uploaded by X on Date
@@ -7131,14 +6729,8 @@ const getSearchResultTorrentId = (row, link) => {
       { id: 'filelist', label: 'Files', hasContent: torrentData.files && torrentData.files.length > 0 }
     ];
 
-    // Mediainfo / Bdinfo - show whichever is not empty, prefer mediainfo if both exist
-    const hasMediainfo = torrentData.media_info && torrentData.media_info.trim();
-    const hasBdinfo = torrentData.bd_info && torrentData.bd_info.trim();
-    if (hasMediainfo) {
-      tabsConfig.push({ id: 'mediainfo', label: 'MediaInfo', hasContent: true, content: torrentData.media_info });
-    } else if (hasBdinfo) {
-      tabsConfig.push({ id: 'bdinfo', label: 'BDInfo', hasContent: true, content: torrentData.bd_info });
-    }
+    const mediaSummary = renderMediaSummary(torrentData);
+    if (mediaSummary) tabsConfig.push({ id: mediaSummary.id, label: mediaSummary.label, hasContent: true, mediaSummary });
 
     // Create tabs and panels
     tabsConfig.forEach((config, index) => {
@@ -7163,7 +6755,7 @@ const getSearchResultTorrentId = (row, link) => {
         rawCopyContent = details.rawContent;
         panel.appendChild(details.element);
         if (details.torrentId && details.trumpReportHost) {
-          fetchTrumpReportsForTorrent(details.torrentId)
+          torrentRepository.reportsFor(details.torrentId)
             .then((reports) => {
               const rawReportContent = renderTrumpReportAlert(details.trumpReportHost, reports);
               panel.dataset.rawContent = [details.rawContent, rawReportContent].filter(Boolean).join('\n\n');
@@ -7357,22 +6949,10 @@ const getSearchResultTorrentId = (row, link) => {
         console.log('GAZELL3D: File tree rendered. Total rows:', allRows.length, 'Hidden:', hiddenRows.length);
 
         panel.appendChild(table);
-      } else if (config.id === 'mediainfo' || config.id === 'bdinfo') {
+      } else if (config.mediaSummary) {
         panel.classList.add('gz-dropdown-mediainfo');
-        rawCopyContent = config.content;
-
-        // Parse and display summary based on type
-        if (config.id === 'bdinfo') {
-          const parsed = parseBDInfo(config.content);
-          if (parsed.summary) {
-            panel.appendChild(renderBDInfoSummary(parsed.summary, config.content));
-          }
-        } else {
-          const parsed = parseMediaInfo(config.content);
-          if (parsed.summary) {
-            panel.appendChild(renderMediaInfoSummary(parsed.summary, config.content));
-          }
-        }
+        rawCopyContent = config.mediaSummary.rawContent;
+        panel.appendChild(config.mediaSummary.element);
       }
 
       // Store raw content on the panel for later
@@ -7424,25 +7004,68 @@ const getSearchResultTorrentId = (row, link) => {
     return container;
   };
 
-  // Create a loading dropdown row
-  const createLoadingDropdownRow = (colSpan) => {
-    const dropdownRow = create('tr', 'gz-dropdown-row');
-    const td = create('td');
-    td.setAttribute('colspan', colSpan);
-    td.innerHTML = '<div class="gz-dropdown-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
-    dropdownRow.appendChild(td);
-    return dropdownRow;
+  const createTorrentDropdowns = ({ render }) => {
+    const attachments = new WeakMap();
+    const makeRow = (colSpan, className, message) => {
+      const row = create('tr', 'gz-dropdown-row');
+      const cell = create('td');
+      cell.colSpan = colSpan;
+      const content = create('div', className);
+      content.textContent = message;
+      cell.appendChild(content);
+      row.appendChild(cell);
+      return row;
+    };
+    return Object.freeze({
+      attach: ({ row, link, load, colSpan, getTrumpableReason = () => null }) => {
+        if (attachments.has(link)) return attachments.get(link);
+        let current = null;
+        const click = async (event) => {
+          if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (current?.isConnected) {
+            current.remove();
+            current = null;
+            return;
+          }
+          const columns = colSpan();
+          const loading = makeRow(columns, 'gz-dropdown-loading', 'Loading...');
+          current = loading;
+          row.insertAdjacentElement('afterend', loading);
+          const isCurrent = () => current === loading && row.isConnected && loading.isConnected && row.nextElementSibling === loading;
+          try {
+            const data = await load();
+            if (!isCurrent()) return;
+            if (!data) throw new Error('Torrent data not found in response.');
+            const reason = getTrumpableReason();
+            const result = makeRow(columns, '', '');
+            result.firstElementChild.replaceChildren(render(reason ? { ...data, trumpable_reason: reason } : data));
+            loading.replaceWith(result);
+            current = result;
+          } catch (error) {
+            if (!isCurrent()) return;
+            const result = makeRow(columns, 'gz-dropdown-error', `Failed to fetch torrent data: ${error?.message || 'Unknown error'}`);
+            loading.replaceWith(result);
+            current = result;
+          }
+        };
+        const detach = () => {
+          link.removeEventListener('click', click);
+          current?.remove();
+          current = null;
+          link.classList.remove('gz-clickable');
+          attachments.delete(link);
+        };
+        link.classList.add('gz-clickable');
+        link.addEventListener('click', click);
+        attachments.set(link, detach);
+        return detach;
+      },
+    });
   };
 
-  // Create an error dropdown row
-  const createErrorDropdownRow = (colSpan, message) => {
-    const dropdownRow = create('tr', 'gz-dropdown-row');
-    const td = create('td');
-    td.setAttribute('colspan', colSpan);
-    td.innerHTML = `<div class="gz-dropdown-error">${message}</div>`;
-    dropdownRow.appendChild(td);
-    return dropdownRow;
-  };
+  const torrentDropdowns = createTorrentDropdowns({ render: renderTorrentDropdown });
 
   // ============================================
   // Trump Report Feature
@@ -7483,32 +7106,6 @@ const getSearchResultTorrentId = (row, link) => {
       toast.style.animation = 'gz-toast-slide-in 0.3s ease reverse';
       setTimeout(() => toast.remove(), 300);
     }, duration);
-  };
-
-  // Submit Trump Report to API
-  const submitTrumpReport = async (payload) => {
-    const url = 'https://aither.cc/api/trumping-reports/create';
-
-    try {
-      const response = await gmFetchJson(
-        url,
-        {
-          headers: {
-            'Authorization': `Bearer ${AITHER_API_KEY}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          data: JSON.stringify(payload)
-        },
-        'POST',
-        30000
-      );
-
-      return response;
-    } catch (error) {
-      console.error('GAZELL3D: Trump report submission failed:', error);
-      throw error;
-    }
   };
 
   // Show Trump Report Modal
@@ -7617,7 +7214,7 @@ const getSearchResultTorrentId = (row, link) => {
           payload.screenshots_trumping_torrent = screenshotsTrumping;
         }
 
-        const response = await submitTrumpReport(payload);
+        const response = await torrentRepository.submitReport(payload);
 
         closeModal();
 
@@ -7639,7 +7236,7 @@ const getSearchResultTorrentId = (row, link) => {
 
   const gazellifyTorrentLayout = (article) => {
     const section = $(SELECTORS.torrentGroup, article);
-    if (!section) return;
+    if (!section || section.querySelector('.gz-torrent-table')) return;
 
     // Clear the trump torrent registry for fresh population
     trumpTorrentRegistry.clear();
@@ -7672,6 +7269,7 @@ const getSearchResultTorrentId = (row, link) => {
     }
 
     const newTable = create('table', 'gz-torrent-table');
+    const iconEntries = [];
 
     const thead = create('thead');
     // Conditionally include Actions header
@@ -7692,7 +7290,6 @@ const getSearchResultTorrentId = (row, link) => {
     newTable.appendChild(thead);
 
     const tbody = create('tbody');
-    let rowIdCounter = 0;
 
     // Shared row processing logic
     // seasonGroup: identifier for the season (e.g., 'S01', 'S02') used for trump report filtering
@@ -7721,12 +7318,7 @@ const getSearchResultTorrentId = (row, link) => {
         const nameLink = row.querySelector('.torrent-search--grouped__name a');
         if (!nameLink) return;
 
-        // Assign Sync ID
-        const syncId = `gz-sync-${++rowIdCounter}`;
-        row.dataset.gzSyncId = syncId;
-
         const newRow = create('tr');
-        newRow.dataset.gzSyncId = syncId;
 
         // 1. Episode/Season Column -> REMOVED (Replaced by header)
 
@@ -7742,43 +7334,8 @@ const getSearchResultTorrentId = (row, link) => {
         const tdName = create('td', 'gz-col-name');
         const iconSpan = create('span', 'gz-torrent-icons');
 
-        const updateIcons = () => {
-          iconSpan.innerHTML = '';
-          const originalIcons = row.querySelector('.torrent-icons');
-          if (originalIcons) {
-            // Create a copy of children array since we may modify the original
-            const iconsToProcess = Array.from(originalIcons.children);
-            iconsToProcess.forEach(icon => {
-              // Filter text nodes but keep elements
-              if (icon.nodeType !== 1) return;
-
-              // Check if this is a Seadex icon - these need special handling
-              const isSeadex = icon.hasAttribute('data-seadex');
-
-              // Apply filtering logic
-              const isKeep = isSeadex ||
-                icon.classList.contains('torrent-icons__torrent-trump') ||
-                icon.classList.contains('torrent-icons__personal-release') ||
-                icon.classList.contains('torrent-icons__internal');
-
-              if (CONFIG.removeTorrentIcons && !isKeep) {
-                return;
-              }
-
-              // Skip comment icon always
-              if (icon.classList.contains('fa-comment-alt-plus') || icon.classList.contains('torrent-icons__comments')) return;
-
-              // For Seadex icons: MOVE them instead of cloning to preserve event listeners
-              // The original table is hidden anyway, so this is safe
-              if (isSeadex) {
-                iconSpan.appendChild(icon);
-              } else {
-                iconSpan.appendChild(icon.cloneNode(true));
-              }
-            });
-          }
-        };
-        updateIcons(); // Initial population
+        const originalIcons = row.querySelector('.torrent-icons');
+        if (originalIcons) iconEntries.push({ source: originalIcons, target: iconSpan });
 
         const newLink = nameLink.cloneNode(true);
         newLink.className = 'torrent-name-link';
@@ -7793,7 +7350,6 @@ const getSearchResultTorrentId = (row, link) => {
         const typePart = currentType ? `[${currentType}]` : '';
         const episodePart = episodeId ? `${episodeId} ` : '';
         const torrentDisplayName = `${episodePart}${typePart} ${torrentName}`.trim();
-        const trumpableReason = extractTrumpableReasonFromElement(row);
 
         // Register torrent in the trump report registry for season-aware filtering
         if (torrentId) {
@@ -7802,62 +7358,18 @@ const getSearchResultTorrentId = (row, link) => {
 
         // Add dropdown functionality if enabled
         if (CONFIG.enableTorrentDropdowns && torrentId) {
-          newLink.classList.add('gz-clickable');
           newLink.dataset.torrentId = torrentId;
-
-          newLink.addEventListener('click', async (e) => {
-            // Ctrl+click or Cmd+click: let the browser handle it natively
-            // (the browser already opens <a> links in a new tab on Ctrl/Cmd+click)
-            if (e.ctrlKey || e.metaKey) {
-              return;
-            }
-
-            e.preventDefault();
-            e.stopPropagation();
-
-            const colSpan = CONFIG.enableGazelleButtons ? 7 : 6;
-            const existingDropdown = newRow.nextElementSibling;
-
-            // Toggle existing dropdown
-            if (existingDropdown && existingDropdown.classList.contains('gz-dropdown-row')) {
-              existingDropdown.remove();
-              return;
-            }
-
-            // Create loading state
-            const loadingRow = createLoadingDropdownRow(colSpan);
-            newRow.insertAdjacentElement('afterend', loadingRow);
-
-            // Fetch torrent data
-            const tmdbId = getTmdbIdFromPage();
-            if (!tmdbId) {
-              loadingRow.replaceWith(createErrorDropdownRow(colSpan, 'Could not detect TMDB ID'));
-              return;
-            }
-
-            const torrentDataMap = await fetchTorrentsByTmdb(tmdbId);
-            if (!torrentDataMap) {
-              loadingRow.replaceWith(createErrorDropdownRow(colSpan, 'Failed to fetch torrent data. Check API key.'));
-              return;
-            }
-
-            const torrentData = torrentDataMap.get(torrentId);
-            if (!torrentData) {
-              loadingRow.replaceWith(createErrorDropdownRow(colSpan, 'Torrent data not found in API response'));
-              return;
-            }
-
-            // Render dropdown
-            const dropdownRow = create('tr', 'gz-dropdown-row');
-            const td = create('td');
-            td.setAttribute('colspan', colSpan);
-            const dropdownTorrentData = trumpableReason
-              ? { ...torrentData, trumpable_reason: trumpableReason }
-              : torrentData;
-            td.appendChild(renderTorrentDropdown(dropdownTorrentData, colSpan));
-            dropdownRow.appendChild(td);
-
-            loadingRow.replaceWith(dropdownRow);
+          torrentDropdowns.attach({
+            row: newRow,
+            link: newLink,
+            colSpan: () => CONFIG.enableGazelleButtons ? 7 : 6,
+            getTrumpableReason: () => extractTrumpableReasonFromElement(row),
+            load: async () => {
+              const tmdbId = getTmdbIdFromPage();
+              if (!tmdbId) throw new Error('Could not detect TMDB ID');
+              const torrents = await torrentRepository.byTmdb(tmdbId);
+              return torrents.get(torrentId);
+            },
           });
         }
 
@@ -8183,59 +7695,12 @@ const getSearchResultTorrentId = (row, link) => {
 
     wrapper.appendChild(newTable);
 
-    // Observe the original hidden wrapper for changes (like Async Seadex icons)
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach(mutation => {
-        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-          // Only process when nodes are ADDED, not removed
-          // This prevents race conditions when we move icons (which triggers remove mutations)
-          const target = mutation.target;
-          if (target.matches && (target.matches('.torrent-icons') || target.closest('.torrent-icons'))) {
-            const row = target.closest('tr');
-            const syncId = row ? row.dataset.gzSyncId : null;
-            if (syncId) {
-              const newRow = newTable.querySelector(`tr[data-gz-sync-id="${syncId}"]`);
-              if (newRow) {
-                const iconSpan = newRow.querySelector('.gz-torrent-icons');
-                if (iconSpan) {
-                  // Process only the newly added nodes, don't rebuild everything
-                  mutation.addedNodes.forEach(node => {
-                    if (node.nodeType !== 1) return;
-
-                    // Check if this is a Seadex icon (or contains one)
-                    const isSeadexDirect = node.hasAttribute && node.hasAttribute('data-seadex');
-                    const containsSeadex = node.querySelector && node.querySelector('[data-seadex]');
-                    const seadexElement = isSeadexDirect ? node : containsSeadex;
-
-                    if (seadexElement) {
-                      // For Seadex icons: MOVE them to preserve event listeners
-                      // Find the containing li if wrapped, otherwise move the element directly
-                      const elementToMove = seadexElement.closest('li') || seadexElement;
-                      iconSpan.appendChild(elementToMove);
-                    } else {
-                      // Check if it's another "keep" icon
-                      const isKeep = node.classList && (
-                        node.classList.contains('torrent-icons__torrent-trump') ||
-                        node.classList.contains('torrent-icons__personal-release') ||
-                        node.classList.contains('torrent-icons__internal')
-                      );
-
-                      if (!CONFIG.removeTorrentIcons || isKeep) {
-                        // Skip comment icons
-                        if (node.classList && (node.classList.contains('fa-comment-alt-plus') || node.classList.contains('torrent-icons__comments'))) return;
-                        iconSpan.appendChild(node.cloneNode(true));
-                      }
-                    }
-                  });
-                }
-              }
-            }
-          }
-        }
-      });
+    liveTorrentIcons.project({
+      sourceRoot: section,
+      targetRoot: newTable,
+      entries: iconEntries,
+      removeIcons: CONFIG.removeTorrentIcons,
     });
-
-    observer.observe(wrapper, { childList: true, subtree: true });
 
     // Remove "Expand all" button
     const expandBtn = section.querySelector('.panel__actions button[x-bind="all"]');
@@ -8466,29 +7931,12 @@ const getSearchResultTorrentId = (row, link) => {
       // Hide the original but keep it for Seadex to find
       torrentTags.style.display = 'none';
 
-      // Observe the hidden original for Seadex icons
-      const tagsObserver = new MutationObserver((mutations) => {
-        mutations.forEach(mutation => {
-          if (mutation.type === 'childList') {
-            mutation.addedNodes.forEach(node => {
-              // Check if a Seadex icon was added (it has data-seadex attribute)
-              if (node.nodeType === 1) {
-                const seadexIcon = node.querySelector ?
-                  (node.hasAttribute('data-seadex') ? node : node.querySelector('[data-seadex]')) :
-                  null;
-                if (seadexIcon || (node.hasAttribute && node.hasAttribute('data-seadex'))) {
-                  // Move the Seadex element to visible tags (preserves click handlers)
-                  const elementToMove = seadexIcon || node;
-                  // Find the corresponding li in visible tags, or append to visible tags
-                  visibleTags.appendChild(elementToMove.closest('li') || elementToMove);
-                }
-              }
-            });
-          }
-        });
+      liveTorrentIcons.project({
+        sourceRoot: article,
+        targetRoot: visibleTags,
+        entries: [{ source: torrentTags, target: visibleTags }],
+        kind: 'tags',
       });
-
-      tagsObserver.observe(torrentTags, { childList: true, subtree: true });
     }
 
     const { panels } = createMetaPanels(meta, false);
@@ -8851,15 +8299,14 @@ const getSearchResultTorrentId = (row, link) => {
 
   const initApp = async () => {
     try {
-      const config = await loadConfig();
-      SCENE_RELEASE_GROUPS = new Set((config.SCENE_RELEASE_GROUPS || []).map(normalizeSceneGroupName));
-      SERVICE_TOKENS = config.SERVICE_TOKENS || [];
-      COUNTRY_MAP = config.COUNTRY_MAP || {};
-      LANGUAGE_MAP = config.LANGUAGE_MAP || {};
-      TAG_STYLES = config.TAG_STYLES || {};
-
-      // Initialize dependent sets
-      RELEASE_GROUP_BLOCK_TOKENS = initReleaseGroupBlockTokens();
+      let catalog = {};
+      try {
+        catalog = await loadConfig() || {};
+      } catch (error) {
+        // Catalog outages should not disable layouts, settings or dropdowns.
+        console.warn('GAZELL3D: Using built-in naming rules without the remote catalog', error);
+      }
+      torrentNaming = createTorrentNaming({ catalog, sequence: GAZELLIFY_SEQUENCE });
 
       const baseZoom = (CONFIG.baseFontSize || 100) / 100;
       const dynamicStyles = baseZoom !== 1 ? `

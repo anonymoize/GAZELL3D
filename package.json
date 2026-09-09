@@ -1,0 +1,12 @@
+{
+  "name": "gazell3d",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build-userscript.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "pretest": "npm run build"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
+  }
+}
