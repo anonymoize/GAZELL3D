@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      2.2.1
+// @version      2.2.2
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -6796,6 +6796,13 @@ const getSearchResultTorrentId = (row, link) => {
     header.append(heading);
     const buttons = banner.querySelector('.user-profile-card__buttons');
     if (buttons) header.append(buttons);
+
+    const avatarBox = banner.querySelector('.user-profile-card__left-block');
+    if (avatarBox) {
+      const avatarHeading = el('h2', 'user-profile-card__meta-title');
+      avatarHeading.textContent = 'Avatar';
+      avatarBox.prepend(avatarHeading);
+    }
 
     const layout = el('div', 'gz-profile-layout');
     const content = el('div', 'gz-profile-content');
