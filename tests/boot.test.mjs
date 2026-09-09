@@ -2,14 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { JSDOM } from 'jsdom';
-import { settle, catalog } from './harness.mjs';
+import { settle } from './harness.mjs';
 
 const bundle = fs.readFileSync(new URL('../GAZELL3D.user.js', import.meta.url), 'utf8');
 const footer = '<footer><section class="footer__section"><p>Torrenting - Modernized</p></section></footer>';
 const sourceRow = '<tr><td class="similar-torrents__type">WEB-DL</td><td><span class="torrent-search--grouped__name"><a href="/torrents/7">Example 2024 1080p WEB-DL H264-Group</a></span><ul class="torrent-icons"><li class="torrent-icons__internal">Internal</li></ul></td></tr>';
 const grouped = `<main class="page__torrent-similar--index"><article><ul><li class="meta__tmdb"><a class="meta-id-tag" title="TMDB: 10"></a></li></ul><section class="panelV2" x-data="torrentGroup"><header class="panel__header"></header><div class="data-table-wrapper"><table class="similar-torrents__torrents"><tbody>${sourceRow}</tbody></table></div></section></article></main>`;
 const search = '<main class="page__torrent--index"><table><tbody><tr class="torrent-search--list__row"><td><a class="torrent-search--list__name" href="/torrents/7">Example 2024 1080p WEB-DL H264-Group</a></td></tr></tbody></table></main>';
-async function boot(t, markup, config = {}, catalogFailure = false) {
+async function boot(t, markup, config = {}) {
   const dom = new JSDOM(`<!doctype html><html><body>${markup}${footer}</body></html>`, { url: 'https://aither.cc/torrents/7/similar', runScripts: 'outside-only' });
   t.after(() => dom.window.close());
   const { window } = dom;
@@ -22,10 +22,6 @@ async function boot(t, markup, config = {}, catalogFailure = false) {
   const torrent = { id: 7, attributes: { id: 7, name: 'Example', description: '[b]Description[/b]', media_info: media, uploader: 'Anonymous' } };
   window.GM_xmlhttpRequest = options => {
     requests.push(options.url);
-    if (options.url.includes('raw.githubusercontent')) {
-      if (catalogFailure) { options.onerror(); return; }
-      options.onload({ status: 200, responseText: JSON.stringify(catalog) }); return;
-    }
     if (options.url.includes('trumping-reports/filter')) { options.onload({ status: 200, responseText: '{"data":[]}' }); return; }
     const data = options.url.includes('/torrents/filter') ? { data: [torrent] } : { data: torrent };
     options.onload({ status: 200, responseText: JSON.stringify(data) });
@@ -34,8 +30,10 @@ async function boot(t, markup, config = {}, catalogFailure = false) {
   return { window, document: window.document, requests, errors, media };
 }
 
-test('built userscript boots search during a catalog outage and opens a complete dropdown', async t => {
-  const h = await boot(t, search, { enableGazellifySearch: true }, true);
+test('built userscript boots search with bundled catalog without requests and opens a complete dropdown', async t => {
+  const h = await boot(t, search.replace('WEB-DL H264-Group', 'AMZN WEB-DL H264-NTb'), { enableGazellifySearch: true });
+  assert.deepEqual(h.requests, []);
+  assert.match(h.document.querySelector('.gz-search-title__subheading').textContent, /AMZN/);
   assert.ok(h.document.querySelector('.gz-config-link'));
   const link = h.document.querySelector('.torrent-search--list__name');
   assert.ok(link.querySelector('.gz-search-title')); assert.ok(link.querySelector('.gz-hidden-original'));

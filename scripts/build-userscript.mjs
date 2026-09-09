@@ -35,11 +35,15 @@ bodyFiles.forEach((file, index) => {
   }
 });
 
+const catalog = JSON.parse(fs.readFileSync(path.join(rootDir, 'config.json'), 'utf8'));
+
 const generated = [
   metadata,
   '',
   '(function () {',
   "  'use strict';",
+  '',
+  `  const NAMING_CATALOG = ${JSON.stringify(catalog)};`,
   '',
   body,
   '})();',

@@ -71,33 +71,6 @@
       }
     });
   };
-  const CONFIG_URL = 'https://raw.githubusercontent.com/anonymoize/GAZELL3D/main/config.json';
-  const CACHE_KEY = typeof GM_info !== 'undefined' ? 'GAZELL3D_CONFIG_' + GM_info.script.version : 'GAZELL3D_CONFIG_V2';
-  const CACHE_EXPIRY = 24 * 60 * 60 * 1000;
-
-  const loadConfig = async () => {
-    try {
-      const cached = localStorage.getItem(CACHE_KEY);
-      if (cached) {
-        const { timestamp, data } = JSON.parse(cached);
-        if (Date.now() - timestamp < CACHE_EXPIRY) {
-          console.log('GAZELL3D: Loaded config from cache');
-          return data;
-        }
-      }
-    } catch (e) {
-      console.warn('GAZELL3D: Cache read error', e);
-    }
-
-    const data = await gmFetchJson(CONFIG_URL);
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data }));
-    } catch (error) {
-      console.warn('GAZELL3D: Cache write error', error);
-    }
-    return data;
-  };
-
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
   const parseColorString = (value) => {
     if (!value) return null;

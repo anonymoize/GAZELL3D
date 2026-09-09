@@ -2,7 +2,11 @@
 
 `GAZELL3D.user.js` is generated from the smaller source files in `src/`.
 
-After editing any source file, rebuild the installable userscript:
+The build embeds the naming catalog from `config.json` into the userscript.
+Keep `config.json` published at its existing path for older installations that
+still fetch it remotely. Catalog changes ship with userscript updates.
+
+After editing any source file or `config.json`, rebuild the installable userscript:
 
 ```bash
 node scripts/build-userscript.mjs
@@ -29,8 +33,8 @@ modules keep their state and supporting functions private:
 Failed retrievals can retry. Credential changes isolate cached data, and a
 successful trump report invalidates the affected report cache. Retrieval rejects
 responses that would exceed the existing 20-page limit rather than caching a
-partial result. A remote naming catalog outage falls back to built-in naming
-rules while leaving page enhancements and settings available.
+partial result. The naming catalog is bundled at build time, so page initialization does not
+wait for a remote catalog request.
 
 Tests cover request outcomes, stale dropdown loads, naming context, media text,
 late Seadex icons and representative search/grouped/detail pages. They do not

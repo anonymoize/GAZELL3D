@@ -349,16 +349,9 @@
     targetSection.appendChild(configLink);
   };
 
-  const initApp = async () => {
+  const initApp = () => {
     try {
-      let catalog = {};
-      try {
-        catalog = await loadConfig() || {};
-      } catch (error) {
-        // Catalog outages should not disable layouts, settings or dropdowns.
-        console.warn('GAZELL3D: Using built-in naming rules without the remote catalog', error);
-      }
-      torrentNaming = createTorrentNaming({ catalog, sequence: GAZELLIFY_SEQUENCE });
+      torrentNaming = createTorrentNaming({ catalog: NAMING_CATALOG, sequence: GAZELLIFY_SEQUENCE });
 
       const baseZoom = (CONFIG.baseFontSize || 100) / 100;
       const dynamicStyles = baseZoom !== 1 ? `
