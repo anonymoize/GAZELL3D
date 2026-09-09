@@ -1,3 +1,13 @@
+## Member profiles
+
+Member pages under `/users/*` use a Gazelle-style layout: a simple member heading,
+a wide content column, and a narrow right sidebar for the avatar and account stats.
+About text, badges, achievements, followers, and account tables stay in the content
+column. The banner is suppressed for a compact, text-focused page.
+The layout follows the active theme and stacks on narrow screens. Existing
+profile links and form state are retained, with complete Alpine dialog scopes moved together;
+other user routes (settings, activity, etc.) keep their native layout.
+
 ## Settings
 
 Open **GAZELL3D Settings** in the site footer. The menu follows the active
@@ -51,6 +61,7 @@ dropdown attachments; page builders connect those interfaces to the host DOM.
 | `src/08-media-summaries.js` | MediaInfo/BDInfo selection, parsing, summary rendering and unchanged raw text. |
 | `src/09-dropdowns-and-reporting.js` | Dropdown lifecycle and tabs, details/report alerts, file tree, active-panel copying, report registry/form and toasts. |
 | `src/10-page-layouts.js` | Similar/detail page assembly, movie and TV table grouping, actions, grouped dropdown wiring and icon projection. |
+| `src/10-user-profile.js` | Member profile assembly, preserving host components while arranging content and account information into columns. |
 | `src/11-settings-and-boot.js` | Settings draft/dialog, footer entry point, naming initialization, zoom and page dispatch. |
 
 ## Runtime flow
@@ -73,6 +84,9 @@ Page dispatch uses the selectors in `01-config-and-storage.js`:
   season tables and a short initial release list; the side layout setting adds a
   poster rail. Original rows, controls and group associations remain intact.
   Dropdowns fetch individual torrents by ID; this path retains the individual-torrent retrieval flow.
+- **Member profiles:** move existing host components into a content column and
+  account sidebar; retain complete dialog and Livewire sections. No account data
+  is fetched or copied.
 - **User-group requirements:** parse the site's class/requirement/perk markup,
   consolidate shared entry classes into Main Path, and render Main Path and
   Uploader Path side by side, with other groups outside the path columns.
@@ -104,6 +118,7 @@ so observers and timers do not outlive the test.
 | `tests/icons.test.mjs` | Initial/late Seadex identity, ordinary-icon cloning/filtering and observer disposal. |
 | `tests/naming-and-media.test.mjs` | Explicit naming context, catalog snapshots, release-group rules, raw media preservation and text rendering. |
 | `tests/boot.test.mjs` | Built-script search/grouped/detail integration and late icon handling. |
+| `tests/user-profile.test.mjs` | Profile retries, missing private sections, DOM identity, form state, and host scope preservation. |
 | `tests/settings.test.mjs` | Draft isolation, focus, preview/reordering, validation, persistence and storage failure. |
 | `tests/group-requirements.test.mjs` | Split path ownership, shared-class deduplication, static groups, collapsed/expanded perks, safe text rendering, and idempotent rendering. |
 

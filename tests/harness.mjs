@@ -12,7 +12,7 @@ export function harness(markup = '', config = {}) {
   dom.window.GM_getValue = (key, fallback) => key === 'gz_config' ? JSON.stringify(config) : fallback;
   dom.window.GM_setValue = () => {};
   dom.window.GM_xmlhttpRequest = () => { throw Error('Unexpected network access'); };
-  const modules = dom.window.eval(`${source}\n({ buildGroupRequirementsLayout, createJsonRequest, createTorrentRepository, createTorrentNaming, createTorrentDropdowns, createLiveTorrentIcons, renderMediaSummary, renderTorrentDropdown, enhanceSearchTorrentDropdowns, gazellifyTorrentLayout })`);
+  const modules = dom.window.eval(`${source}\n({ buildUserProfileLayout, buildGroupRequirementsLayout, createJsonRequest, createTorrentRepository, createTorrentNaming, createTorrentDropdowns, createLiveTorrentIcons, renderMediaSummary, renderTorrentDropdown, enhanceSearchTorrentDropdowns, gazellifyTorrentLayout })`);
   return { dom, window: dom.window, document: dom.window.document, ...modules };
 }
 export const settle = () => new Promise(resolve => setTimeout(resolve, 0));

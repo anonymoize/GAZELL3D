@@ -1,4 +1,11 @@
   const initPage = () => {
+    // Profile assembly preserves complete host controls and dialog scopes.
+    const userProfile = $('main.page__user-profile--show');
+    if (userProfile) {
+      return buildUserProfileLayout(userProfile);
+    }
+    // Other /users routes share the install match, but need no page observer.
+    if (location.pathname.startsWith('/users/')) return true;
     if ($(SELECTORS.layout)) return true;
 
     const similarArticle = $(SELECTORS.similarArticle);

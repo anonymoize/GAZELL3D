@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      2.1.1
+// @version      2.2.1
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
 // @match        https://aither.cc/stats/groups*
+// @match        https://aither.cc/users/*
 // @updateURL    https://github.com/anonymoize/GAZELL3D/raw/refs/heads/main/GAZELL3D.user.js
 // @downloadURL  https://github.com/anonymoize/GAZELL3D/raw/refs/heads/main/GAZELL3D.user.js
 // @grant        GM_addStyle
@@ -2816,6 +2817,128 @@
       .gz-mediahub--poster .torrent-search--grouped__poster { width: 64px; top: 10px; left: 10px; }
       .gz-mediahub .torrent-search--grouped__poster img { width: 64px; max-height: 96px; }
       .gz-mediahub .torrent-search--grouped__plot { line-height: 1.3; }
+    }
+    /* Gazelle-style member pages: content on the left, compact facts on the right. */
+    .gz-user-profile {
+      --gz-profile-bg: var(--panel-bg, #202534);
+      --gz-profile-fg: var(--text-color, #ccc);
+      --gz-profile-line: color-mix(in srgb, var(--gz-profile-fg) 14%, transparent);
+      --gz-profile-muted: color-mix(in srgb, var(--gz-profile-fg) 76%, var(--gz-profile-bg));
+      --key-value-odd-bg: transparent;
+      --key-value-even-bg: transparent;
+      color: var(--gz-profile-fg);
+    }
+    .gz-user-profile > article {
+      width: 100%; max-width: 1440px; margin-inline: auto; padding: 24px;
+    }
+    .gz-profile-header { margin-bottom: 22px; }
+    .gz-profile-heading {
+      display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 16px;
+      margin: 0; padding: 0; font-size: 22px; font-weight: 400;
+    }
+    .gz-user-profile .user-profile-card__username {
+      display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px;
+      padding: 0; font-size: inherit; overflow-wrap: anywhere;
+    }
+    .gz-user-profile .user-profile-card__title {
+      text-align: left; font-size: 14px; font-weight: 400; overflow-wrap: anywhere;
+    }
+    .gz-user-profile .user-profile-card__buttons {
+      display: flex; justify-content: flex-start; flex-wrap: wrap; gap: 8px;
+      margin-top: 14px;
+    }
+    .gz-user-profile .user-profile-card__buttons:not(:has(a, button)) { display: none; }
+    .gz-user-profile .user-profile-card__user-buttons,
+    .gz-user-profile .user-profile-card__staff-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+    .gz-user-profile .user-profile-card__section-button--info {
+      padding: 4px 10px; border: 1px solid var(--gz-profile-line); border-radius: 2px;
+      background: var(--gz-profile-bg); color: var(--gz-profile-fg); backdrop-filter: none;
+      font-size: 12px;
+    }
+    .gz-profile-layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 24px; align-items: start; }
+    .gz-profile-content, .gz-profile-sidebar { min-width: 0; display: flex; flex-direction: column; gap: 22px; }
+    .gz-user-profile .user-profile__section { display: flex; flex-direction: column; gap: 22px; margin: 0; }
+    .gz-user-profile .panelV2 { margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+    .gz-profile-content > .panelV2,
+    .gz-profile-content .user-profile__section > div { background: transparent; min-width: 0; }
+    .gz-user-profile .panel__heading,
+    .gz-user-profile .user-profile-card__meta-title {
+      display: block; margin: 0; padding: 0 0 7px; border: 0;
+      border-bottom: 1px solid var(--gz-profile-line); border-radius: 0;
+      background: transparent; color: var(--gz-profile-fg); font-size: 13px; font-weight: 500;
+    }
+    .gz-user-profile .panel__body { padding: 12px 0; font-size: 13px; line-height: 1.6; }
+    .gz-profile-content .panel__body { background: transparent; border-radius: 0; }
+    .gz-profile-sidebar { gap: 16px; }
+    .gz-profile-sidebar > .panelV2 { background: transparent; }
+    .gz-user-profile .user-profile-card__banner {
+      display: flex; flex-direction: column; align-items: stretch; gap: 16px;
+      padding: 0; background: none !important;
+    }
+    .gz-user-profile .user-profile-card__left-block,
+    .gz-user-profile .user-profile-card__meta,
+    .gz-profile-sidebar .user-profile__section > div {
+      display: block; min-width: 0; padding: 14px; margin: 0;
+      border: 1px solid var(--gz-profile-line); border-radius: 0;
+      background: var(--gz-profile-bg) !important;
+      backdrop-filter: none; -webkit-backdrop-filter: none; font-size: 12px;
+    }
+    .gz-user-profile .user-profile-card__avater-username {
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+    }
+    .gz-user-profile .user-profile-card__avatar {
+      width: auto; height: auto; max-width: 160px; max-height: 180px; border-radius: 0; object-fit: contain;
+    }
+    .gz-user-profile .user-profile-card__avater-username > .user-profile-card { color: var(--gz-profile-muted); font-size: 12px; }
+    .gz-user-profile .user-profile-card__internal:empty { display: none; }
+    .gz-user-profile .user-profile-card__right-block { display: flex; flex-direction: column; gap: 16px; }
+    .gz-user-profile .user-profile-card__meta:has(.user-profile-card__meta-item-subrow:nth-child(3)) { order: -1; }
+    .gz-user-profile .user-profile-card__meta-title { margin-bottom: 8px; color: var(--color-light-blue, #64b5f6); }
+    .gz-user-profile .user-profile-card__meta-title::before { display: none; }
+    .gz-user-profile .user-profile-card__meta-title > i { display: none; }
+    .gz-user-profile .user-profile-card__meta-list,
+    .gz-user-profile .user-profile-card__meta-list-rows,
+    .gz-user-profile .user-profile-card__meta-item-subrow {
+      display: block; width: 100%; padding: 0; margin: 0; border: 0;
+    }
+    .gz-user-profile .user-profile-card__meta-item-subrow + .user-profile-card__meta-item-subrow {
+      margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--gz-profile-line);
+    }
+    .gz-user-profile .user-profile-card__meta-item {
+      display: block; padding: 2px 0; text-align: left; color: var(--gz-profile-fg);
+      font-size: 12px; line-height: 1.5; overflow-wrap: anywhere;
+    }
+    .gz-user-profile .user-profile-card__meta-item-title { color: var(--gz-profile-muted); font-weight: 400; }
+    .gz-user-profile .user-profile-card__meta-item-title::after { content: ": "; }
+    .gz-user-profile .user-profile-card__meta-item-title > i { display: none; }
+    .gz-user-profile .user-profile-card__meta-item-value { font-weight: 400; font-variant-numeric: tabular-nums; }
+    .gz-user-profile .user-profile-card__meta-item-value :is(sup, sub) { font-size: 9px; }
+    .gz-user-profile .user-profile-card__meta-item-value:has(>a):hover { transform: none; }
+    .gz-profile-sidebar .user-profile__section { gap: 16px; }
+    .gz-profile-sidebar .panel__heading { color: var(--color-light-blue, #64b5f6); }
+    .gz-user-profile .key-value { padding: 8px 0 0; margin: 0; background: transparent; }
+    .gz-user-profile .key-value__group { display: block; padding: 2px 0; }
+    .gz-user-profile .key-value :is(dt, dd) { display: inline; font-size: 12px; line-height: 1.5; font-weight: 400; }
+    .gz-user-profile .key-value dt { color: var(--gz-profile-muted); }
+    .gz-user-profile .key-value dt::after { content: ": "; }
+    .gz-user-profile .key-value dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .gz-user-profile :is(.user-profile__column--badges, .user-profile__column--achievements, .user-profile__column--followers) .panel__body {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-block: 18px;
+    }
+    .gz-user-profile .user-profile__column--badges .panel__body img { height: 64px; width: auto; max-width: 100%; object-fit: contain; }
+    .gz-user-profile .user-profile__column--achievements .panel__body img { height: 48px; width: auto; max-width: 100%; object-fit: contain; }
+    .gz-user-profile .user-profile__column--followers .panel__body img { width: 40px; height: 40px; object-fit: cover; border-radius: 2px; }
+    .gz-profile-content .data-table-wrapper { max-width: 100%; overflow-x: auto; }
+    .gz-profile-content .data-table { font-size: 12px; }
+    .gz-user-profile :is(a, button):focus-visible { outline: 2px solid var(--color-light-blue, #64b5f6); outline-offset: 3px; }
+    @media (max-width: 900px) {
+      .gz-user-profile > article { padding: 18px 12px; }
+      .gz-profile-layout { grid-template-columns: minmax(0, 1fr) 250px; gap: 18px; }
+    }
+    @media (max-width: 650px) {
+      .gz-profile-layout { display: flex; flex-direction: column; gap: 24px; }
+      .gz-profile-content, .gz-profile-sidebar { width: 100%; }
+      .gz-profile-heading { font-size: 20px; }
     }
   `;
 
@@ -6650,7 +6773,56 @@ const getSearchResultTorrentId = (row, link) => {
     });
   };
 
+  // Move complete host components so forms, listeners and Alpine dialog scopes survive.
+  const buildUserProfileLayout = (page) => {
+    if (page.classList.contains('gz-user-profile')) return true;
+    const article = page.querySelector(':scope > article');
+    const banner = article?.querySelector('.user-profile-card__banner');
+    const profilePanel = banner?.closest('.panelV2');
+    const identity = banner?.querySelector('.user-profile-card__username');
+    if (!article || !profilePanel || !identity) return false;
+
+    const el = (tag, className) => {
+      const node = document.createElement(tag);
+      node.className = className;
+      return node;
+    };
+    const originalSections = [...article.children];
+    const header = el('header', 'gz-profile-header');
+    const heading = el('h1', 'gz-profile-heading');
+    heading.append(identity);
+    const title = banner.querySelector('.user-profile-card__title');
+    if (title) heading.append(title);
+    header.append(heading);
+    const buttons = banner.querySelector('.user-profile-card__buttons');
+    if (buttons) header.append(buttons);
+
+    const layout = el('div', 'gz-profile-layout');
+    const content = el('div', 'gz-profile-content');
+    const sidebar = el('aside', 'gz-profile-sidebar');
+    sidebar.setAttribute('aria-label', 'Member information');
+    sidebar.append(profilePanel);
+    for (const section of originalSections) {
+      if (section === profilePanel) continue;
+      // Keep each host section whole, including any Livewire/Alpine scope.
+      const isAccountStats = section.matches('.user-profile__section') &&
+        section.querySelector('.user-profile__column--traffic, .user-profile__column--bon');
+      (isAccountStats ? sidebar : content).append(section);
+    }
+    layout.append(content, sidebar);
+    article.append(header, layout);
+    page.classList.add('gz-user-profile');
+    return true;
+  };
+
   const initPage = () => {
+    // Profile assembly preserves complete host controls and dialog scopes.
+    const userProfile = $('main.page__user-profile--show');
+    if (userProfile) {
+      return buildUserProfileLayout(userProfile);
+    }
+    // Other /users routes share the install match, but need no page observer.
+    if (location.pathname.startsWith('/users/')) return true;
     if ($(SELECTORS.layout)) return true;
 
     const similarArticle = $(SELECTORS.similarArticle);
