@@ -34,6 +34,20 @@ test('naming owns catalog and sequence snapshots, retains unknowns and handles n
   assert.ok(fallback.format('Example 2024 1080p WEB-DL H264-Group').length);
 });
 
+test('naming uses catalog resolutions and extra block tokens as a snapshot', t => {
+  const { createTorrentNaming } = setup(t);
+  const localCatalog = { ...catalog, RESOLUTIONS: ['900p'], EXTRA_RELEASE_GROUP_BLOCK_TOKENS: ['CUSTOMTAG'] };
+  const naming = createTorrentNaming({ catalog: localCatalog, sequence });
+  localCatalog.RESOLUTIONS.length = 0;
+  localCatalog.EXTRA_RELEASE_GROUP_BLOCK_TOKENS.length = 0;
+  const parts = naming.format('Example 2024 900p WEB-DL H264-CUSTOMTAG');
+  assert.equal(parts.find(x => x.category === 'resolution').value, '900p');
+  assert.equal(parts.find(x => x.category === 'group').value, 'NOGRP');
+  const bundled = createTorrentNaming({ catalog, sequence });
+  assert.equal(bundled.format('Example 2024 1080p WEB-DL H264-COMMENTARY').find(x => x.category === 'group').value, 'NOGRP');
+  assert.equal(bundled.format('Example 2024 1080p WEB-DL H264-Group').find(x => x.category === 'resolution').value, '1080p');
+});
+
 test('naming preserves full-disc country interpretation and release-group blocking', t => {
   const { createTorrentNaming } = setup(t);
   const naming = createTorrentNaming({ catalog: { COUNTRY_MAP: { USA: 'USA' }, SERVICE_TOKENS: ['NF'] }, sequence });

@@ -15,7 +15,7 @@
       { regex: /\bJPEG2000\b/i, value: 'JPEG2000' },
     ];
 
-    const RESOLUTIONS = ['4320p', '2160p', '1080p', '1080i', '720p', '576p', '576i', '540p', '480p', '480i', "360p", '240p', '144p'];
+    const RESOLUTIONS = [...(catalog.RESOLUTIONS || [])];
 
     const SOURCE_PATTERNS = [
       { regex: /\bUHD[\s-]*Blu-?ray\b/i, value: 'UHD BluRay' },
@@ -141,15 +141,11 @@
     const LANGUAGE_MAP = { ...(catalog.LANGUAGE_MAP || {}) };
     const sequenceOrder = [...sequence];
     const initReleaseGroupBlockTokens = () => {
-      const tokens = new Set([
-        'WEB', 'DL', 'DUAL', 'AUDIO', 'SUBBED', 'DUBBED', 'MULTI', 'MULTISUB',
-        'REMUX', 'REPACK', 'PROPER', 'LIMITED', 'COMPLETE', 'UNCENSORED',
-        'UNRATED', 'THEATRICAL', 'EXTENDED', 'PACK', 'COLLECTION', 'SAMPLE',
-        'HDR', 'SDR', 'ATMOS', 'DOLBY', 'TRUEHD', 'COMMENTARY', '3D', 'MVC',
-      ]);
+      const tokens = new Set();
       const addTokens = (values) => {
         values.forEach((value) => tokenizeWords(value).forEach((token) => tokens.add(token)));
       };
+      addTokens(catalog.EXTRA_RELEASE_GROUP_BLOCK_TOKENS || []);
       addTokens(RESOLUTIONS);
       addTokens(SERVICE_TOKENS);
       addTokens(SOURCE_PATTERNS.map((pattern) => pattern.value));
