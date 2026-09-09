@@ -42,286 +42,268 @@
     { key: 'baseFontSize', label: 'Base Font Size (%)', type: 'number', min: 50, max: 200 },
   ];
 
-  // Create and show config modal
+  // Each opening edits an isolated draft; only Save writes to userscript storage.
   const showConfigModal = () => {
-    // Remove any existing modal
-    const existing = document.querySelector('.gz-config-overlay');
-    if (existing) existing.remove();
-
+    if (document.querySelector('.gz-config-overlay')) return;
+    const previousFocus = document.activeElement;
     const overlay = create('div', 'gz-config-overlay');
     const modal = create('div', 'gz-config-modal');
-
-    // Header
-    const header = create('div', 'gz-config-header');
-    const title = create('h3', 'gz-config-title');
-    title.textContent = '⚙️ GAZELL3D Settings';
-    const closeBtn = create('button', 'gz-config-close');
-    closeBtn.textContent = '×';
-    closeBtn.onclick = () => overlay.remove();
-    header.appendChild(title);
-    header.appendChild(closeBtn);
-    modal.appendChild(header);
-
-    // API Key Section
-    const apiSection = create('div', 'gz-config-section');
-    const apiTitle = create('div', 'gz-config-section-title');
-    apiTitle.textContent = 'API Key';
-    apiSection.appendChild(apiTitle);
-
-    const apiField = create('div', 'gz-config-input-field');
-    const apiLabel = create('label', 'gz-config-input-label');
-    apiLabel.textContent = 'Aither API Key (required for dropdowns)';
-    apiLabel.setAttribute('for', 'gz-api-key-input');
-    const apiInput = create('input', 'gz-config-input');
-    apiInput.type = 'password';
-    apiInput.id = 'gz-api-key-input';
-    apiInput.placeholder = 'Enter your API key...';
-    apiInput.value = AITHER_API_KEY || '';
-    apiField.appendChild(apiLabel);
-    apiField.appendChild(apiInput);
-    apiSection.appendChild(apiField);
-    modal.appendChild(apiSection);
-
-    // Options Section
-    const optionsSection = create('div', 'gz-config-section');
-    const optionsTitle = create('div', 'gz-config-section-title');
-    optionsTitle.textContent = 'Options';
-    optionsSection.appendChild(optionsTitle);
-
-    const inputs = {};
-    CONFIG_OPTIONS.forEach(opt => {
-      const field = create('div', 'gz-config-field');
-      const label = create('label', 'gz-config-label');
-
-      if (opt.type === 'number') {
-        const input = create('input');
-        input.type = 'number';
-        input.min = opt.min || 0;
-        input.max = opt.max || 1000;
-        input.value = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
-        input.style.width = '60px';
-        input.style.marginRight = '8px';
-        inputs[opt.key] = input;
-
-        label.appendChild(input);
-        label.appendChild(document.createTextNode(opt.label));
-      } else {
-        const checkbox = create('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
-        inputs[opt.key] = checkbox;
-
-        label.appendChild(checkbox);
-        label.appendChild(document.createTextNode(opt.label));
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'gz-config-title');
+    const el = (tag, className, text) => {
+      const node = create(tag, className);
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+    const button = (text, action, className = 'gz-config-btn') => {
+      const node = el('button', className, text);
+      node.type = 'button';
+      node.onclick = action;
+      return node;
+    };
+    const background = [...document.body.children].map(node => [node, node.inert]);
+    const previousOverflow = document.body.style.overflow;
+    const close = () => {
+      document.removeEventListener('keydown', onKeydown, true);
+      overlay.remove();
+      background.forEach(([node, inert]) => { node.inert = inert; });
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+    const onKeydown = event => {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); }
+      if (event.key !== 'Tab') return;
+      const focusable = [...modal.querySelectorAll('button, input, [tabindex="0"]')]
+        .filter(node => !node.disabled && !node.closest('[hidden]'));
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) {
+        event.preventDefault(); first.focus();
       }
+    };
 
-      field.appendChild(label);
-      optionsSection.appendChild(field);
+    const header = el('header', 'gz-config-header');
+    const heading = el('div');
+    const title = el('h2', 'gz-config-title', 'GAZELL3D Settings');
+    title.id = 'gz-config-title';
+    heading.append(title);
+    const closeBtn = button('×', close, 'gz-config-btn gz-config-close');
+    closeBtn.setAttribute('aria-label', 'Close settings');
+    header.append(heading, closeBtn);
+    const workspace = el('div', 'gz-config-workspace');
+    const nav = el('nav', 'gz-config-nav');
+    nav.setAttribute('aria-label', 'Settings sections');
+    const body = el('div', 'gz-config-body');
+    const panels = {}, navButtons = {};
+    const activate = key => {
+      Object.keys(panels).forEach(id => {
+        panels[id].hidden = id !== key;
+        if (id === key) navButtons[id].setAttribute('aria-current', 'page');
+        else navButtons[id].removeAttribute('aria-current');
+      });
+      preview.hidden = key !== 'names' && key !== 'colors';
+      body.scrollTop = 0;
+    };
+    const section = (key, name, description) => {
+      const panel = el('section', 'gz-config-section');
+      panel.id = `gz-settings-${key}`;
+      panel.append(el('h3', 'gz-config-section-title', name), el('p', 'gz-config-description', description));
+      const link = button(name, () => activate(key), 'gz-config-nav-button');
+      link.setAttribute('aria-controls', panel.id);
+      panels[key] = panel; navButtons[key] = link;
+      nav.append(link); body.append(panel);
+      return panel;
+    };
+    const general = section('general', 'Layout & display', 'Fine-tune the way torrent pages look and behave.');
+    const names = section('names', 'Torrent names', 'Choose where to simplify release names and how their components appear.');
+    const colors = section('colors', 'Component colors', 'Give each part of a release name its own color.');
+    const connection = section('connection', 'API connection', 'Connect your Aither API key to load expanded torrent details.');
+    const inputs = {}, colorInputs = {};
+    const namingKeys = new Set(['enableGazellifySimilar', 'enableGazellifyDetail', 'enableGazellifySearch', 'enableOriginalTitleTooltip']);
+    const descriptions = {
+      removeTorrentIcons: 'Hide standard torrent icons for a cleaner listing.',
+      enableGazellifySimilar: 'Simplify names in grouped torrent listings.',
+      enableGazellifyDetail: 'Simplify the title on individual torrent pages.',
+      enableGazellifySearch: 'Simplify release names in search results.',
+      enableOriginalTitleTooltip: 'Keep the full release name available on hover.',
+      showEditButton: 'Show the edit action on torrent pages.',
+      enableSideLayout: 'Place torrent information in a side column.',
+      enableGazelleButtons: 'Use compact Gazelle-style torrent actions.',
+      enableGazelleTorrentLayout: 'Arrange grouped releases in a Gazelle-style table.',
+      enableTorrentDropdowns: 'Expand details inline. An API key is required.',
+      enableComponentColors: 'Apply the palette below to simplified names.',
+      baseFontSize: 'Scale similar and detail page content. Default: 100%.',
+    };
+    CONFIG_OPTIONS.forEach(opt => {
+      const label = el('label', 'gz-config-field');
+      const copy = el('span', 'gz-config-field-copy');
+      copy.append(el('span', 'gz-config-label', opt.label), el('span', 'gz-config-help', descriptions[opt.key]));
+      const input = el('input', opt.type === 'number' ? 'gz-config-input gz-config-number' : 'gz-config-toggle');
+      input.id = `gz-option-${opt.key}`;
+      input.type = opt.type || 'checkbox';
+      if (opt.type === 'number') {
+        input.min = opt.min; input.max = opt.max; input.step = 1; input.required = true;
+        input.value = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
+      } else input.checked = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
+      inputs[opt.key] = input;
+      label.append(copy, input);
+      const target = namingKeys.has(opt.key) ? names : opt.key === 'enableComponentColors' ? colors : opt.key === 'enableTorrentDropdowns' ? connection : general;
+      target.append(label);
     });
-    modal.appendChild(optionsSection);
 
-    // Colors Section
-    const colorsSection = create('div', 'gz-config-section');
-    const colorsTitle = create('div', 'gz-config-section-title');
-    colorsTitle.textContent = 'Component Colors';
-    colorsSection.appendChild(colorsTitle);
-
-    const colorsGrid = create('div');
-    colorsGrid.style.display = 'grid';
-    colorsGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
-    colorsGrid.style.gap = '8px';
-
-    const colorInputs = {};
-    Object.keys(DEFAULT_CONFIG.componentColors).forEach(key => {
-      const field = create('div', 'gz-config-field');
-      const label = create('label', 'gz-config-label');
-      label.style.display = 'flex';
-      label.style.alignItems = 'center';
-
-      const input = create('input');
-      input.type = 'color';
-      input.value = CONFIG.componentColors[key] || DEFAULT_CONFIG.componentColors[key];
-      input.style.marginRight = '8px';
-      input.style.cursor = 'pointer';
-
-      colorInputs[key] = input;
-
-      label.appendChild(input);
-      label.appendChild(document.createTextNode(SEQUENCE_LABELS[key] || key));
-      field.appendChild(label);
-      colorsGrid.appendChild(field);
+    const apiLabel = el('label', 'gz-config-input-label', 'Aither API key');
+    apiLabel.htmlFor = 'gz-api-key-input';
+    const apiRow = el('div', 'gz-config-api-row');
+    const apiInput = el('input', 'gz-config-input');
+    apiInput.type = 'password'; apiInput.id = 'gz-api-key-input';
+    apiInput.autocomplete = 'off'; apiInput.spellcheck = false;
+    apiInput.placeholder = 'Paste your API key'; apiInput.value = AITHER_API_KEY || '';
+    const reveal = button('Show', () => {
+      const showing = apiInput.type === 'password';
+      apiInput.type = showing ? 'text' : 'password';
+      reveal.textContent = showing ? 'Hide' : 'Show';
+      reveal.setAttribute('aria-pressed', String(showing));
     });
+    reveal.setAttribute('aria-label', 'Show or hide API key');
+    reveal.setAttribute('aria-pressed', 'false');
+    apiRow.append(apiInput, reveal);
+    const apiStatus = el('p', 'gz-config-notice');
+    apiStatus.id = 'gz-api-status'; apiStatus.setAttribute('aria-live', 'polite');
+    apiInput.setAttribute('aria-describedby', apiStatus.id);
+    connection.append(apiLabel, apiRow, apiStatus, el('p', 'gz-config-help', 'Saved in your userscript manager. The key is used for requests to Aither; it is not checked when you save.'));
+    const updateApiStatus = () => {
+      apiStatus.textContent = apiInput.value.trim() ? 'Key entered · connection not verified' : inputs.enableTorrentDropdowns.checked ? 'Add a key to use torrent dropdowns. Other settings work without one.' : 'No key entered · torrent dropdowns are off';
+    };
+    apiInput.addEventListener('input', updateApiStatus);
+    inputs.enableTorrentDropdowns.addEventListener('change', updateApiStatus);
+    updateApiStatus();
 
-    colorsSection.appendChild(colorsGrid);
-    modal.appendChild(colorsSection);
-
-    // Sequence Order Section
-    const sequenceSection = create('div', 'gz-config-section');
-    const sequenceTitle = create('div', 'gz-config-section-title');
-    sequenceTitle.textContent = 'Torrent Name Sequence Order';
-    sequenceSection.appendChild(sequenceTitle);
-
-    const sequenceDesc = create('div', 'gz-config-input-label');
-    sequenceDesc.textContent = 'Drag to reorder, toggle checkbox to enable/disable:';
-    sequenceDesc.style.marginBottom = '10px';
-    sequenceSection.appendChild(sequenceDesc);
-
-    const sequenceList = create('div', 'gz-sequence-list');
     let currentSequence = [...SEQUENCE_CONFIG.order];
     let disabledItems = new Set(SEQUENCE_CONFIG.disabled);
-
-    const createSequenceItem = (key) => {
-      const isDisabled = disabledItems.has(key);
-      const item = create('div', 'gz-sequence-item' + (isDisabled ? ' disabled' : ''));
-      item.draggable = true;
-      item.dataset.key = key;
-
-      // Toggle checkbox
-      const toggle = create('input', 'gz-sequence-toggle');
-      toggle.type = 'checkbox';
-      toggle.checked = !isDisabled;
-      toggle.title = isDisabled ? 'Enable this component' : 'Disable this component';
-      toggle.onclick = (e) => {
-        e.stopPropagation();
-        if (toggle.checked) {
-          disabledItems.delete(key);
-        } else {
-          disabledItems.add(key);
-        }
-        renderSequenceList();
-      };
-
-      const handle = create('span', 'gz-sequence-handle');
-      const label = create('span', 'gz-sequence-label');
-      label.textContent = SEQUENCE_LABELS[key] || key;
-      const keySpan = create('span', 'gz-sequence-key');
-      keySpan.textContent = key;
-
-      item.appendChild(toggle);
-      item.appendChild(handle);
-      item.appendChild(label);
-      item.appendChild(keySpan);
-
-      // Drag events
-      item.addEventListener('dragstart', (e) => {
-        item.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', key);
+    const sample = { videoCodec: 'H.265', bitDepth: '10-bit', resolution: '2160p', country: 'USA', service: 'AMZN', source: 'WEB-DL', remux: 'Remux', seasonEpisode: 'S01E02', language: 'English', audio: 'DD+ 5.1', atmos: 'Atmos', hdr: 'HDR10', hybrid: 'Hybrid', cut: 'Extended', repack: 'REPACK', scene: 'Scene', group: 'Group' };
+    const preview = el('div', 'gz-config-preview');
+    preview.append(el('div', 'gz-config-eyebrow', 'NAME PREVIEW · SAMPLE COMPONENTS'));
+    const previewName = el('div', 'gz-config-preview-name');
+    preview.append(previewName);
+    const updatePreview = () => {
+      previewName.replaceChildren();
+      currentSequence.filter(key => !disabledItems.has(key)).forEach(key => {
+        const part = el('span', '', sample[key]);
+        if (inputs.enableComponentColors.checked) part.style.color = colorInputs[key].value;
+        previewName.append(part);
       });
-
-      item.addEventListener('dragend', () => {
-        item.classList.remove('dragging');
-        document.querySelectorAll('.gz-sequence-item').forEach(el => el.classList.remove('drag-over'));
-      });
-
-      item.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        const dragging = document.querySelector('.gz-sequence-item.dragging');
-        if (dragging && dragging !== item) {
-          item.classList.add('drag-over');
-        }
-      });
-
-      item.addEventListener('dragleave', () => {
-        item.classList.remove('drag-over');
-      });
-
-      item.addEventListener('drop', (e) => {
-        e.preventDefault();
-        item.classList.remove('drag-over');
-        const draggedKey = e.dataTransfer.getData('text/plain');
-        const targetKey = item.dataset.key;
-
-        if (draggedKey && draggedKey !== targetKey) {
-          const draggedIndex = currentSequence.indexOf(draggedKey);
-          const targetIndex = currentSequence.indexOf(targetKey);
-
-          if (draggedIndex !== -1 && targetIndex !== -1) {
-            // Remove from old position
-            currentSequence.splice(draggedIndex, 1);
-            // Insert at new position
-            currentSequence.splice(targetIndex, 0, draggedKey);
-
-            // Re-render list
-            renderSequenceList();
-          }
-        }
-      });
-
-      return item;
+      if (!previewName.childElementCount) previewName.textContent = 'All components are hidden.';
+      colorsGrid.classList.toggle('is-muted', !inputs.enableComponentColors.checked);
     };
+    const colorsGrid = el('div', 'gz-config-colors');
+    Object.keys(DEFAULT_CONFIG.componentColors).forEach(key => {
+      const label = el('label', 'gz-config-color');
+      const input = el('input'); input.type = 'color';
+      input.value = CONFIG.componentColors[key] || DEFAULT_CONFIG.componentColors[key];
+      colorInputs[key] = input;
+      label.append(input, el('span', '', SEQUENCE_LABELS[key]));
+      colorsGrid.append(label);
+      input.addEventListener('input', updatePreview);
+    });
+    colors.append(colorsGrid, button('Reset colors', () => {
+      Object.keys(colorInputs).forEach(key => { colorInputs[key].value = DEFAULT_CONFIG.componentColors[key]; });
+      updatePreview(); markDirty();
+    }));
+    inputs.enableComponentColors.addEventListener('change', updatePreview);
 
+    names.append(el('h4', 'gz-config-subtitle', 'Component order'), el('p', 'gz-config-help', 'Drag to reorder, or use the arrow buttons. Uncheck a component to hide it.'));
+    const sequenceList = el('div', 'gz-sequence-list');
+    const sequenceStatus = el('span', 'gz-config-sr-only');
+    sequenceStatus.setAttribute('aria-live', 'polite');
+    const move = (key, targetIndex) => {
+      const index = currentSequence.indexOf(key);
+      if (index < 0 || targetIndex < 0 || targetIndex >= currentSequence.length || index === targetIndex) return;
+      currentSequence.splice(index, 1); currentSequence.splice(targetIndex, 0, key);
+      renderSequenceList(); updatePreview(); markDirty();
+      sequenceStatus.textContent = `${SEQUENCE_LABELS[key]} moved to position ${targetIndex + 1}.`;
+    };
     const renderSequenceList = () => {
-      sequenceList.innerHTML = '';
-      currentSequence.forEach(key => {
-        sequenceList.appendChild(createSequenceItem(key));
+      sequenceList.replaceChildren();
+      currentSequence.forEach((key, index) => {
+        const item = el('div', 'gz-sequence-item');
+        item.dataset.key = key; item.draggable = true;
+        item.classList.toggle('disabled', disabledItems.has(key));
+        const label = el('label', 'gz-sequence-label');
+        const toggle = el('input', 'gz-sequence-toggle');
+        toggle.type = 'checkbox'; toggle.checked = !disabledItems.has(key);
+        toggle.onchange = () => {
+          if (toggle.checked) disabledItems.delete(key); else disabledItems.add(key);
+          item.classList.toggle('disabled', !toggle.checked);
+          updatePreview(); markDirty();
+        };
+        label.append(toggle, el('span', '', SEQUENCE_LABELS[key]));
+        const handle = el('span', 'gz-sequence-handle', '⠿'); handle.setAttribute('aria-hidden', 'true');
+        item.append(handle, label);
+        [-1, 1].forEach(direction => {
+          const arrow = button(direction === -1 ? '↑' : '↓', () => {
+            move(key, index + direction);
+            const moved = sequenceList.querySelector(`[data-key="${key}"]`);
+            const preferred = moved.querySelector(`[data-direction="${direction}"]`);
+            (preferred.disabled ? moved.querySelector('input') : preferred).focus();
+          }, 'gz-config-btn gz-sequence-arrow');
+          arrow.dataset.direction = direction;
+          arrow.setAttribute('aria-label', `Move ${SEQUENCE_LABELS[key]} ${direction === -1 ? 'up' : 'down'}`);
+          arrow.disabled = index + direction < 0 || index + direction >= currentSequence.length;
+          item.append(arrow);
+        });
+        item.ondragstart = event => {
+          event.dataTransfer.setData('text/plain', key); event.dataTransfer.effectAllowed = 'move';
+          item.classList.add('dragging');
+        };
+        item.ondragend = () => sequenceList.querySelectorAll('.gz-sequence-item').forEach(node => node.classList.remove('dragging', 'drag-over'));
+        item.ondragover = event => { event.preventDefault(); item.classList.add('drag-over'); };
+        item.ondragleave = () => item.classList.remove('drag-over');
+        item.ondrop = event => {
+          event.preventDefault(); item.classList.remove('drag-over');
+          move(event.dataTransfer.getData('text/plain'), currentSequence.indexOf(key));
+        };
+        sequenceList.append(item);
       });
     };
+    names.append(sequenceList, sequenceStatus, button('Reset component order', () => {
+      currentSequence = [...DEFAULT_GAZELLIFY_SEQUENCE]; disabledItems = new Set();
+      renderSequenceList(); updatePreview(); markDirty();
+    }));
+    renderSequenceList(); updatePreview();
 
-    renderSequenceList();
-    sequenceSection.appendChild(sequenceList);
-
-    // Reset button
-    const resetBtn = create('button', 'gz-sequence-reset');
-    resetBtn.textContent = '↺ Reset to Default';
-    resetBtn.onclick = () => {
-      currentSequence = [...DEFAULT_GAZELLIFY_SEQUENCE];
-      disabledItems = new Set();
-      renderSequenceList();
-    };
-    sequenceSection.appendChild(resetBtn);
-
-    modal.appendChild(sequenceSection);
-
-    // Buttons
-    const buttons = create('div', 'gz-config-buttons');
-    const cancelBtn = create('button', 'gz-config-btn gz-config-btn--cancel');
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.onclick = () => overlay.remove();
-
-    const saveBtn = create('button', 'gz-config-btn gz-config-btn--save');
-    saveBtn.textContent = 'Save & Reload';
-    saveBtn.onclick = () => {
-      // Save API key
-      const newApiKey = apiInput.value.trim();
-      saveApiKey(newApiKey);
-
-      // Save config options
-      const newConfig = {};
-      CONFIG_OPTIONS.forEach(opt => {
-        if (opt.type === 'number') {
-          newConfig[opt.key] = parseInt(inputs[opt.key].value, 10) || DEFAULT_CONFIG[opt.key];
-        } else {
-          newConfig[opt.key] = inputs[opt.key].checked;
-        }
-      });
-
-      newConfig.componentColors = {};
-      Object.keys(DEFAULT_CONFIG.componentColors).forEach(key => {
-        newConfig.componentColors[key] = colorInputs[key].value;
-      });
-
-      saveUserConfig(newConfig);
-
-      // Save sequence order and disabled items
-      saveGazellifySequence(currentSequence, disabledItems);
-
-      // Reload to apply changes
-      overlay.remove();
-      window.location.reload();
-    };
-
-    buttons.appendChild(cancelBtn);
-    buttons.appendChild(saveBtn);
-    modal.appendChild(buttons);
-
-    overlay.appendChild(modal);
-    overlay.onclick = (e) => {
-      if (e.target === overlay) overlay.remove();
-    };
-
-    document.body.appendChild(overlay);
+    const footer = el('footer', 'gz-config-buttons');
+    const status = el('span', 'gz-config-save-status', 'Changes apply after reload');
+    status.setAttribute('role', 'status');
+    const markDirty = () => { status.textContent = 'Unsaved changes'; status.classList.remove('is-error'); };
+    modal.addEventListener('input', markDirty);
+    modal.addEventListener('change', markDirty);
+    const save = button('Save & reload', () => {
+      const font = inputs.baseFontSize;
+      if (!font.checkValidity()) {
+        activate('general'); font.focus(); font.reportValidity();
+        status.textContent = 'Enter a font size from 50 to 200%.'; status.classList.add('is-error'); return;
+      }
+      const newConfig = { ...CONFIG, componentColors: {} };
+      CONFIG_OPTIONS.forEach(opt => { newConfig[opt.key] = opt.type === 'number' ? Number(inputs[opt.key].value) : inputs[opt.key].checked; });
+      Object.keys(colorInputs).forEach(key => { newConfig.componentColors[key] = colorInputs[key].value; });
+      if (!saveUserConfig(newConfig) || !saveGazellifySequence(currentSequence, disabledItems) || !saveApiKey(apiInput.value.trim())) {
+        status.textContent = 'Could not save all settings. Please retry.'; status.classList.add('is-error'); return;
+      }
+      close(); window.location.reload();
+    }, 'gz-config-btn gz-config-btn--save');
+    footer.append(status, button('Cancel', close), save);
+    workspace.append(nav, body);
+    modal.append(header, workspace, preview, footer);
+    overlay.append(modal);
+    overlay.onclick = event => { if (event.target === overlay) close(); };
+    activate('general');
+    background.forEach(([node]) => { node.inert = true; });
+    document.body.style.overflow = 'hidden';
+    document.body.append(overlay);
+    document.addEventListener('keydown', onKeydown, true);
+    closeBtn.focus();
   };
 
   // Inject config button into footer
@@ -343,8 +325,9 @@
     // Check if already injected
     if (targetSection.querySelector('.gz-config-link')) return;
 
-    const configLink = create('span', 'gz-config-link');
-    configLink.textContent = '⚙️ GAZELL3D Config';
+    const configLink = create('button', 'gz-config-link');
+    configLink.type = 'button';
+    configLink.textContent = '⚙ GAZELL3D Settings';
     configLink.onclick = showConfigModal;
     targetSection.appendChild(configLink);
   };

@@ -1,3 +1,16 @@
+## Settings
+
+Open **GAZELL3D Settings** in the site footer. The menu follows the active
+Aither theme and groups preferences into layout, torrent names, component colors,
+and API connection. Name and color changes update a sample preview; components
+can be reordered by dragging or with the arrow buttons.
+
+**Save & reload** applies your changes. Cancel, Escape, or clicking outside the
+menu discards the draft. Color and component-order resets affect only the draft
+until saved. Existing stored preferences remain compatible. Font size accepts
+whole percentages from 50 to 200. API keys stay masked until you choose Show;
+saving a key does not verify the connection.
+
 ## Development
 
 `GAZELL3D.user.js` is generated from the smaller source files in `src/`.

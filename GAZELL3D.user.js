@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      2.0.3
+// @version      2.1.0
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
@@ -3843,291 +3843,100 @@ transform: scale(2.35);
       color: #fff;
     }
 
-    /* Config Button (Footer) */
-    .gz-config-link {
-      cursor: pointer;
-      color: inherit;
-      opacity: 0.8;
-      transition: opacity 0.15s ease;
-      font-size: 0.9em;
-      margin-top: 8px;
-      display: inline-block;
-    }
-
-    .gz-config-link:hover {
-      opacity: 1;
-      text-decoration: underline;
-    }
-
-    /* Config Modal Styles */
+    /* Settings inherit the active UNIT3D theme, with Starry Night fallbacks. */
+    .gz-config-link { display: inline-block; margin-top: 8px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+    .gz-config-link:hover { text-decoration: underline; }
     .gz-config-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.75);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10000;
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
+      --gz-settings-bg: var(--dialog-bg, #1e2433);
+      --gz-settings-fg: var(--dialog-fg, var(--text-color, #ccc));
+      --gz-settings-head: var(--dialog-head-bg, #0e111d);
+      --gz-settings-row: var(--data-table-tr-even-bg, #272d3d);
+      --gz-settings-border: color-mix(in srgb, var(--gz-settings-fg) 18%, transparent);
+      --gz-settings-accent: var(--button-filled-bg, #586379);
+      position: fixed; inset: 0; z-index: 10000; padding: 24px;
+      display: flex; align-items: center; justify-content: center;
+      background: #0009; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+      color: var(--gz-settings-fg); font: 14px/1.5 system-ui, sans-serif; text-align: left;
     }
-
+    .gz-config-overlay *, .gz-config-overlay *::before, .gz-config-overlay *::after { box-sizing: border-box; }
     .gz-config-modal {
-      background: rgba(30, 30, 35, 0.95);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 12px;
-      padding: 24px;
-      width: 90%;
-      max-width: 500px;
-      max-height: 80vh;
-      overflow-y: auto;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      display: flex; flex-direction: column; width: 920px; max-width: 100%;
+      height: 790px; max-height: calc(100dvh - 48px); min-height: 0;
+      background: var(--gz-settings-bg); border: 1px solid var(--gz-settings-border);
+      border-radius: 12px; overflow: hidden; box-shadow: 0 24px 90px #0008;
     }
-
-    .gz-config-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    .gz-config-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 26px; background: var(--gz-settings-head); border-bottom: 1px solid var(--gz-settings-border); }
+    .gz-config-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .12em; opacity: .75; }
+    .gz-config-modal .gz-config-title { font-size: 23px; font-weight: 600; color: var(--dialog-head-fg, #fff); margin: 0; line-height: 1.3; }
+    .gz-config-workspace { display: flex; flex: 1; min-height: 0; }
+    .gz-config-nav { flex: 0 0 195px; padding: 20px 12px; border-right: 1px solid var(--gz-settings-border); background: var(--gz-settings-head); }
+    .gz-config-nav-button { display: block; width: 100%; text-align: left; padding: 11px 12px; margin: 0 0 5px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+    .gz-config-nav-button[aria-current] { background: var(--gz-settings-row); border-color: var(--gz-settings-border); color: var(--dialog-head-fg, #fff); box-shadow: inset 3px 0 var(--gz-settings-accent); }
+    .gz-config-nav-button:hover { background: var(--gz-settings-row); }
+    .gz-config-body { flex: 1; min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding: 24px 28px; scrollbar-width: thin; }
+    .gz-config-section[hidden] { display: none !important; }
+    .gz-config-modal .gz-config-section-title { font-size: 19px; line-height: 1.3; margin: 0 0 8px; color: inherit; font-weight: 600; }
+    .gz-config-description { margin: 0 0 22px; opacity: .75; font-size: 13px; }
+    .gz-config-field { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 0; margin: 0; border-bottom: 1px solid var(--gz-settings-border); cursor: pointer; }
+    .gz-config-field-copy { min-width: 0; }
+    .gz-config-label { display: block; color: inherit; font-size: 14px; font-weight: 500; }
+    .gz-config-help { display: block; margin: 4px 0 0; font-size: 12px; opacity: .72; line-height: 1.5; }
+    .gz-config-toggle { appearance: none; -webkit-appearance: none; flex: 0 0 36px; width: 36px; height: 21px; margin: 0; padding: 2px; border: 1px solid var(--gz-settings-border); border-radius: 20px; background: var(--gz-settings-head); cursor: pointer; }
+    .gz-config-toggle::before { content: ''; display: block; width: 15px; height: 15px; border-radius: 50%; background: var(--gz-settings-fg); transition: transform .15s; }
+    .gz-config-toggle:checked { background: var(--gz-settings-accent); }
+    .gz-config-toggle:checked::before { transform: translateX(15px); background: var(--button-filled-fg, #fff); }
+    .gz-config-input { width: 100%; min-width: 0; padding: 10px 12px; background: var(--gz-settings-head); border: 1px solid var(--gz-settings-border); border-radius: 6px; color: inherit; font: inherit; }
+    .gz-config-input::placeholder { color: inherit; opacity: .5; }
+    .gz-config-number { flex: 0 0 80px; width: 80px; }
+    .gz-config-input-label { display: block; margin: 22px 0 8px; font-size: 13px; }
+    .gz-config-api-row { display: flex; gap: 8px; }
+    .gz-config-notice { margin: 16px 0 10px; padding: 12px; border: 1px solid var(--gz-settings-border); border-radius: 6px; background: var(--gz-settings-row); font-size: 12px; }
+    .gz-config-colors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 18px 0; }
+    .gz-config-colors.is-muted { opacity: .55; }
+    .gz-config-color { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 10px; margin: 0; border: 1px solid var(--gz-settings-border); border-radius: 6px; background: var(--gz-settings-row); font-size: 12px; cursor: pointer; }
+    .gz-config-color input { appearance: none; -webkit-appearance: none; width: 28px; height: 28px; flex: 0 0 28px; padding: 0; border: 1px solid var(--gz-settings-border); border-radius: 5px; overflow: hidden; background: none; cursor: pointer; }
+    .gz-config-color input::-webkit-color-swatch-wrapper { padding: 0; }
+    .gz-config-color input::-webkit-color-swatch { border: 0; border-radius: 3px; }
+    .gz-config-color input::-moz-color-swatch { border: 0; }
+    .gz-config-modal .gz-config-subtitle { margin: 24px 0 4px; font-size: 15px; color: inherit; }
+    .gz-sequence-list { display: flex; flex-direction: column; gap: 5px; margin: 14px 0; }
+    .gz-sequence-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--gz-settings-border); border-radius: 6px; background: var(--gz-settings-row); }
+    .gz-sequence-label { display: flex; align-items: center; gap: 10px; flex: 1; margin: 0; font-size: 13px; cursor: pointer; }
+    .gz-sequence-toggle { width: 16px; height: 16px; margin: 0; flex-shrink: 0; accent-color: var(--gz-settings-accent); }
+    .gz-sequence-handle { cursor: grab; opacity: .5; font-size: 18px; }
+    .gz-sequence-item.disabled .gz-sequence-label span { opacity: .5; text-decoration: line-through; }
+    .gz-sequence-item.dragging { opacity: .4; }
+    .gz-sequence-item.drag-over { outline: 2px solid var(--gz-settings-accent); }
+    .gz-config-preview { flex-shrink: 0; padding: 14px 26px; border-top: 1px solid var(--gz-settings-border); background: var(--gz-settings-head); }
+    .gz-config-preview-name { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 7px; font: 12px/1.5 ui-monospace, monospace; max-height: 80px; overflow-y: auto; }
+    .gz-config-buttons { display: flex; flex-shrink: 0; align-items: center; gap: 10px; padding: 16px 26px; border-top: 1px solid var(--gz-settings-border); }
+    .gz-config-save-status { flex: 1; font-size: 12px; opacity: .75; }
+    .gz-config-save-status.is-error { opacity: 1; color: var(--color-light-red, #ec8b99); }
+    .gz-config-btn { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 9px 14px; border: 1px solid var(--gz-settings-border); border-radius: 6px; background: var(--gz-settings-row); color: inherit; font: 500 13px/1.4 system-ui, sans-serif; cursor: pointer; text-decoration: none; }
+    .gz-config-btn:hover { filter: brightness(1.15); }
+    .gz-config-btn--save { background: var(--gz-settings-accent); color: var(--button-filled-fg, #fff); }
+    .gz-config-close { width: 34px; height: 34px; padding: 0; font-size: 24px; background: transparent; }
+    .gz-sequence-arrow { padding: 4px; width: 28px; height: 28px; }
+    .gz-config-btn:disabled { opacity: .3; cursor: default; }
+    .gz-config-overlay :focus-visible, .gz-config-link:focus-visible { outline: 2px solid var(--color-light-blue, #8ab4e8); outline-offset: 3px; }
+    .gz-config-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    @media (max-width: 640px) {
+      .gz-config-overlay { padding: 8px; }
+      .gz-config-modal { max-height: calc(100dvh - 16px); height: 850px; }
+      .gz-config-header { padding: 16px; }
+      .gz-config-modal .gz-config-title { font-size: 20px; }
+      .gz-config-workspace { flex-direction: column; }
+      .gz-config-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex: 0 0 auto; padding: 8px; border-right: 0; border-bottom: 1px solid var(--gz-settings-border); }
+      .gz-config-nav-button { margin: 0; padding: 8px; font-size: 12px; }
+      .gz-config-body { padding: 18px 16px; }
+      .gz-config-field { gap: 12px; }
+      .gz-config-preview { padding: 12px 16px; }
+      .gz-config-buttons { padding: 12px 16px; flex-wrap: wrap; }
+      .gz-config-save-status { flex-basis: 100%; }
+      .gz-config-buttons > button { flex: 1; }
     }
-
-    .gz-config-title {
-      font-size: 1.15em;
-      font-weight: 600;
-      color: #fff;
-      margin: 0;
-    }
-
-    .gz-config-close {
-      background: none;
-      border: none;
-      color: rgba(255, 255, 255, 0.6);
-      font-size: 1.5em;
-      cursor: pointer;
-      padding: 0;
-      line-height: 1;
-      transition: color 0.15s ease;
-    }
-
-    .gz-config-close:hover {
-      color: #fff;
-    }
-
-    .gz-config-section {
-      margin-bottom: 20px;
-    }
-
-    .gz-config-section-title {
-      font-size: 0.85em;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: rgba(255, 255, 255, 0.5);
-      margin-bottom: 12px;
-    }
-
-    .gz-config-field {
-      margin-bottom: 14px;
-    }
-
-    .gz-config-field:last-child {
-      margin-bottom: 0;
-    }
-
-    .gz-config-label {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      cursor: pointer;
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 0.9em;
-    }
-
-    .gz-config-label input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      accent-color: rgba(118, 219, 166, 0.9);
-    }
-
-    .gz-config-input-field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .gz-config-input-label {
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 0.9em;
-    }
-
-    .gz-config-input {
-      padding: 10px 12px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 6px;
-      color: #fff;
-      font-size: 0.9em;
-      font-family: inherit;
-      transition: border-color 0.15s ease, background 0.15s ease;
-    }
-
-    .gz-config-input:focus {
-      outline: none;
-      border-color: rgba(118, 219, 166, 0.6);
-      background: rgba(255, 255, 255, 0.08);
-    }
-
-    .gz-config-input::placeholder {
-      color: rgba(255, 255, 255, 0.4);
-    }
-
-    .gz-config-buttons {
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-      margin-top: 20px;
-      padding-top: 16px;
-      border-top: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .gz-config-btn {
-      padding: 10px 20px;
-      border-radius: 6px;
-      font-size: 0.9em;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s ease;
-      border: none;
-    }
-
-    .gz-config-btn--cancel {
-      background: rgba(255, 255, 255, 0.1);
-      color: rgba(255, 255, 255, 0.8);
-    }
-
-    .gz-config-btn--cancel:hover {
-      background: rgba(255, 255, 255, 0.15);
-      color: #fff;
-    }
-
-    .gz-config-btn--save {
-      background: rgba(118, 219, 166, 0.85);
-      color: rgb(20, 20, 25);
-    }
-
-    .gz-config-btn--save:hover {
-      background: rgba(118, 219, 166, 1);
-    }
-
-    /* Sequence Ordering (Drag & Drop) */
-    .gz-sequence-list {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      padding: 8px;
-      background: rgba(0, 0, 0, 0.2);
-      border-radius: 8px;
-      max-height: 280px;
-      overflow-y: auto;
-    }
-
-    .gz-sequence-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 6px;
-      cursor: grab;
-      transition: all 0.15s ease;
-      user-select: none;
-    }
-
-    .gz-sequence-item:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: rgba(255, 255, 255, 0.15);
-    }
-
-    .gz-sequence-item:active {
-      cursor: grabbing;
-    }
-
-    .gz-sequence-item.dragging {
-      opacity: 0.5;
-      background: rgba(118, 219, 166, 0.1);
-      border-color: rgba(118, 219, 166, 0.3);
-    }
-
-    .gz-sequence-item.drag-over {
-      border-color: rgba(118, 219, 166, 0.6);
-      background: rgba(118, 219, 166, 0.15);
-    }
-
-    .gz-sequence-handle {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      opacity: 0.5;
-      color: rgba(255, 255, 255, 0.6);
-      font-size: 0.8em;
-    }
-
-    .gz-sequence-handle::before {
-      content: '⋮⋮';
-      letter-spacing: -2px;
-    }
-
-    .gz-sequence-label {
-      flex: 1;
-      font-size: 0.9em;
-      color: rgba(255, 255, 255, 0.9);
-    }
-
-    .gz-sequence-key {
-      font-size: 0.75em;
-      color: rgba(255, 255, 255, 0.4);
-      font-family: monospace;
-    }
-
-    .gz-sequence-reset {
-      margin-top: 8px;
-      padding: 6px 12px;
-      font-size: 0.8em;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
-      color: rgba(255, 255, 255, 0.6);
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-
-    .gz-sequence-reset:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: rgba(255, 255, 255, 0.9);
-    }
-
-    .gz-sequence-toggle {
-      width: 16px;
-      height: 16px;
-      accent-color: rgba(118, 219, 166, 0.9);
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .gz-sequence-item.disabled {
-      opacity: 0.5;
-      background: rgba(255, 255, 255, 0.02);
-    }
-
-    .gz-sequence-item.disabled .gz-sequence-label {
-      text-decoration: line-through;
-      color: rgba(255, 255, 255, 0.5);
-    }
+    @media (max-width: 380px) { .gz-config-colors { grid-template-columns: 1fr; } }
+    @media (prefers-reduced-motion: reduce) { .gz-config-toggle::before { transition: none; } }
 
     /* Native UNIT3D BBCode rendered styles */
     .bbcode-rendered { font-size: 15px; line-height: 1.5; word-wrap: break-word; color: rgba(255, 255, 255, 0.85); margin: 0; }
@@ -7960,286 +7769,268 @@ const getSearchResultTorrentId = (row, link) => {
     { key: 'baseFontSize', label: 'Base Font Size (%)', type: 'number', min: 50, max: 200 },
   ];
 
-  // Create and show config modal
+  // Each opening edits an isolated draft; only Save writes to userscript storage.
   const showConfigModal = () => {
-    // Remove any existing modal
-    const existing = document.querySelector('.gz-config-overlay');
-    if (existing) existing.remove();
-
+    if (document.querySelector('.gz-config-overlay')) return;
+    const previousFocus = document.activeElement;
     const overlay = create('div', 'gz-config-overlay');
     const modal = create('div', 'gz-config-modal');
-
-    // Header
-    const header = create('div', 'gz-config-header');
-    const title = create('h3', 'gz-config-title');
-    title.textContent = '⚙️ GAZELL3D Settings';
-    const closeBtn = create('button', 'gz-config-close');
-    closeBtn.textContent = '×';
-    closeBtn.onclick = () => overlay.remove();
-    header.appendChild(title);
-    header.appendChild(closeBtn);
-    modal.appendChild(header);
-
-    // API Key Section
-    const apiSection = create('div', 'gz-config-section');
-    const apiTitle = create('div', 'gz-config-section-title');
-    apiTitle.textContent = 'API Key';
-    apiSection.appendChild(apiTitle);
-
-    const apiField = create('div', 'gz-config-input-field');
-    const apiLabel = create('label', 'gz-config-input-label');
-    apiLabel.textContent = 'Aither API Key (required for dropdowns)';
-    apiLabel.setAttribute('for', 'gz-api-key-input');
-    const apiInput = create('input', 'gz-config-input');
-    apiInput.type = 'password';
-    apiInput.id = 'gz-api-key-input';
-    apiInput.placeholder = 'Enter your API key...';
-    apiInput.value = AITHER_API_KEY || '';
-    apiField.appendChild(apiLabel);
-    apiField.appendChild(apiInput);
-    apiSection.appendChild(apiField);
-    modal.appendChild(apiSection);
-
-    // Options Section
-    const optionsSection = create('div', 'gz-config-section');
-    const optionsTitle = create('div', 'gz-config-section-title');
-    optionsTitle.textContent = 'Options';
-    optionsSection.appendChild(optionsTitle);
-
-    const inputs = {};
-    CONFIG_OPTIONS.forEach(opt => {
-      const field = create('div', 'gz-config-field');
-      const label = create('label', 'gz-config-label');
-
-      if (opt.type === 'number') {
-        const input = create('input');
-        input.type = 'number';
-        input.min = opt.min || 0;
-        input.max = opt.max || 1000;
-        input.value = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
-        input.style.width = '60px';
-        input.style.marginRight = '8px';
-        inputs[opt.key] = input;
-
-        label.appendChild(input);
-        label.appendChild(document.createTextNode(opt.label));
-      } else {
-        const checkbox = create('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
-        inputs[opt.key] = checkbox;
-
-        label.appendChild(checkbox);
-        label.appendChild(document.createTextNode(opt.label));
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'gz-config-title');
+    const el = (tag, className, text) => {
+      const node = create(tag, className);
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+    const button = (text, action, className = 'gz-config-btn') => {
+      const node = el('button', className, text);
+      node.type = 'button';
+      node.onclick = action;
+      return node;
+    };
+    const background = [...document.body.children].map(node => [node, node.inert]);
+    const previousOverflow = document.body.style.overflow;
+    const close = () => {
+      document.removeEventListener('keydown', onKeydown, true);
+      overlay.remove();
+      background.forEach(([node, inert]) => { node.inert = inert; });
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+    const onKeydown = event => {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); }
+      if (event.key !== 'Tab') return;
+      const focusable = [...modal.querySelectorAll('button, input, [tabindex="0"]')]
+        .filter(node => !node.disabled && !node.closest('[hidden]'));
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) {
+        event.preventDefault(); first.focus();
       }
+    };
 
-      field.appendChild(label);
-      optionsSection.appendChild(field);
+    const header = el('header', 'gz-config-header');
+    const heading = el('div');
+    const title = el('h2', 'gz-config-title', 'GAZELL3D Settings');
+    title.id = 'gz-config-title';
+    heading.append(title);
+    const closeBtn = button('×', close, 'gz-config-btn gz-config-close');
+    closeBtn.setAttribute('aria-label', 'Close settings');
+    header.append(heading, closeBtn);
+    const workspace = el('div', 'gz-config-workspace');
+    const nav = el('nav', 'gz-config-nav');
+    nav.setAttribute('aria-label', 'Settings sections');
+    const body = el('div', 'gz-config-body');
+    const panels = {}, navButtons = {};
+    const activate = key => {
+      Object.keys(panels).forEach(id => {
+        panels[id].hidden = id !== key;
+        if (id === key) navButtons[id].setAttribute('aria-current', 'page');
+        else navButtons[id].removeAttribute('aria-current');
+      });
+      preview.hidden = key !== 'names' && key !== 'colors';
+      body.scrollTop = 0;
+    };
+    const section = (key, name, description) => {
+      const panel = el('section', 'gz-config-section');
+      panel.id = `gz-settings-${key}`;
+      panel.append(el('h3', 'gz-config-section-title', name), el('p', 'gz-config-description', description));
+      const link = button(name, () => activate(key), 'gz-config-nav-button');
+      link.setAttribute('aria-controls', panel.id);
+      panels[key] = panel; navButtons[key] = link;
+      nav.append(link); body.append(panel);
+      return panel;
+    };
+    const general = section('general', 'Layout & display', 'Fine-tune the way torrent pages look and behave.');
+    const names = section('names', 'Torrent names', 'Choose where to simplify release names and how their components appear.');
+    const colors = section('colors', 'Component colors', 'Give each part of a release name its own color.');
+    const connection = section('connection', 'API connection', 'Connect your Aither API key to load expanded torrent details.');
+    const inputs = {}, colorInputs = {};
+    const namingKeys = new Set(['enableGazellifySimilar', 'enableGazellifyDetail', 'enableGazellifySearch', 'enableOriginalTitleTooltip']);
+    const descriptions = {
+      removeTorrentIcons: 'Hide standard torrent icons for a cleaner listing.',
+      enableGazellifySimilar: 'Simplify names in grouped torrent listings.',
+      enableGazellifyDetail: 'Simplify the title on individual torrent pages.',
+      enableGazellifySearch: 'Simplify release names in search results.',
+      enableOriginalTitleTooltip: 'Keep the full release name available on hover.',
+      showEditButton: 'Show the edit action on torrent pages.',
+      enableSideLayout: 'Place torrent information in a side column.',
+      enableGazelleButtons: 'Use compact Gazelle-style torrent actions.',
+      enableGazelleTorrentLayout: 'Arrange grouped releases in a Gazelle-style table.',
+      enableTorrentDropdowns: 'Expand details inline. An API key is required.',
+      enableComponentColors: 'Apply the palette below to simplified names.',
+      baseFontSize: 'Scale similar and detail page content. Default: 100%.',
+    };
+    CONFIG_OPTIONS.forEach(opt => {
+      const label = el('label', 'gz-config-field');
+      const copy = el('span', 'gz-config-field-copy');
+      copy.append(el('span', 'gz-config-label', opt.label), el('span', 'gz-config-help', descriptions[opt.key]));
+      const input = el('input', opt.type === 'number' ? 'gz-config-input gz-config-number' : 'gz-config-toggle');
+      input.id = `gz-option-${opt.key}`;
+      input.type = opt.type || 'checkbox';
+      if (opt.type === 'number') {
+        input.min = opt.min; input.max = opt.max; input.step = 1; input.required = true;
+        input.value = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
+      } else input.checked = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
+      inputs[opt.key] = input;
+      label.append(copy, input);
+      const target = namingKeys.has(opt.key) ? names : opt.key === 'enableComponentColors' ? colors : opt.key === 'enableTorrentDropdowns' ? connection : general;
+      target.append(label);
     });
-    modal.appendChild(optionsSection);
 
-    // Colors Section
-    const colorsSection = create('div', 'gz-config-section');
-    const colorsTitle = create('div', 'gz-config-section-title');
-    colorsTitle.textContent = 'Component Colors';
-    colorsSection.appendChild(colorsTitle);
-
-    const colorsGrid = create('div');
-    colorsGrid.style.display = 'grid';
-    colorsGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
-    colorsGrid.style.gap = '8px';
-
-    const colorInputs = {};
-    Object.keys(DEFAULT_CONFIG.componentColors).forEach(key => {
-      const field = create('div', 'gz-config-field');
-      const label = create('label', 'gz-config-label');
-      label.style.display = 'flex';
-      label.style.alignItems = 'center';
-
-      const input = create('input');
-      input.type = 'color';
-      input.value = CONFIG.componentColors[key] || DEFAULT_CONFIG.componentColors[key];
-      input.style.marginRight = '8px';
-      input.style.cursor = 'pointer';
-
-      colorInputs[key] = input;
-
-      label.appendChild(input);
-      label.appendChild(document.createTextNode(SEQUENCE_LABELS[key] || key));
-      field.appendChild(label);
-      colorsGrid.appendChild(field);
+    const apiLabel = el('label', 'gz-config-input-label', 'Aither API key');
+    apiLabel.htmlFor = 'gz-api-key-input';
+    const apiRow = el('div', 'gz-config-api-row');
+    const apiInput = el('input', 'gz-config-input');
+    apiInput.type = 'password'; apiInput.id = 'gz-api-key-input';
+    apiInput.autocomplete = 'off'; apiInput.spellcheck = false;
+    apiInput.placeholder = 'Paste your API key'; apiInput.value = AITHER_API_KEY || '';
+    const reveal = button('Show', () => {
+      const showing = apiInput.type === 'password';
+      apiInput.type = showing ? 'text' : 'password';
+      reveal.textContent = showing ? 'Hide' : 'Show';
+      reveal.setAttribute('aria-pressed', String(showing));
     });
+    reveal.setAttribute('aria-label', 'Show or hide API key');
+    reveal.setAttribute('aria-pressed', 'false');
+    apiRow.append(apiInput, reveal);
+    const apiStatus = el('p', 'gz-config-notice');
+    apiStatus.id = 'gz-api-status'; apiStatus.setAttribute('aria-live', 'polite');
+    apiInput.setAttribute('aria-describedby', apiStatus.id);
+    connection.append(apiLabel, apiRow, apiStatus, el('p', 'gz-config-help', 'Saved in your userscript manager. The key is used for requests to Aither; it is not checked when you save.'));
+    const updateApiStatus = () => {
+      apiStatus.textContent = apiInput.value.trim() ? 'Key entered · connection not verified' : inputs.enableTorrentDropdowns.checked ? 'Add a key to use torrent dropdowns. Other settings work without one.' : 'No key entered · torrent dropdowns are off';
+    };
+    apiInput.addEventListener('input', updateApiStatus);
+    inputs.enableTorrentDropdowns.addEventListener('change', updateApiStatus);
+    updateApiStatus();
 
-    colorsSection.appendChild(colorsGrid);
-    modal.appendChild(colorsSection);
-
-    // Sequence Order Section
-    const sequenceSection = create('div', 'gz-config-section');
-    const sequenceTitle = create('div', 'gz-config-section-title');
-    sequenceTitle.textContent = 'Torrent Name Sequence Order';
-    sequenceSection.appendChild(sequenceTitle);
-
-    const sequenceDesc = create('div', 'gz-config-input-label');
-    sequenceDesc.textContent = 'Drag to reorder, toggle checkbox to enable/disable:';
-    sequenceDesc.style.marginBottom = '10px';
-    sequenceSection.appendChild(sequenceDesc);
-
-    const sequenceList = create('div', 'gz-sequence-list');
     let currentSequence = [...SEQUENCE_CONFIG.order];
     let disabledItems = new Set(SEQUENCE_CONFIG.disabled);
-
-    const createSequenceItem = (key) => {
-      const isDisabled = disabledItems.has(key);
-      const item = create('div', 'gz-sequence-item' + (isDisabled ? ' disabled' : ''));
-      item.draggable = true;
-      item.dataset.key = key;
-
-      // Toggle checkbox
-      const toggle = create('input', 'gz-sequence-toggle');
-      toggle.type = 'checkbox';
-      toggle.checked = !isDisabled;
-      toggle.title = isDisabled ? 'Enable this component' : 'Disable this component';
-      toggle.onclick = (e) => {
-        e.stopPropagation();
-        if (toggle.checked) {
-          disabledItems.delete(key);
-        } else {
-          disabledItems.add(key);
-        }
-        renderSequenceList();
-      };
-
-      const handle = create('span', 'gz-sequence-handle');
-      const label = create('span', 'gz-sequence-label');
-      label.textContent = SEQUENCE_LABELS[key] || key;
-      const keySpan = create('span', 'gz-sequence-key');
-      keySpan.textContent = key;
-
-      item.appendChild(toggle);
-      item.appendChild(handle);
-      item.appendChild(label);
-      item.appendChild(keySpan);
-
-      // Drag events
-      item.addEventListener('dragstart', (e) => {
-        item.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', key);
+    const sample = { videoCodec: 'H.265', bitDepth: '10-bit', resolution: '2160p', country: 'USA', service: 'AMZN', source: 'WEB-DL', remux: 'Remux', seasonEpisode: 'S01E02', language: 'English', audio: 'DD+ 5.1', atmos: 'Atmos', hdr: 'HDR10', hybrid: 'Hybrid', cut: 'Extended', repack: 'REPACK', scene: 'Scene', group: 'Group' };
+    const preview = el('div', 'gz-config-preview');
+    preview.append(el('div', 'gz-config-eyebrow', 'NAME PREVIEW · SAMPLE COMPONENTS'));
+    const previewName = el('div', 'gz-config-preview-name');
+    preview.append(previewName);
+    const updatePreview = () => {
+      previewName.replaceChildren();
+      currentSequence.filter(key => !disabledItems.has(key)).forEach(key => {
+        const part = el('span', '', sample[key]);
+        if (inputs.enableComponentColors.checked) part.style.color = colorInputs[key].value;
+        previewName.append(part);
       });
-
-      item.addEventListener('dragend', () => {
-        item.classList.remove('dragging');
-        document.querySelectorAll('.gz-sequence-item').forEach(el => el.classList.remove('drag-over'));
-      });
-
-      item.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        const dragging = document.querySelector('.gz-sequence-item.dragging');
-        if (dragging && dragging !== item) {
-          item.classList.add('drag-over');
-        }
-      });
-
-      item.addEventListener('dragleave', () => {
-        item.classList.remove('drag-over');
-      });
-
-      item.addEventListener('drop', (e) => {
-        e.preventDefault();
-        item.classList.remove('drag-over');
-        const draggedKey = e.dataTransfer.getData('text/plain');
-        const targetKey = item.dataset.key;
-
-        if (draggedKey && draggedKey !== targetKey) {
-          const draggedIndex = currentSequence.indexOf(draggedKey);
-          const targetIndex = currentSequence.indexOf(targetKey);
-
-          if (draggedIndex !== -1 && targetIndex !== -1) {
-            // Remove from old position
-            currentSequence.splice(draggedIndex, 1);
-            // Insert at new position
-            currentSequence.splice(targetIndex, 0, draggedKey);
-
-            // Re-render list
-            renderSequenceList();
-          }
-        }
-      });
-
-      return item;
+      if (!previewName.childElementCount) previewName.textContent = 'All components are hidden.';
+      colorsGrid.classList.toggle('is-muted', !inputs.enableComponentColors.checked);
     };
+    const colorsGrid = el('div', 'gz-config-colors');
+    Object.keys(DEFAULT_CONFIG.componentColors).forEach(key => {
+      const label = el('label', 'gz-config-color');
+      const input = el('input'); input.type = 'color';
+      input.value = CONFIG.componentColors[key] || DEFAULT_CONFIG.componentColors[key];
+      colorInputs[key] = input;
+      label.append(input, el('span', '', SEQUENCE_LABELS[key]));
+      colorsGrid.append(label);
+      input.addEventListener('input', updatePreview);
+    });
+    colors.append(colorsGrid, button('Reset colors', () => {
+      Object.keys(colorInputs).forEach(key => { colorInputs[key].value = DEFAULT_CONFIG.componentColors[key]; });
+      updatePreview(); markDirty();
+    }));
+    inputs.enableComponentColors.addEventListener('change', updatePreview);
 
+    names.append(el('h4', 'gz-config-subtitle', 'Component order'), el('p', 'gz-config-help', 'Drag to reorder, or use the arrow buttons. Uncheck a component to hide it.'));
+    const sequenceList = el('div', 'gz-sequence-list');
+    const sequenceStatus = el('span', 'gz-config-sr-only');
+    sequenceStatus.setAttribute('aria-live', 'polite');
+    const move = (key, targetIndex) => {
+      const index = currentSequence.indexOf(key);
+      if (index < 0 || targetIndex < 0 || targetIndex >= currentSequence.length || index === targetIndex) return;
+      currentSequence.splice(index, 1); currentSequence.splice(targetIndex, 0, key);
+      renderSequenceList(); updatePreview(); markDirty();
+      sequenceStatus.textContent = `${SEQUENCE_LABELS[key]} moved to position ${targetIndex + 1}.`;
+    };
     const renderSequenceList = () => {
-      sequenceList.innerHTML = '';
-      currentSequence.forEach(key => {
-        sequenceList.appendChild(createSequenceItem(key));
+      sequenceList.replaceChildren();
+      currentSequence.forEach((key, index) => {
+        const item = el('div', 'gz-sequence-item');
+        item.dataset.key = key; item.draggable = true;
+        item.classList.toggle('disabled', disabledItems.has(key));
+        const label = el('label', 'gz-sequence-label');
+        const toggle = el('input', 'gz-sequence-toggle');
+        toggle.type = 'checkbox'; toggle.checked = !disabledItems.has(key);
+        toggle.onchange = () => {
+          if (toggle.checked) disabledItems.delete(key); else disabledItems.add(key);
+          item.classList.toggle('disabled', !toggle.checked);
+          updatePreview(); markDirty();
+        };
+        label.append(toggle, el('span', '', SEQUENCE_LABELS[key]));
+        const handle = el('span', 'gz-sequence-handle', '⠿'); handle.setAttribute('aria-hidden', 'true');
+        item.append(handle, label);
+        [-1, 1].forEach(direction => {
+          const arrow = button(direction === -1 ? '↑' : '↓', () => {
+            move(key, index + direction);
+            const moved = sequenceList.querySelector(`[data-key="${key}"]`);
+            const preferred = moved.querySelector(`[data-direction="${direction}"]`);
+            (preferred.disabled ? moved.querySelector('input') : preferred).focus();
+          }, 'gz-config-btn gz-sequence-arrow');
+          arrow.dataset.direction = direction;
+          arrow.setAttribute('aria-label', `Move ${SEQUENCE_LABELS[key]} ${direction === -1 ? 'up' : 'down'}`);
+          arrow.disabled = index + direction < 0 || index + direction >= currentSequence.length;
+          item.append(arrow);
+        });
+        item.ondragstart = event => {
+          event.dataTransfer.setData('text/plain', key); event.dataTransfer.effectAllowed = 'move';
+          item.classList.add('dragging');
+        };
+        item.ondragend = () => sequenceList.querySelectorAll('.gz-sequence-item').forEach(node => node.classList.remove('dragging', 'drag-over'));
+        item.ondragover = event => { event.preventDefault(); item.classList.add('drag-over'); };
+        item.ondragleave = () => item.classList.remove('drag-over');
+        item.ondrop = event => {
+          event.preventDefault(); item.classList.remove('drag-over');
+          move(event.dataTransfer.getData('text/plain'), currentSequence.indexOf(key));
+        };
+        sequenceList.append(item);
       });
     };
+    names.append(sequenceList, sequenceStatus, button('Reset component order', () => {
+      currentSequence = [...DEFAULT_GAZELLIFY_SEQUENCE]; disabledItems = new Set();
+      renderSequenceList(); updatePreview(); markDirty();
+    }));
+    renderSequenceList(); updatePreview();
 
-    renderSequenceList();
-    sequenceSection.appendChild(sequenceList);
-
-    // Reset button
-    const resetBtn = create('button', 'gz-sequence-reset');
-    resetBtn.textContent = '↺ Reset to Default';
-    resetBtn.onclick = () => {
-      currentSequence = [...DEFAULT_GAZELLIFY_SEQUENCE];
-      disabledItems = new Set();
-      renderSequenceList();
-    };
-    sequenceSection.appendChild(resetBtn);
-
-    modal.appendChild(sequenceSection);
-
-    // Buttons
-    const buttons = create('div', 'gz-config-buttons');
-    const cancelBtn = create('button', 'gz-config-btn gz-config-btn--cancel');
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.onclick = () => overlay.remove();
-
-    const saveBtn = create('button', 'gz-config-btn gz-config-btn--save');
-    saveBtn.textContent = 'Save & Reload';
-    saveBtn.onclick = () => {
-      // Save API key
-      const newApiKey = apiInput.value.trim();
-      saveApiKey(newApiKey);
-
-      // Save config options
-      const newConfig = {};
-      CONFIG_OPTIONS.forEach(opt => {
-        if (opt.type === 'number') {
-          newConfig[opt.key] = parseInt(inputs[opt.key].value, 10) || DEFAULT_CONFIG[opt.key];
-        } else {
-          newConfig[opt.key] = inputs[opt.key].checked;
-        }
-      });
-
-      newConfig.componentColors = {};
-      Object.keys(DEFAULT_CONFIG.componentColors).forEach(key => {
-        newConfig.componentColors[key] = colorInputs[key].value;
-      });
-
-      saveUserConfig(newConfig);
-
-      // Save sequence order and disabled items
-      saveGazellifySequence(currentSequence, disabledItems);
-
-      // Reload to apply changes
-      overlay.remove();
-      window.location.reload();
-    };
-
-    buttons.appendChild(cancelBtn);
-    buttons.appendChild(saveBtn);
-    modal.appendChild(buttons);
-
-    overlay.appendChild(modal);
-    overlay.onclick = (e) => {
-      if (e.target === overlay) overlay.remove();
-    };
-
-    document.body.appendChild(overlay);
+    const footer = el('footer', 'gz-config-buttons');
+    const status = el('span', 'gz-config-save-status', 'Changes apply after reload');
+    status.setAttribute('role', 'status');
+    const markDirty = () => { status.textContent = 'Unsaved changes'; status.classList.remove('is-error'); };
+    modal.addEventListener('input', markDirty);
+    modal.addEventListener('change', markDirty);
+    const save = button('Save & reload', () => {
+      const font = inputs.baseFontSize;
+      if (!font.checkValidity()) {
+        activate('general'); font.focus(); font.reportValidity();
+        status.textContent = 'Enter a font size from 50 to 200%.'; status.classList.add('is-error'); return;
+      }
+      const newConfig = { ...CONFIG, componentColors: {} };
+      CONFIG_OPTIONS.forEach(opt => { newConfig[opt.key] = opt.type === 'number' ? Number(inputs[opt.key].value) : inputs[opt.key].checked; });
+      Object.keys(colorInputs).forEach(key => { newConfig.componentColors[key] = colorInputs[key].value; });
+      if (!saveUserConfig(newConfig) || !saveGazellifySequence(currentSequence, disabledItems) || !saveApiKey(apiInput.value.trim())) {
+        status.textContent = 'Could not save all settings. Please retry.'; status.classList.add('is-error'); return;
+      }
+      close(); window.location.reload();
+    }, 'gz-config-btn gz-config-btn--save');
+    footer.append(status, button('Cancel', close), save);
+    workspace.append(nav, body);
+    modal.append(header, workspace, preview, footer);
+    overlay.append(modal);
+    overlay.onclick = event => { if (event.target === overlay) close(); };
+    activate('general');
+    background.forEach(([node]) => { node.inert = true; });
+    document.body.style.overflow = 'hidden';
+    document.body.append(overlay);
+    document.addEventListener('keydown', onKeydown, true);
+    closeBtn.focus();
   };
 
   // Inject config button into footer
@@ -8261,8 +8052,9 @@ const getSearchResultTorrentId = (row, link) => {
     // Check if already injected
     if (targetSection.querySelector('.gz-config-link')) return;
 
-    const configLink = create('span', 'gz-config-link');
-    configLink.textContent = '⚙️ GAZELL3D Config';
+    const configLink = create('button', 'gz-config-link');
+    configLink.type = 'button';
+    configLink.textContent = '⚙ GAZELL3D Settings';
     configLink.onclick = showConfigModal;
     targetSection.appendChild(configLink);
   };

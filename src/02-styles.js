@@ -3601,291 +3601,100 @@ transform: scale(2.35);
       color: #fff;
     }
 
-    /* Config Button (Footer) */
-    .gz-config-link {
-      cursor: pointer;
-      color: inherit;
-      opacity: 0.8;
-      transition: opacity 0.15s ease;
-      font-size: 0.9em;
-      margin-top: 8px;
-      display: inline-block;
-    }
-
-    .gz-config-link:hover {
-      opacity: 1;
-      text-decoration: underline;
-    }
-
-    /* Config Modal Styles */
+    /* Settings inherit the active UNIT3D theme, with Starry Night fallbacks. */
+    .gz-config-link { display: inline-block; margin-top: 8px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+    .gz-config-link:hover { text-decoration: underline; }
     .gz-config-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.75);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10000;
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
+      --gz-settings-bg: var(--dialog-bg, #1e2433);
+      --gz-settings-fg: var(--dialog-fg, var(--text-color, #ccc));
+      --gz-settings-head: var(--dialog-head-bg, #0e111d);
+      --gz-settings-row: var(--data-table-tr-even-bg, #272d3d);
+      --gz-settings-border: color-mix(in srgb, var(--gz-settings-fg) 18%, transparent);
+      --gz-settings-accent: var(--button-filled-bg, #586379);
+      position: fixed; inset: 0; z-index: 10000; padding: 24px;
+      display: flex; align-items: center; justify-content: center;
+      background: #0009; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+      color: var(--gz-settings-fg); font: 14px/1.5 system-ui, sans-serif; text-align: left;
     }
-
+    .gz-config-overlay *, .gz-config-overlay *::before, .gz-config-overlay *::after { box-sizing: border-box; }
     .gz-config-modal {
-      background: rgba(30, 30, 35, 0.95);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 12px;
-      padding: 24px;
-      width: 90%;
-      max-width: 500px;
-      max-height: 80vh;
-      overflow-y: auto;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      display: flex; flex-direction: column; width: 920px; max-width: 100%;
+      height: 790px; max-height: calc(100dvh - 48px); min-height: 0;
+      background: var(--gz-settings-bg); border: 1px solid var(--gz-settings-border);
+      border-radius: 12px; overflow: hidden; box-shadow: 0 24px 90px #0008;
     }
-
-    .gz-config-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    .gz-config-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 26px; background: var(--gz-settings-head); border-bottom: 1px solid var(--gz-settings-border); }
+    .gz-config-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .12em; opacity: .75; }
+    .gz-config-modal .gz-config-title { font-size: 23px; font-weight: 600; color: var(--dialog-head-fg, #fff); margin: 0; line-height: 1.3; }
+    .gz-config-workspace { display: flex; flex: 1; min-height: 0; }
+    .gz-config-nav { flex: 0 0 195px; padding: 20px 12px; border-right: 1px solid var(--gz-settings-border); background: var(--gz-settings-head); }
+    .gz-config-nav-button { display: block; width: 100%; text-align: left; padding: 11px 12px; margin: 0 0 5px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+    .gz-config-nav-button[aria-current] { background: var(--gz-settings-row); border-color: var(--gz-settings-border); color: var(--dialog-head-fg, #fff); box-shadow: inset 3px 0 var(--gz-settings-accent); }
+    .gz-config-nav-button:hover { background: var(--gz-settings-row); }
+    .gz-config-body { flex: 1; min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding: 24px 28px; scrollbar-width: thin; }
+    .gz-config-section[hidden] { display: none !important; }
+    .gz-config-modal .gz-config-section-title { font-size: 19px; line-height: 1.3; margin: 0 0 8px; color: inherit; font-weight: 600; }
+    .gz-config-description { margin: 0 0 22px; opacity: .75; font-size: 13px; }
+    .gz-config-field { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 0; margin: 0; border-bottom: 1px solid var(--gz-settings-border); cursor: pointer; }
+    .gz-config-field-copy { min-width: 0; }
+    .gz-config-label { display: block; color: inherit; font-size: 14px; font-weight: 500; }
+    .gz-config-help { display: block; margin: 4px 0 0; font-size: 12px; opacity: .72; line-height: 1.5; }
+    .gz-config-toggle { appearance: none; -webkit-appearance: none; flex: 0 0 36px; width: 36px; height: 21px; margin: 0; padding: 2px; border: 1px solid var(--gz-settings-border); border-radius: 20px; background: var(--gz-settings-head); cursor: pointer; }
+    .gz-config-toggle::before { content: ''; display: block; width: 15px; height: 15px; border-radius: 50%; background: var(--gz-settings-fg); transition: transform .15s; }
+    .gz-config-toggle:checked { background: var(--gz-settings-accent); }
+    .gz-config-toggle:checked::before { transform: translateX(15px); background: var(--button-filled-fg, #fff); }
+    .gz-config-input { width: 100%; min-width: 0; padding: 10px 12px; background: var(--gz-settings-head); border: 1px solid var(--gz-settings-border); border-radius: 6px; color: inherit; font: inherit; }
+    .gz-config-input::placeholder { color: inherit; opacity: .5; }
+    .gz-config-number { flex: 0 0 80px; width: 80px; }
+    .gz-config-input-label { display: block; margin: 22px 0 8px; font-size: 13px; }
+    .gz-config-api-row { display: flex; gap: 8px; }
+    .gz-config-notice { margin: 16px 0 10px; padding: 12px; border: 1px solid var(--gz-settings-border); border-radius: 6px; background: var(--gz-settings-row); font-size: 12px; }
+    .gz-config-colors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 18px 0; }
+    .gz-config-colors.is-muted { opacity: .55; }
+    .gz-config-color { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 10px; margin: 0; border: 1px solid var(--gz-settings-border); border-radius: 6px; background: var(--gz-settings-row); font-size: 12px; cursor: pointer; }
+    .gz-config-color input { appearance: none; -webkit-appearance: none; width: 28px; height: 28px; flex: 0 0 28px; padding: 0; border: 1px solid var(--gz-settings-border); border-radius: 5px; overflow: hidden; background: none; cursor: pointer; }
+    .gz-config-color input::-webkit-color-swatch-wrapper { padding: 0; }
+    .gz-config-color input::-webkit-color-swatch { border: 0; border-radius: 3px; }
+    .gz-config-color input::-moz-color-swatch { border: 0; }
+    .gz-config-modal .gz-config-subtitle { margin: 24px 0 4px; font-size: 15px; color: inherit; }
+    .gz-sequence-list { display: flex; flex-direction: column; gap: 5px; margin: 14px 0; }
+    .gz-sequence-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--gz-settings-border); border-radius: 6px; background: var(--gz-settings-row); }
+    .gz-sequence-label { display: flex; align-items: center; gap: 10px; flex: 1; margin: 0; font-size: 13px; cursor: pointer; }
+    .gz-sequence-toggle { width: 16px; height: 16px; margin: 0; flex-shrink: 0; accent-color: var(--gz-settings-accent); }
+    .gz-sequence-handle { cursor: grab; opacity: .5; font-size: 18px; }
+    .gz-sequence-item.disabled .gz-sequence-label span { opacity: .5; text-decoration: line-through; }
+    .gz-sequence-item.dragging { opacity: .4; }
+    .gz-sequence-item.drag-over { outline: 2px solid var(--gz-settings-accent); }
+    .gz-config-preview { flex-shrink: 0; padding: 14px 26px; border-top: 1px solid var(--gz-settings-border); background: var(--gz-settings-head); }
+    .gz-config-preview-name { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 7px; font: 12px/1.5 ui-monospace, monospace; max-height: 80px; overflow-y: auto; }
+    .gz-config-buttons { display: flex; flex-shrink: 0; align-items: center; gap: 10px; padding: 16px 26px; border-top: 1px solid var(--gz-settings-border); }
+    .gz-config-save-status { flex: 1; font-size: 12px; opacity: .75; }
+    .gz-config-save-status.is-error { opacity: 1; color: var(--color-light-red, #ec8b99); }
+    .gz-config-btn { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 9px 14px; border: 1px solid var(--gz-settings-border); border-radius: 6px; background: var(--gz-settings-row); color: inherit; font: 500 13px/1.4 system-ui, sans-serif; cursor: pointer; text-decoration: none; }
+    .gz-config-btn:hover { filter: brightness(1.15); }
+    .gz-config-btn--save { background: var(--gz-settings-accent); color: var(--button-filled-fg, #fff); }
+    .gz-config-close { width: 34px; height: 34px; padding: 0; font-size: 24px; background: transparent; }
+    .gz-sequence-arrow { padding: 4px; width: 28px; height: 28px; }
+    .gz-config-btn:disabled { opacity: .3; cursor: default; }
+    .gz-config-overlay :focus-visible, .gz-config-link:focus-visible { outline: 2px solid var(--color-light-blue, #8ab4e8); outline-offset: 3px; }
+    .gz-config-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    @media (max-width: 640px) {
+      .gz-config-overlay { padding: 8px; }
+      .gz-config-modal { max-height: calc(100dvh - 16px); height: 850px; }
+      .gz-config-header { padding: 16px; }
+      .gz-config-modal .gz-config-title { font-size: 20px; }
+      .gz-config-workspace { flex-direction: column; }
+      .gz-config-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex: 0 0 auto; padding: 8px; border-right: 0; border-bottom: 1px solid var(--gz-settings-border); }
+      .gz-config-nav-button { margin: 0; padding: 8px; font-size: 12px; }
+      .gz-config-body { padding: 18px 16px; }
+      .gz-config-field { gap: 12px; }
+      .gz-config-preview { padding: 12px 16px; }
+      .gz-config-buttons { padding: 12px 16px; flex-wrap: wrap; }
+      .gz-config-save-status { flex-basis: 100%; }
+      .gz-config-buttons > button { flex: 1; }
     }
-
-    .gz-config-title {
-      font-size: 1.15em;
-      font-weight: 600;
-      color: #fff;
-      margin: 0;
-    }
-
-    .gz-config-close {
-      background: none;
-      border: none;
-      color: rgba(255, 255, 255, 0.6);
-      font-size: 1.5em;
-      cursor: pointer;
-      padding: 0;
-      line-height: 1;
-      transition: color 0.15s ease;
-    }
-
-    .gz-config-close:hover {
-      color: #fff;
-    }
-
-    .gz-config-section {
-      margin-bottom: 20px;
-    }
-
-    .gz-config-section-title {
-      font-size: 0.85em;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: rgba(255, 255, 255, 0.5);
-      margin-bottom: 12px;
-    }
-
-    .gz-config-field {
-      margin-bottom: 14px;
-    }
-
-    .gz-config-field:last-child {
-      margin-bottom: 0;
-    }
-
-    .gz-config-label {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      cursor: pointer;
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 0.9em;
-    }
-
-    .gz-config-label input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      accent-color: rgba(118, 219, 166, 0.9);
-    }
-
-    .gz-config-input-field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .gz-config-input-label {
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 0.9em;
-    }
-
-    .gz-config-input {
-      padding: 10px 12px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 6px;
-      color: #fff;
-      font-size: 0.9em;
-      font-family: inherit;
-      transition: border-color 0.15s ease, background 0.15s ease;
-    }
-
-    .gz-config-input:focus {
-      outline: none;
-      border-color: rgba(118, 219, 166, 0.6);
-      background: rgba(255, 255, 255, 0.08);
-    }
-
-    .gz-config-input::placeholder {
-      color: rgba(255, 255, 255, 0.4);
-    }
-
-    .gz-config-buttons {
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-      margin-top: 20px;
-      padding-top: 16px;
-      border-top: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .gz-config-btn {
-      padding: 10px 20px;
-      border-radius: 6px;
-      font-size: 0.9em;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s ease;
-      border: none;
-    }
-
-    .gz-config-btn--cancel {
-      background: rgba(255, 255, 255, 0.1);
-      color: rgba(255, 255, 255, 0.8);
-    }
-
-    .gz-config-btn--cancel:hover {
-      background: rgba(255, 255, 255, 0.15);
-      color: #fff;
-    }
-
-    .gz-config-btn--save {
-      background: rgba(118, 219, 166, 0.85);
-      color: rgb(20, 20, 25);
-    }
-
-    .gz-config-btn--save:hover {
-      background: rgba(118, 219, 166, 1);
-    }
-
-    /* Sequence Ordering (Drag & Drop) */
-    .gz-sequence-list {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      padding: 8px;
-      background: rgba(0, 0, 0, 0.2);
-      border-radius: 8px;
-      max-height: 280px;
-      overflow-y: auto;
-    }
-
-    .gz-sequence-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 6px;
-      cursor: grab;
-      transition: all 0.15s ease;
-      user-select: none;
-    }
-
-    .gz-sequence-item:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: rgba(255, 255, 255, 0.15);
-    }
-
-    .gz-sequence-item:active {
-      cursor: grabbing;
-    }
-
-    .gz-sequence-item.dragging {
-      opacity: 0.5;
-      background: rgba(118, 219, 166, 0.1);
-      border-color: rgba(118, 219, 166, 0.3);
-    }
-
-    .gz-sequence-item.drag-over {
-      border-color: rgba(118, 219, 166, 0.6);
-      background: rgba(118, 219, 166, 0.15);
-    }
-
-    .gz-sequence-handle {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      opacity: 0.5;
-      color: rgba(255, 255, 255, 0.6);
-      font-size: 0.8em;
-    }
-
-    .gz-sequence-handle::before {
-      content: '⋮⋮';
-      letter-spacing: -2px;
-    }
-
-    .gz-sequence-label {
-      flex: 1;
-      font-size: 0.9em;
-      color: rgba(255, 255, 255, 0.9);
-    }
-
-    .gz-sequence-key {
-      font-size: 0.75em;
-      color: rgba(255, 255, 255, 0.4);
-      font-family: monospace;
-    }
-
-    .gz-sequence-reset {
-      margin-top: 8px;
-      padding: 6px 12px;
-      font-size: 0.8em;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
-      color: rgba(255, 255, 255, 0.6);
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-
-    .gz-sequence-reset:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: rgba(255, 255, 255, 0.9);
-    }
-
-    .gz-sequence-toggle {
-      width: 16px;
-      height: 16px;
-      accent-color: rgba(118, 219, 166, 0.9);
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .gz-sequence-item.disabled {
-      opacity: 0.5;
-      background: rgba(255, 255, 255, 0.02);
-    }
-
-    .gz-sequence-item.disabled .gz-sequence-label {
-      text-decoration: line-through;
-      color: rgba(255, 255, 255, 0.5);
-    }
+    @media (max-width: 380px) { .gz-config-colors { grid-template-columns: 1fr; } }
+    @media (prefers-reduced-motion: reduce) { .gz-config-toggle::before { transition: none; } }
 
     /* Native UNIT3D BBCode rendered styles */
     .bbcode-rendered { font-size: 15px; line-height: 1.5; word-wrap: break-word; color: rgba(255, 255, 255, 0.85); margin: 0; }
