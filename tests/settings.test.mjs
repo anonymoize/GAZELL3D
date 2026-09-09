@@ -94,3 +94,17 @@ test('settings retain the draft on storage failure and contain keyboard focus', 
   assert.ok(h.d.querySelector('.gz-config-overlay'));
   assert.match(h.d.querySelector('[role="status"]').textContent, /Could not save/);
 });
+
+test('top bar selection stays in the draft and saves with existing preferences', async t => {
+  const h = await openSettings(t);
+  const selector = () => h.d.querySelector('#gz-option-topBarLayout');
+  assert.equal(selector().value, 'default');
+  selector().value = 'compact';
+  h.click('Cancel');
+  assert.deepEqual(h.writes, []);
+  h.opener.click();
+  assert.equal(selector().value, 'default');
+  selector().value = 'spacious';
+  h.click('Save & reload');
+  assert.equal(JSON.parse(Object.fromEntries(h.writes).gz_config).topBarLayout, 'spacious');
+});

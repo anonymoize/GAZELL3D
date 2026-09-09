@@ -1,12 +1,9 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      2.2.2
+// @version      2.4.0
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
-// @match        https://aither.cc/torrents/*
-// @match        https://aither.cc/torrents*
-// @match        https://aither.cc/stats/groups*
-// @match        https://aither.cc/users/*
+// @match        https://aither.cc/*
 // @updateURL    https://github.com/anonymoize/GAZELL3D/raw/refs/heads/main/GAZELL3D.user.js
 // @downloadURL  https://github.com/anonymoize/GAZELL3D/raw/refs/heads/main/GAZELL3D.user.js
 // @grant        GM_addStyle
@@ -23,6 +20,7 @@
 
   // Default configuration - will be overridden by user storage
   const DEFAULT_CONFIG = Object.freeze({
+    topBarLayout: 'default',
     removeTorrentIcons: true,
     enableGazellifySimilar: true,
     enableGazellifyDetail: false,
@@ -2611,7 +2609,7 @@
     .gz-config-btn { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 9px 14px; border: 1px solid var(--gz-settings-border); border-radius: 6px; background: var(--gz-settings-row); color: inherit; font: 500 13px/1.4 system-ui, sans-serif; cursor: pointer; text-decoration: none; }
     .gz-config-btn:hover { filter: brightness(1.15); }
     .gz-config-btn--save { background: var(--gz-settings-accent); color: var(--button-filled-fg, #fff); }
-    .gz-config-close { width: 34px; height: 34px; padding: 0; font-size: 24px; background: transparent; }
+    .gz-config-close { width: 34px; height: 38px; padding: 0; font-size: 24px; background: transparent; }
     .gz-sequence-arrow { padding: 4px; width: 28px; height: 28px; }
     .gz-config-btn:disabled { opacity: .3; cursor: default; }
     .gz-config-overlay :focus-visible, .gz-config-link:focus-visible { outline: 2px solid var(--color-light-blue, #8ab4e8); outline-offset: 3px; }
@@ -2946,6 +2944,139 @@
       .gz-profile-layout { display: flex; flex-direction: column; gap: 24px; }
       .gz-profile-content, .gz-profile-sidebar { width: 100%; }
       .gz-profile-heading { font-size: 20px; }
+    }
+
+    .gz-config-select { width: auto; max-width: 55%; }
+    /* Keep native controls/scopes intact; align the header with the 1440px content shell. */
+    html[data-gz-top-bar] .top-nav {
+      --gz-header-gutter: max(24px, calc(10vw - 36px), calc(25vw - 276px), calc(45vw - 776px), calc((100% - 1392px) / 2));
+      position: relative;
+      display: grid;
+      grid-template: "actions stats stats icons" minmax(38px, auto) "brand menus search search" 56px / auto minmax(0, 1fr) 220px auto;
+      align-items: center;
+      gap: 0 20px;
+      padding: 0 var(--gz-header-gutter);
+      height: auto;
+      max-height: none;
+      overflow: visible;
+      background: var(--gz-header-bg, var(--top-nav-bg, #1a1e2a));
+      box-shadow: none;
+    }
+    html[data-gz-top-bar] .top-nav__left,
+    html[data-gz-top-bar] .top-nav__right { display: contents; }
+    html[data-gz-top-bar] .top-nav__branding { grid-area: brand; padding: 0; }
+    html[data-gz-top-bar] .top-nav__site-logo { font-size: 24px; letter-spacing: .04em; }
+    html[data-gz-top-bar] .top-nav .quick-search {
+      grid-area: search; display: block; width: 240px; max-width: 100%; height: 30px;
+      justify-self: end; min-width: 0; z-index: 1001;
+    }
+    html[data-gz-top-bar] .top-nav .quick-search .quick-search__inputs { position: relative; width: 100%; height: 100%; }
+    html[data-gz-top-bar] .top-nav .quick-search__input { width: 100%; border-radius: 4px; padding: 5px 10px; }
+    html[data-gz-top-bar] .top-nav__main-menus {
+      grid-area: menus; display: flex; flex-direction: row; flex-wrap: wrap;
+      justify-content: center; gap: 2px 10px; margin: 0; padding: 0;
+    }
+    html[data-gz-top-bar] .top-nav__main-menus > li > a { font-size: 13px; margin: 0; padding: 8px 10px; }
+    html[data-gz-top-bar] .top-nav .top-nav__ratio-bar {
+      grid-area: stats; display: flex; flex-wrap: wrap; justify-content: flex-end;
+      gap: 5px 14px; padding: 0; font-size: 11px; font-variant-numeric: tabular-nums;
+    }
+    html[data-gz-top-bar] .top-nav__icon-bar {
+      grid-area: icons; display: flex; justify-content: flex-end; gap: 10px; width: auto;
+    }
+    html[data-gz-top-bar] .top-nav__icon-bar > li > a > i { height: 24px; line-height: 24px; font-size: 13px; }
+    html[data-gz-top-bar] .top-nav__profile-image { width: 24px; height: 24px; }
+    html[data-gz-top-bar] .top-nav__toggle,
+    html[data-gz-top-bar] .top-nav__username--highresolution { display: none; }
+    html[data-gz-top-bar] .top-nav__dropdown { position: relative; }
+    html[data-gz-top-bar] .top-nav .top-nav__dropdown > ul {
+      top: 100%; max-width: calc(100vw - 32px); max-height: 65vh; overflow: auto;
+      margin: 0; z-index: 1002;
+    }
+    html[data-gz-top-bar] .top-nav__dropdown > ul > li > a,
+    html[data-gz-top-bar] .top-nav__dropdown > ul > li > form > button { padding-right: 24px; white-space: normal; }
+    html[data-gz-top-bar] .top-nav a:focus-visible,
+    html[data-gz-top-bar] .top-nav button:focus-visible,
+    html[data-gz-top-bar] .top-nav input:focus-visible { outline: 2px solid var(--color-light-blue, #71b7ec); outline-offset: 2px; }
+    html[data-gz-top-bar] .secondary-nav {
+      position: relative; grid-template-columns: 1fr auto; min-height: 28px;
+      padding: 0 max(24px, calc(10vw - 36px), calc(25vw - 276px), calc(45vw - 776px), calc((100% - 1392px) / 2));
+      background: var(--gz-header-bg, var(--top-nav-bg, #1a1e2a)); box-shadow: none;
+      border-bottom: 1px solid var(--panel-border-color, #ffffff18);
+      font-size: 12px;
+    }
+    /* Native secondary menus use a fixed top offset for the stock header. */
+    html[data-gz-top-bar] .secondary-nav .nav-tabsV2 { overflow: visible; flex-wrap: wrap; }
+    html[data-gz-top-bar] .secondary-nav .nav-tab-menu { position: relative; }
+    html[data-gz-top-bar] .secondary-nav .nav-tab-menu__items {
+      top: 100%; right: 0; left: auto; margin: 0;
+      width: max-content; max-width: calc(100vw - 32px);
+    }
+    html[data-gz-top-bar="compact"] .top-nav::before {
+      content: ""; position: absolute; inset: 0 0 auto; height: 38px;
+      background: var(--secondary-nav-bg, #151820); pointer-events: none;
+    }
+    html[data-gz-top-bar="compact"] .top-nav :is(.top-nav__ratio-bar, .top-nav__icon-bar) { position: relative; }
+    html[data-gz-top-bar="spacious"] .top-nav {
+      grid-template: "brand actions icons" minmax(32px, auto) "brand stats icons" minmax(38px, auto) "menus menus search" 48px / auto minmax(0, 1fr) 260px;
+      padding-bottom: 4px;
+    }
+    html[data-gz-top-bar="spacious"] .top-nav__site-logo { font-size: 30px; letter-spacing: .12em; }
+    html[data-gz-top-bar="spacious"] .top-nav__main-menus {
+      justify-content: flex-start; gap: 8px; padding-left: 10px;
+    }
+    html[data-gz-top-bar="spacious"] .top-nav::before {
+      content: ""; grid-column: 1 / -1; grid-row: 3; align-self: stretch;
+      background: var(--secondary-nav-bg, #151820); border-radius: 4px;
+      pointer-events: none;
+    }
+    html[data-gz-top-bar="spacious"] .top-nav__main-menus { position: relative; }
+    html[data-gz-top-bar="spacious"] .top-nav__main-menus > li > a { text-transform: uppercase; font-weight: 600; padding: 10px 18px; }
+    html[data-gz-top-bar="spacious"] .top-nav .quick-search { margin-right: 10px; }
+    html[data-gz-top-bar] .gz-header-actions {
+      grid-area: actions; display: flex; flex-wrap: wrap; gap: 6px 14px;
+      align-items: center; position: relative; padding: 6px 0; margin: 0; list-style: none; font-size: 12px;
+    }
+    html[data-gz-top-bar] .gz-header-actions a { color: var(--top-nav-dropdown-fg, inherit); text-decoration: none; white-space: nowrap; }
+    html[data-gz-top-bar] .gz-header-actions a:hover { text-decoration: underline; }
+    html[data-gz-top-bar="spacious"] .gz-header-actions { justify-content: flex-end; text-transform: uppercase; padding-top: 10px; }
+    html[data-gz-top-bar] .top-nav .top-nav__ratio-bar { padding: 6px 0; gap: 5px 12px; }
+    html[data-gz-top-bar] .gz-header-stat-label { opacity: .75; }
+    html[data-gz-top-bar] .top-nav li:has(.gz-header-stat-label) i { display: none; }
+    html[data-gz-top-bar] .top-nav__ratio-bar .ratio-bar__ratio { order: -2; }
+    html[data-gz-top-bar] .top-nav__ratio-bar :is(.ratio-bar__uploaded, .ratio-bar__downloaded) { order: -3; }
+    html[data-gz-top-bar] .top-nav__ratio-bar .ratio-bar__seeding { order: -1; }
+    html[data-gz-top-bar] .top-nav__icon-bar { position: relative; z-index: 1004; }
+    html[data-gz-top-bar] .top-nav .top-nav__dropdown > ul { width: max-content; min-width: 210px; }
+    html[data-gz-top-bar] .top-nav .top-nav__icon-bar .top-nav__dropdown > ul { right: 0; left: auto; }
+    html[data-gz-top-bar] .top-nav .top-nav__icon-bar .top-nav__dropdown > ul > li > a { white-space: nowrap; }
+    @media (max-width: 1100px) {
+      html[data-gz-top-bar] .top-nav {
+        grid-template: "brand icons" auto "actions actions" auto "stats stats" auto "menus search" auto / minmax(0, 1fr) 240px;
+        padding: 12px 24px 8px; gap: 10px 12px;
+      }
+      html[data-gz-top-bar] .top-nav::before { display: none; }
+      html[data-gz-top-bar] .gz-header-actions { justify-content: flex-start; padding: 0; }
+      html[data-gz-top-bar] .top-nav .top-nav__ratio-bar { justify-content: flex-start; }
+      html[data-gz-top-bar] .top-nav__main-menus { justify-content: flex-start; padding: 0; gap: 2px; }
+      html[data-gz-top-bar] .top-nav__main-menus > li > a { padding: 7px; }
+      html[data-gz-top-bar] .top-nav .quick-search { margin: 0; }
+      html[data-gz-top-bar] .top-nav__username--highresolution { display: none; }
+    }
+    @media (max-width: 650px) {
+      html[data-gz-top-bar] .top-nav {
+        grid-template: "brand icons" auto "actions actions" auto "stats stats" auto "menus menus" auto "search search" auto / minmax(0, 1fr) auto;
+        padding: 10px 16px; gap: 8px 12px;
+      }
+      html[data-gz-top-bar] .top-nav__site-logo { font-size: 22px; }
+      html[data-gz-top-bar] .top-nav__main-menus { justify-content: space-between; position: relative; gap: 0; }
+      html[data-gz-top-bar] .top-nav__main-menus .top-nav__dropdown { position: static; }
+      html[data-gz-top-bar] .top-nav__main-menus > li > a { padding: 7px 4px; font-size: 12px; }
+      html[data-gz-top-bar] .top-nav .top-nav__ratio-bar { font-size: 10px; gap: 6px 10px; }
+      html[data-gz-top-bar] .top-nav .quick-search { width: 100%; }
+      html[data-gz-top-bar] .secondary-nav { display: flex; flex-direction: column; align-items: stretch; padding: 0 16px; }
+      html[data-gz-top-bar] .secondary-nav > * { flex-wrap: wrap; }
+      html[data-gz-top-bar] .top-nav__main-menus .top-nav__dropdown > ul { position: absolute; left: 0; right: 0; }
     }
   `;
 
@@ -6780,6 +6911,88 @@ const getSearchResultTorrentId = (row, link) => {
     });
   };
 
+  const enhanceSiteHeader = (header) => {
+    const labels = { uploaded: 'Up', downloaded: 'Down', ratio: 'Ratio', seeding: 'Seeding',
+      leeching: 'Leeching', slots: 'Slots', buffer: 'Buffer', points: 'Bonus', tokens: 'Tokens', invites: 'Invites' };
+    Object.entries(labels).forEach(([key, label]) => {
+      const item = header.querySelector(`.ratio-bar__${key}`);
+      if (!item || item.querySelector('.gz-header-stat-label')) return;
+      const text = document.createElement('span');
+      text.className = 'gz-header-stat-label';
+      text.textContent = `${label}: `;
+      (item.querySelector('a') || item).prepend(text);
+    });
+    if (header.querySelector('.gz-header-actions')) return;
+    const actions = document.createElement('ul');
+    actions.className = 'gz-header-actions';
+    actions.setAttribute('aria-label', 'Quick links');
+    // Copy only navigation destinations, never host scopes, handlers, or account forms.
+    const links = [...header.querySelectorAll('.top-nav__main-menus a[href]')];
+    ['Upload', 'Requests', 'Forums', 'Donate'].forEach(label => {
+      const source = links.find(link => link.textContent.trim() === label);
+      if (!source) return;
+      const url = new URL(source.getAttribute('href'), location.href);
+      if (url.origin !== location.origin || !['http:', 'https:'].includes(url.protocol)) return;
+      const link = document.createElement('a');
+      link.href = url.href;
+      link.textContent = label;
+      const item = document.createElement('li');
+      item.append(link);
+      actions.append(item);
+    });
+    // Keep live values and original account links for Bonus and Invites.
+    ['points', 'invites'].forEach(key => {
+      const item = header.querySelector(`.top-nav__ratio-bar .ratio-bar__${key}`);
+      if (item) actions.append(item);
+    });
+    if (actions.childElementCount) header.append(actions);
+  };
+
+  // CSS rearranges the existing header without moving Alpine scopes or cloning controls.
+  // Root scoping also covers headers rendered after boot, without a body observer.
+  const initSiteHeader = () => {
+    const layout = ['compact', 'spacious'].includes(CONFIG.topBarLayout) ? CONFIG.topBarLayout : 'default';
+    if (layout === 'default') {
+      delete document.documentElement.dataset.gzTopBar;
+      return;
+    }
+    document.documentElement.dataset.gzTopBar = layout;
+    const header = document.querySelector('.top-nav');
+    if (header) {
+      enhanceSiteHeader(header);
+      const headerObserver = new MutationObserver(() => enhanceSiteHeader(header));
+      headerObserver.observe(header, { childList: true, subtree: true });
+    }
+
+    // Custom themes can override body background without updating --body-bg.
+    // Resolve the painted color instead, keeping the sticky header opaque.
+    const syncBackground = () => {
+      const color = [document.body, document.documentElement]
+        .map(node => getComputedStyle(node).backgroundColor)
+        .find(value => /^rgb\(/.test(value));
+      const rootStyle = document.documentElement.style;
+      if (color && rootStyle.getPropertyValue('--gz-header-bg') !== color) {
+        rootStyle.setProperty('--gz-header-bg', color);
+      } else if (!color && rootStyle.getPropertyValue('--gz-header-bg')) {
+        rootStyle.removeProperty('--gz-header-bg');
+      }
+    };
+    syncBackground();
+    // Also cover stylesheets that finish loading after userscript initialization.
+    window.addEventListener('load', syncBackground, { once: true });
+    document.head?.addEventListener('load', syncBackground, true);
+    // Watch theme switches and custom stylesheet edits, not page-content mutations.
+    const themeObserver = new MutationObserver(syncBackground);
+    const themeAttributes = { attributes: true, attributeFilter: ['class', 'style', 'data-theme', 'data-bs-theme'] };
+    themeObserver.observe(document.documentElement, themeAttributes);
+    themeObserver.observe(document.body, themeAttributes);
+    if (document.head) themeObserver.observe(document.head, {
+      childList: true, subtree: true, characterData: true, attributes: true,
+      attributeFilter: ['href', 'media', 'disabled'],
+    });
+    window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', syncBackground);
+  };
+
   // Move complete host components so forms, listeners and Alpine dialog scopes survive.
   const buildUserProfileLayout = (page) => {
     if (page.classList.contains('gz-user-profile')) return true;
@@ -6861,11 +7074,13 @@ const getSearchResultTorrentId = (row, link) => {
     return buildGroupRequirementsLayout(groupRequirementsPage);
   }
 
-  return false;
+  // Site-wide headers do not need torrent boot retries on unrelated routes.
+  return !/^\/(torrents(?:\/|$)|mediahub(?:\/|$)|stats\/groups(?:\/|$))/.test(location.pathname);
 };
 
   // Config option definitions for the modal
   const CONFIG_OPTIONS = [
+    { key: 'topBarLayout', label: 'Top bar layout', type: 'select', choices: [['default', 'Default (Aither)'], ['compact', 'Compact'], ['spacious', 'Spacious']] },
     { key: 'removeTorrentIcons', label: 'Remove torrent icons' },
     { key: 'enableGazellifySimilar', label: 'Gazellify similar page titles' },
     { key: 'enableGazellifyDetail', label: 'Gazellify detail page titles' },
@@ -6912,7 +7127,7 @@ const getSearchResultTorrentId = (row, link) => {
     const onKeydown = event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); }
       if (event.key !== 'Tab') return;
-      const focusable = [...modal.querySelectorAll('button, input, [tabindex="0"]')]
+      const focusable = [...modal.querySelectorAll('button, input, select, [tabindex="0"]')]
         .filter(node => !node.disabled && !node.closest('[hidden]'));
       const first = focusable[0], last = focusable[focusable.length - 1];
       if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
@@ -6954,13 +7169,14 @@ const getSearchResultTorrentId = (row, link) => {
       nav.append(link); body.append(panel);
       return panel;
     };
-    const general = section('general', 'Layout & display', 'Fine-tune the way torrent pages look and behave.');
+    const general = section('general', 'Layout & display', 'Choose the site header and torrent page layout.');
     const names = section('names', 'Torrent names', 'Choose where to simplify release names and how their components appear.');
     const colors = section('colors', 'Component colors', 'Give each part of a release name its own color.');
     const connection = section('connection', 'API connection', 'Connect your Aither API key to load expanded torrent details.');
     const inputs = {}, colorInputs = {};
     const namingKeys = new Set(['enableGazellifySimilar', 'enableGazellifyDetail', 'enableGazellifySearch', 'enableOriginalTitleTooltip']);
     const descriptions = {
+      topBarLayout: 'Applies across Aither. Compact places stats above navigation; Spacious uses a brand row and navigation band. Both keep search beside the menus.',
       removeTorrentIcons: 'Hide standard torrent icons for a cleaner listing.',
       enableGazellifySimilar: 'Simplify names in grouped torrent listings.',
       enableGazellifyDetail: 'Simplify the title on individual torrent pages.',
@@ -6978,13 +7194,18 @@ const getSearchResultTorrentId = (row, link) => {
       const label = el('label', 'gz-config-field');
       const copy = el('span', 'gz-config-field-copy');
       copy.append(el('span', 'gz-config-label', opt.label), el('span', 'gz-config-help', descriptions[opt.key]));
-      const input = el('input', opt.type === 'number' ? 'gz-config-input gz-config-number' : 'gz-config-toggle');
+      const input = el(opt.type === 'select' ? 'select' : 'input', opt.type === 'select' ? 'gz-config-input gz-config-select' : opt.type === 'number' ? 'gz-config-input gz-config-number' : 'gz-config-toggle');
       input.id = `gz-option-${opt.key}`;
-      input.type = opt.type || 'checkbox';
+      if (opt.type === 'select') {
+        opt.choices.forEach(([value, text]) => {
+          const option = el('option', '', text); option.value = value; input.append(option);
+        });
+        input.value = opt.choices.some(([value]) => value === CONFIG[opt.key]) ? CONFIG[opt.key] : DEFAULT_CONFIG[opt.key];
+      } else input.type = opt.type || 'checkbox';
       if (opt.type === 'number') {
         input.min = opt.min; input.max = opt.max; input.step = 1; input.required = true;
         input.value = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
-      } else input.checked = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
+      } else if (opt.type !== 'select') input.checked = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
       inputs[opt.key] = input;
       label.append(copy, input);
       const target = namingKeys.has(opt.key) ? names : opt.key === 'enableComponentColors' ? colors : opt.key === 'enableTorrentDropdowns' ? connection : general;
@@ -7124,7 +7345,7 @@ const getSearchResultTorrentId = (row, link) => {
         status.textContent = 'Enter a font size from 50 to 200%.'; status.classList.add('is-error'); return;
       }
       const newConfig = { ...CONFIG, componentColors: {} };
-      CONFIG_OPTIONS.forEach(opt => { newConfig[opt.key] = opt.type === 'number' ? Number(inputs[opt.key].value) : inputs[opt.key].checked; });
+      CONFIG_OPTIONS.forEach(opt => { newConfig[opt.key] = opt.type === 'number' ? Number(inputs[opt.key].value) : opt.type === 'select' ? inputs[opt.key].value : inputs[opt.key].checked; });
       Object.keys(colorInputs).forEach(key => { newConfig.componentColors[key] = colorInputs[key].value; });
       if (!saveUserConfig(newConfig) || !saveGazellifySequence(currentSequence, disabledItems) || !saveApiKey(apiInput.value.trim())) {
         status.textContent = 'Could not save all settings. Please retry.'; status.classList.add('is-error'); return;
@@ -7192,6 +7413,7 @@ const getSearchResultTorrentId = (row, link) => {
 
       // Inject config button into footer
       injectConfigButton();
+      initSiteHeader();
 
       if (initPage()) return;
 

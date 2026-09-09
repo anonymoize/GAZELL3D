@@ -1,5 +1,6 @@
   // Default configuration - will be overridden by user storage
   const DEFAULT_CONFIG = Object.freeze({
+    topBarLayout: 'default',
     removeTorrentIcons: true,
     enableGazellifySimilar: true,
     enableGazellifyDetail: false,

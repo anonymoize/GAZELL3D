@@ -15,6 +15,17 @@ Aither theme and groups preferences into layout, torrent names, component colors
 and API connection. Name and color changes update a sample preview; components
 can be reordered by dragging or with the arrow buttons.
 
+**Top bar layout** offers Default (Aither), Compact (a slim statistics row above
+the brand and menus), and Spacious (a brand row with a separate navigation
+band). Search sits beside the menus on desktop. Both headers follow the content
+width, use restrained spacing, and stack their controls on narrow screens. Default leaves the native header unchanged. Both alternatives use the active
+Aither theme and retain native search, menu, notification, and account controls.
+The script runs across `https://aither.cc/*`, so header preferences and the footer
+settings entry are also available on forums and other site pages. Custom headers
+label the statistics in text and expose Upload, Requests, Forums, and Donate
+when those links exist in the native menus. Bonus and Invites retain their live
+values in the quick-link row. The original menus and account controls remain available.
+
 **Save & reload** applies your changes. Cancel, Escape, or clicking outside the
 menu discards the draft. Color and component-order resets affect only the draft
 until saved. Existing stored preferences remain compatible. Font size accepts
@@ -61,6 +72,7 @@ dropdown attachments; page builders connect those interfaces to the host DOM.
 | `src/08-media-summaries.js` | MediaInfo/BDInfo selection, parsing, summary rendering and unchanged raw text. |
 | `src/09-dropdowns-and-reporting.js` | Dropdown lifecycle and tabs, details/report alerts, file tree, active-panel copying, report registry/form and toasts. |
 | `src/10-page-layouts.js` | Similar/detail page assembly, movie and TV table grouping, actions, grouped dropdown wiring and icon projection. |
+| `src/10-site-header.js` | Site-wide header layout selection; CSS preserves native header nodes and Alpine scopes. |
 | `src/10-user-profile.js` | Member profile assembly, preserving host components while arranging content and account information into columns. |
 | `src/11-settings-and-boot.js` | Settings draft/dialog, footer entry point, naming initialization, zoom and page dispatch. |
 
@@ -119,6 +131,7 @@ so observers and timers do not outlive the test.
 | `tests/naming-and-media.test.mjs` | Explicit naming context, catalog snapshots, release-group rules, raw media preservation and text rendering. |
 | `tests/boot.test.mjs` | Built-script search/grouped/detail integration and late icon handling. |
 | `tests/user-profile.test.mjs` | Profile retries, missing private sections, DOM identity, form state, and host scope preservation. |
+| `tests/site-header.test.mjs` | Site-wide header defaults, layout selection, and native control identity. |
 | `tests/settings.test.mjs` | Draft isolation, focus, preview/reordering, validation, persistence and storage failure. |
 | `tests/group-requirements.test.mjs` | Split path ownership, shared-class deduplication, static groups, collapsed/expanded perks, safe text rendering, and idempotent rendering. |
 

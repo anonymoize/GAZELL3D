@@ -30,11 +30,13 @@
     return buildGroupRequirementsLayout(groupRequirementsPage);
   }
 
-  return false;
+  // Site-wide headers do not need torrent boot retries on unrelated routes.
+  return !/^\/(torrents(?:\/|$)|mediahub(?:\/|$)|stats\/groups(?:\/|$))/.test(location.pathname);
 };
 
   // Config option definitions for the modal
   const CONFIG_OPTIONS = [
+    { key: 'topBarLayout', label: 'Top bar layout', type: 'select', choices: [['default', 'Default (Aither)'], ['compact', 'Compact'], ['spacious', 'Spacious']] },
     { key: 'removeTorrentIcons', label: 'Remove torrent icons' },
     { key: 'enableGazellifySimilar', label: 'Gazellify similar page titles' },
     { key: 'enableGazellifyDetail', label: 'Gazellify detail page titles' },
@@ -81,7 +83,7 @@
     const onKeydown = event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); }
       if (event.key !== 'Tab') return;
-      const focusable = [...modal.querySelectorAll('button, input, [tabindex="0"]')]
+      const focusable = [...modal.querySelectorAll('button, input, select, [tabindex="0"]')]
         .filter(node => !node.disabled && !node.closest('[hidden]'));
       const first = focusable[0], last = focusable[focusable.length - 1];
       if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
@@ -123,13 +125,14 @@
       nav.append(link); body.append(panel);
       return panel;
     };
-    const general = section('general', 'Layout & display', 'Fine-tune the way torrent pages look and behave.');
+    const general = section('general', 'Layout & display', 'Choose the site header and torrent page layout.');
     const names = section('names', 'Torrent names', 'Choose where to simplify release names and how their components appear.');
     const colors = section('colors', 'Component colors', 'Give each part of a release name its own color.');
     const connection = section('connection', 'API connection', 'Connect your Aither API key to load expanded torrent details.');
     const inputs = {}, colorInputs = {};
     const namingKeys = new Set(['enableGazellifySimilar', 'enableGazellifyDetail', 'enableGazellifySearch', 'enableOriginalTitleTooltip']);
     const descriptions = {
+      topBarLayout: 'Applies across Aither. Compact places stats above navigation; Spacious uses a brand row and navigation band. Both keep search beside the menus.',
       removeTorrentIcons: 'Hide standard torrent icons for a cleaner listing.',
       enableGazellifySimilar: 'Simplify names in grouped torrent listings.',
       enableGazellifyDetail: 'Simplify the title on individual torrent pages.',
@@ -147,13 +150,18 @@
       const label = el('label', 'gz-config-field');
       const copy = el('span', 'gz-config-field-copy');
       copy.append(el('span', 'gz-config-label', opt.label), el('span', 'gz-config-help', descriptions[opt.key]));
-      const input = el('input', opt.type === 'number' ? 'gz-config-input gz-config-number' : 'gz-config-toggle');
+      const input = el(opt.type === 'select' ? 'select' : 'input', opt.type === 'select' ? 'gz-config-input gz-config-select' : opt.type === 'number' ? 'gz-config-input gz-config-number' : 'gz-config-toggle');
       input.id = `gz-option-${opt.key}`;
-      input.type = opt.type || 'checkbox';
+      if (opt.type === 'select') {
+        opt.choices.forEach(([value, text]) => {
+          const option = el('option', '', text); option.value = value; input.append(option);
+        });
+        input.value = opt.choices.some(([value]) => value === CONFIG[opt.key]) ? CONFIG[opt.key] : DEFAULT_CONFIG[opt.key];
+      } else input.type = opt.type || 'checkbox';
       if (opt.type === 'number') {
         input.min = opt.min; input.max = opt.max; input.step = 1; input.required = true;
         input.value = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
-      } else input.checked = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
+      } else if (opt.type !== 'select') input.checked = CONFIG[opt.key] ?? DEFAULT_CONFIG[opt.key];
       inputs[opt.key] = input;
       label.append(copy, input);
       const target = namingKeys.has(opt.key) ? names : opt.key === 'enableComponentColors' ? colors : opt.key === 'enableTorrentDropdowns' ? connection : general;
@@ -293,7 +301,7 @@
         status.textContent = 'Enter a font size from 50 to 200%.'; status.classList.add('is-error'); return;
       }
       const newConfig = { ...CONFIG, componentColors: {} };
-      CONFIG_OPTIONS.forEach(opt => { newConfig[opt.key] = opt.type === 'number' ? Number(inputs[opt.key].value) : inputs[opt.key].checked; });
+      CONFIG_OPTIONS.forEach(opt => { newConfig[opt.key] = opt.type === 'number' ? Number(inputs[opt.key].value) : opt.type === 'select' ? inputs[opt.key].value : inputs[opt.key].checked; });
       Object.keys(colorInputs).forEach(key => { newConfig.componentColors[key] = colorInputs[key].value; });
       if (!saveUserConfig(newConfig) || !saveGazellifySequence(currentSequence, disabledItems) || !saveApiKey(apiInput.value.trim())) {
         status.textContent = 'Could not save all settings. Please retry.'; status.classList.add('is-error'); return;
@@ -361,6 +369,7 @@
 
       // Inject config button into footer
       injectConfigButton();
+      initSiteHeader();
 
       if (initPage()) return;
 
