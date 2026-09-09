@@ -11,15 +11,20 @@
       return buildTorrentLayout(torrentArticle);
     }
 
-    const searchPage = $(SELECTORS.torrentSearchPage);
-    if (searchPage) {
-      refreshSearchResults();
-      watchSearchResults();
-      return true;
-    }
+  const searchPage = $(SELECTORS.torrentSearchPage);
+  if (searchPage) {
+    refreshSearchResults();
+    watchSearchResults();
+    return true;
+  }
 
-    return false;
-  };
+  const groupRequirementsPage = $(SELECTORS.groupRequirementsPage);
+  if (groupRequirementsPage) {
+    return buildGroupRequirementsLayout(groupRequirementsPage);
+  }
+
+  return false;
+};
 
   // Config option definitions for the modal
   const CONFIG_OPTIONS = [
@@ -346,15 +351,14 @@
 
   const initApp = async () => {
     try {
-      const config = await loadConfig();
-      SCENE_RELEASE_GROUPS = new Set((config.SCENE_RELEASE_GROUPS || []).map(normalizeSceneGroupName));
-      SERVICE_TOKENS = config.SERVICE_TOKENS || [];
-      COUNTRY_MAP = config.COUNTRY_MAP || {};
-      LANGUAGE_MAP = config.LANGUAGE_MAP || {};
-      TAG_STYLES = config.TAG_STYLES || {};
-
-      // Initialize dependent sets
-      RELEASE_GROUP_BLOCK_TOKENS = initReleaseGroupBlockTokens();
+      let catalog = {};
+      try {
+        catalog = await loadConfig() || {};
+      } catch (error) {
+        // Catalog outages should not disable layouts, settings or dropdowns.
+        console.warn('GAZELL3D: Using built-in naming rules without the remote catalog', error);
+      }
+      torrentNaming = createTorrentNaming({ catalog, sequence: GAZELLIFY_SEQUENCE });
 
       const baseZoom = (CONFIG.baseFontSize || 100) / 100;
       const dynamicStyles = baseZoom !== 1 ? `

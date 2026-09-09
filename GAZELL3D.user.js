@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         GAZELL3D
 // @namespace    https://github.com/anonymoize/GAZELL3D/
-// @version      2.0.0
+// @version      2.0.1
 // @description  Reimagine UNIT3D-based torrent pages for readability with a two-column layout, richer metadata presentation, cleaner torrent naming, and minor quality-of-life tweaks.
 // @match        https://aither.cc/torrents/*
 // @match        https://aither.cc/torrents*
+// @match        https://aither.cc/stats/groups*
 // @updateURL    https://github.com/anonymoize/GAZELL3D/raw/refs/heads/main/GAZELL3D.user.js
 // @downloadURL  https://github.com/anonymoize/GAZELL3D/raw/refs/heads/main/GAZELL3D.user.js
 // @grant        GM_addStyle
@@ -110,47 +111,35 @@
   let AITHER_API_KEY = loadApiKey();
 
 
-  // Utility for making authenticated API calls
-  const gmFetchJson = (url, opts = {}, method = 'GET', timeout = 15000) => {
-    return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({
+  // Production and tests use the same status/JSON handling through this seam.
+  const createJsonRequest = (send) => (url, opts = {}, method = 'GET', timeout = 15000) =>
+    new Promise((resolve, reject) => {
+      send({
+        ...opts,
         method,
         timeout,
-        ...opts,
         url: url.toString(),
         ontimeout: () => reject(new Error(`Request timed out after ${timeout}ms`)),
-        onerror: (err) => reject(err || new Error('Failed to fetch')),
+        onerror: () => reject(new Error('Failed to fetch')),
         onload: (response) => {
+          let data;
           try {
-            resolve(JSON.parse(response.responseText));
-          } catch (e) {
-            reject(new Error('Failed to parse JSON response'));
+            data = JSON.parse(response.responseText);
+          } catch {
+            reject(new Error(response.status >= 200 && response.status < 300
+              ? 'Failed to parse JSON response' : `HTTP Error ${response.status}`));
+            return;
           }
-        }
+          if (response.status < 200 || response.status >= 300) {
+            reject(new Error(data?.message || `HTTP Error ${response.status}`));
+            return;
+          }
+          resolve(data);
+        },
       });
     });
-  };
 
-  // Utility for fetching raw HTML/text
-  const gmFetchText = (url, opts = {}, method = 'GET', timeout = 15000) => {
-    return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({
-        method,
-        timeout,
-        ...opts,
-        url: url.toString(),
-        ontimeout: () => reject(new Error(`Request timed out after ${timeout}ms`)),
-        onerror: (err) => reject(err || new Error('Failed to fetch')),
-        onload: (response) => {
-          if (response.status >= 200 && response.status < 300) {
-            resolve(response.responseText);
-          } else {
-            reject(new Error(`HTTP Error ${response.status}`));
-          }
-        }
-      });
-    });
-  };
+  const gmFetchJson = createJsonRequest((options) => GM_xmlhttpRequest(options));
 
   // Default sequence order - can be customized by user
   const DEFAULT_GAZELLIFY_SEQUENCE = Object.freeze([
@@ -239,6 +228,7 @@
     similarArticle: 'main.page__torrent-similar--index article',
     torrentArticle: 'main.page__torrent--show article',
     torrentSearchPage: 'main.page__torrent--index',
+    groupRequirementsPage: 'main.page__stats--group-requirements',
     torrentGroup: 'section.panelV2[x-data="torrentGroup"]',
     metaSection: 'section.meta',
     torrentButtons: 'menu.torrent__buttons',
@@ -630,14 +620,1860 @@
       text-decoration: underline;
     }
 
-    .gz-page-header__actions .gz-separator {
-      color: rgba(255, 255, 255, 0.3);
-      user-select: none;
+  .gz-page-header__actions .gz-separator {
+    color: rgba(255, 255, 255, 0.3);
+    user-select: none;
+  }
+
+  /* Group requirements page */
+  main.page__stats--group-requirements {
+    --gz-req-bg: #11151c;
+    --gz-req-panel: rgba(24, 30, 40, 0.94);
+    --gz-req-panel-soft: rgba(255, 255, 255, 0.045);
+    --gz-req-border: rgba(255, 255, 255, 0.1);
+    --gz-req-border-strong: rgba(255, 255, 255, 0.16);
+    --gz-req-text: rgba(247, 250, 252, 0.94);
+    --gz-req-muted: rgba(226, 232, 240, 0.66);
+    --gz-req-accent: #69d3b0;
+    --gz-req-accent-2: #78a6ff;
+    padding: 1.25rem clamp(0.75rem, 2.5vw, 2rem) 2.5rem;
+    background:
+      radial-gradient(circle at top left, rgba(105, 211, 176, 0.14), transparent 32rem),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 18rem);
+  }
+
+  main.page__stats--group-requirements > article {
+    width: min(1500px, 100%);
+    margin: 0 auto;
+  }
+
+  main.page__stats--group-requirements .panelV2 {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+
+  main.page__stats--group-requirements .panel__heading {
+    margin: 0 0 1.15rem;
+    padding: 0;
+    color: var(--gz-req-text);
+    font-size: clamp(1.55rem, 2vw, 2.25rem);
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1.1;
+  }
+
+  main.page__stats--group-requirements .group-requirements__wrapper {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+    gap: 1rem;
+    align-items: start;
+  }
+
+  main.page__stats--group-requirements .group-requirements__path-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
+  main.page__stats--group-requirements .group-requirements__path-wrapper > h3 {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin: 0;
+    padding: 0.7rem 0.85rem;
+    color: var(--gz-req-text);
+    background: rgba(17, 21, 28, 0.92);
+    border: 1px solid var(--gz-req-border);
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+    font-size: 0.9rem;
+    font-weight: 800;
+    text-align: left !important;
+    text-transform: uppercase;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group-wrapper {
+    position: relative;
+    overflow: hidden;
+    min-width: 0;
+    background: var(--gz-req-panel);
+    border: 1px solid var(--gz-req-border);
+    border-radius: 8px;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+    transition: border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group-wrapper::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: linear-gradient(180deg, var(--gz-req-accent), var(--gz-req-accent-2));
+    opacity: 0.85;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group-wrapper:hover {
+    transform: translateY(-1px);
+    border-color: var(--gz-req-border-strong);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.9rem 1rem 0.75rem 1.15rem;
+    cursor: pointer;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--header h3 {
+    min-width: 0;
+    margin: 0;
+    font-size: 1.02rem;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--header h3 span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 100%;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--header h3 i {
+    width: 1.15rem;
+    text-align: center;
+    opacity: 0.95;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--requirement-row-dropdown {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-width: 1.9rem;
+    height: 1.9rem;
+    color: rgba(255, 255, 255, 0.78);
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 999px;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--requirement-row-dropdown .fa-pull-right {
+    float: none;
+    margin: 0;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--description {
+    margin: 0 1rem 0.9rem 1.15rem;
+    color: var(--gz-req-muted);
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--description i {
+    font-style: normal;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--requirement-wrapper,
+  main.page__stats--group-requirements .group-requirements__group--requirement-multirow {
+    display: grid;
+    gap: 0.5rem;
+    padding: 0 1rem 0.9rem 1.15rem;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group-wrapper p.text-center {
+    margin: 0.35rem 1rem 0.55rem 1.15rem;
+    color: var(--gz-req-muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-align: left !important;
+    text-transform: uppercase;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--separator {
+    padding: 0.55rem 0.7rem;
+    color: rgba(255, 255, 255, 0.78);
+    background: rgba(120, 166, 255, 0.09);
+    border: 1px solid rgba(120, 166, 255, 0.18);
+    border-radius: 7px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--requirement-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.9fr) auto auto;
+    gap: 0.55rem;
+    align-items: center;
+    min-width: 0;
+    padding: 0.62rem 0.7rem;
+    color: rgba(255, 255, 255, 0.88);
+    background: var(--gz-req-panel-soft);
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    border-radius: 7px;
+    font-size: 0.86rem;
+    line-height: 1.35;
+    cursor: pointer;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--requirement-row:hover {
+    background: rgba(255, 255, 255, 0.065);
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--requirement-row-extended {
+    display: block;
+    min-width: 0;
+    padding: 0.55rem 0.7rem;
+    color: rgba(255, 255, 255, 0.88);
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.065);
+    border-radius: 7px;
+    font-size: 0.86rem;
+    line-height: 1.35;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--requirement-row > div,
+  main.page__stats--group-requirements .group-requirements__group--requirement-row-extended > div {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--requirement-row-to-advance {
+    color: rgba(255, 255, 255, 0.72);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  main.page__stats--group-requirements .stats__requirements-table {
+    width: 100%;
+    margin: 0.35rem 0 0;
+    border-collapse: collapse;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 7px;
+    font-size: 0.82rem;
+  }
+
+  main.page__stats--group-requirements .stats__requirements-table th,
+  main.page__stats--group-requirements .stats__requirements-table td {
+    padding: 0.5rem 0.6rem;
+    border-color: rgba(255, 255, 255, 0.075) !important;
+  }
+
+  main.page__stats--group-requirements .stats__requirements-table th {
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.045);
+    font-weight: 800;
+  }
+
+  main.page__stats--group-requirements .group-requirements__group--perks-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    padding: 0 1rem 1rem 1.15rem;
+  }
+
+  main.page__stats--group-requirements .group-requirements__perk,
+  main.page__stats--group-requirements .group-requirements__perk-extended {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 2rem;
+    padding: 0.42rem 0.6rem;
+    color: rgba(255, 255, 255, 0.86);
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  main.page__stats--group-requirements .group-requirements__perk {
+    width: 2rem;
+    padding: 0;
+  }
+
+  main.page__stats--group-requirements .group-requirements__perk--blue {
+    background: rgba(93, 173, 226, 0.14);
+    border-color: rgba(93, 173, 226, 0.28);
+  }
+
+  main.page__stats--group-requirements .group-requirements__perk--green {
+    background: rgba(0, 188, 140, 0.14);
+    border-color: rgba(0, 188, 140, 0.28);
+  }
+
+  main.page__stats--group-requirements .group-requirements__perk--yellow {
+    background: rgba(246, 194, 62, 0.15);
+    border-color: rgba(246, 194, 62, 0.3);
+  }
+
+  main.page__stats--group-requirements .group-requirements__perk--red {
+    background: rgba(231, 76, 60, 0.16);
+    border-color: rgba(231, 76, 60, 0.32);
+  }
+
+  main.page__stats--group-requirements .group-requirements__perk--magenta,
+  main.page__stats--group-requirements .group-requirements__perk--comments-fg {
+    background: rgba(190, 120, 255, 0.14);
+    border-color: rgba(190, 120, 255, 0.28);
+  }
+
+  @media (max-width: 760px) {
+    main.page__stats--group-requirements {
+      padding-inline: 0.7rem;
     }
 
-    .gz-search-title {
-      display: flex;
+    main.page__stats--group-requirements .group-requirements__wrapper {
+      grid-template-columns: 1fr;
+    }
+
+    main.page__stats--group-requirements .group-requirements__group--requirement-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+  }
+
+  .gz-req-v2 {
+    --gz-req-v2-bg: #1b1b1b;
+    --gz-req-v2-line: rgba(255, 255, 255, 0.085);
+    --gz-req-v2-text: rgba(220, 220, 220, 0.78);
+    --gz-req-v2-muted: rgba(220, 220, 220, 0.48);
+    --gz-req-v2-heading: rgba(220, 220, 220, 0.72);
+    --gz-req-v2-pass: #48b58a;
+    --gz-req-v2-fail: #ef5f83;
+    width: min(1840px, calc(100vw - 5rem));
+    margin: 0 auto;
+    padding: 0.25rem 0 2.75rem;
+    color: var(--gz-req-v2-text);
+    font-size: 1rem;
+  }
+
+  main.page__stats--group-requirements.gz-req-v2-page {
+    padding: 1.2rem 0 3rem;
+    background: var(--gz-req-v2-bg);
+  }
+
+  main.page__stats--group-requirements.gz-req-v2-page > article {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .gz-req-v2-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 0 0 1.2rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--gz-req-v2-line);
+  }
+
+  .gz-req-v2-title {
+    margin: 0;
+    color: rgba(230, 230, 230, 0.78);
+    font-size: 1.35rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .gz-req-v2-summary {
+    color: var(--gz-req-v2-muted);
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  .gz-req-v2-section {
+    margin: 1.8rem 0 0.35rem;
+    color: rgba(230, 230, 230, 0.46);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .gz-req-v2-row {
+    display: grid;
+    grid-template-columns: minmax(14rem, 21rem) minmax(24rem, 1fr) minmax(26rem, 1.2fr);
+    gap: 3.2rem;
+    align-items: start;
+    padding: 1.45rem 0 1.85rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  }
+
+  .gz-req-v2-rank {
+    min-width: 0;
+    text-align: center;
+  }
+
+  .gz-req-v2-rank__title {
+    margin: 0;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--gz-req-v2-line);
+    color: rgba(230, 230, 230, 0.72);
+    font-size: 1.2rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .gz-req-v2-rank__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 5.8rem;
+    color: rgba(220, 220, 220, 0.56);
+    border-bottom: 1px solid var(--gz-req-v2-line);
+  }
+
+  .gz-req-v2-rank__icon i {
+    font-size: 2.6rem;
+    line-height: 1;
+  }
+
+  .gz-req-v2-rank__description {
+    margin: 0;
+    padding-top: 0.8rem;
+    color: var(--gz-req-v2-muted);
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.35;
+    text-transform: capitalize;
+  }
+
+  .gz-req-v2-panel {
+    min-width: 0;
+  }
+
+  .gz-req-v2-panel__heading {
+    margin: 0 0 0.7rem;
+    padding-bottom: 0.65rem;
+    color: var(--gz-req-v2-heading);
+    border-bottom: 1px solid var(--gz-req-v2-line);
+    font-size: 1.08rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .gz-req-v2-rule-note {
+    margin: 0 0 0.55rem;
+    padding: 0.45rem 0;
+    color: rgba(220, 220, 220, 0.58);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+    font-size: 0.88rem;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .gz-req-v2-criterion {
+    display: grid;
+    grid-template-columns: minmax(11rem, 1.1fr) minmax(10rem, 1fr) 1.4rem;
+    gap: 0.65rem;
+    align-items: baseline;
+    min-width: 0;
+    color: var(--gz-req-v2-text);
+    font-size: 0.98rem;
+    font-weight: 600;
+    line-height: 1.32;
+  }
+
+  .gz-req-v2-criterion__label {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .gz-req-v2-criterion__label i {
+    width: 1rem;
+    color: rgba(220, 220, 220, 0.46) !important;
+    font-size: 0.85rem;
+    text-align: center;
+  }
+
+  .gz-req-v2-criterion__values {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.08rem;
+    min-width: 0;
+    text-align: right;
+  }
+
+  .gz-req-v2-criterion__value {
+    color: rgba(225, 225, 225, 0.68);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .gz-req-v2-criterion__advance {
+    color: rgba(220, 220, 220, 0.36);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .gz-req-v2-status {
+    color: rgba(220, 220, 220, 0.38);
+    font-size: 1.15rem;
+    font-weight: 400;
+    text-align: center;
+    line-height: 1;
+  }
+
+  .gz-req-v2-status--pass {
+    color: var(--gz-req-v2-pass);
+  }
+
+  .gz-req-v2-status--fail {
+    color: var(--gz-req-v2-fail);
+  }
+
+  .gz-req-v2-perk {
+    display: grid;
+    grid-template-columns: 1.15rem minmax(0, 1fr);
+    gap: 0.55rem;
+    align-items: baseline;
+    min-width: 0;
+    padding: 0.62rem 0;
+    color: rgba(220, 220, 220, 0.68);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.052);
+    font-size: 0.98rem;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .gz-req-v2-perk:first-of-type {
+    padding-top: 0;
+  }
+
+  .gz-req-v2-perk i {
+    width: 1.15rem;
+    color: rgba(220, 220, 220, 0.44) !important;
+    font-size: 0.9rem;
+    text-align: center;
+  }
+
+  .gz-req-v2-empty {
+    padding: 0.45rem 0;
+    color: rgba(220, 220, 220, 0.34);
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  @media (max-width: 1250px) {
+    .gz-req-v2 {
+      width: min(100% - 2rem, 1100px);
+    }
+
+    .gz-req-v2-row {
+      grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
+      gap: 2rem;
+    }
+
+    .gz-req-v2-panel--perks {
+      grid-column: 2;
+    }
+  }
+
+  @media (max-width: 820px) {
+    .gz-req-v2 {
+      width: min(100% - 1.2rem, 640px);
+    }
+
+    .gz-req-v2-header {
+      align-items: flex-start;
       flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .gz-req-v2-row {
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+    }
+
+    .gz-req-v2-panel--perks {
+      grid-column: auto;
+    }
+
+    .gz-req-v2-rank {
+      text-align: left;
+    }
+
+    .gz-req-v2-rank__icon {
+      justify-content: flex-start;
+      min-height: 4.2rem;
+    }
+
+    .gz-req-v2-criterion {
+      grid-template-columns: minmax(0, 1fr) auto 1.2rem;
+    }
+  }
+
+  main.page__stats--group-requirements.gz-req-v2-page {
+    overflow-x: hidden;
+  }
+
+  main.page__stats--group-requirements.gz-req-v2-page,
+  main.page__stats--group-requirements.gz-req-v2-page * {
+    box-sizing: border-box;
+  }
+
+  .gz-req-v2 {
+    width: auto;
+    max-width: 1780px;
+    margin: 0 clamp(1rem, 3vw, 3.25rem);
+  }
+
+  .gz-req-v2-header {
+    margin-bottom: 1.55rem;
+  }
+
+  .gz-req-v2-section {
+    margin: 2.2rem 0 0.1rem;
+    padding: 0 0 0.7rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .gz-req-v2-row {
+    grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr) minmax(0, 1.05fr);
+    gap: clamp(1.5rem, 3vw, 3rem);
+    padding: 1.8rem 0 2.05rem;
+  }
+
+  .gz-req-v2-rank__title {
+    font-size: 1.12rem;
+  }
+
+  .gz-req-v2-rank__icon {
+    min-height: 7.4rem;
+  }
+
+  .gz-req-v2-rank__icon i {
+    font-size: 4.2rem;
+  }
+
+  .gz-req-v2-rank__description {
+    padding-top: 1rem;
+    font-size: 0.94rem;
+  }
+
+  .gz-req-v2-panel__heading {
+    margin-bottom: 0.95rem;
+    font-size: 1.02rem;
+  }
+
+  .gz-req-v2-rule-note {
+    margin-bottom: 0.75rem;
+    padding: 0.55rem 0;
+  }
+
+  .gz-req-v2-criterion {
+    grid-template-columns: minmax(0, 1fr) minmax(7.5rem, auto) 1.45rem;
+    gap: 0.75rem;
+    padding: 0.12rem 0;
+    font-size: 1rem;
+  }
+
+  .gz-req-v2-criterion__value,
+  .gz-req-v2-criterion__advance {
+    max-width: 11rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .gz-req-v2-perk {
+    padding: 0.74rem 0;
+    font-size: 1rem;
+  }
+
+  @media (min-width: 1781px) {
+    .gz-req-v2 {
+      margin-left: auto;
+      margin-right: auto;
+    }
+  }
+
+  @media (max-width: 1250px) {
+    .gz-req-v2 {
+      width: auto;
+      max-width: none;
+      margin: 0 1rem;
+    }
+
+    .gz-req-v2-row {
+      grid-template-columns: minmax(10rem, 15rem) minmax(0, 1fr);
+      gap: 1.7rem;
+    }
+
+    .gz-req-v2-panel--perks {
+      grid-column: 2;
+    }
+
+    .gz-req-v2-rank__icon {
+      min-height: 6.6rem;
+    }
+
+    .gz-req-v2-rank__icon i {
+      font-size: 3.7rem;
+    }
+  }
+
+  @media (max-width: 820px) {
+    .gz-req-v2 {
+      margin: 0 0.75rem;
+    }
+
+    .gz-req-v2-row {
+      grid-template-columns: 1fr;
+      gap: 1.15rem;
+    }
+
+    .gz-req-v2-panel--perks {
+      grid-column: auto;
+    }
+
+    .gz-req-v2-rank__icon {
+      min-height: 5rem;
+    }
+
+    .gz-req-v2-rank__icon i {
+      font-size: 3.1rem;
+    }
+
+    .gz-req-v2-criterion {
+      grid-template-columns: minmax(0, 1fr) minmax(5.5rem, auto) 1.2rem;
+      gap: 0.55rem;
+    }
+  }
+
+  .gz-req-v2-rank__icon svg,
+  .gz-req-v2-rank__icon .svg-inline--fa {
+    width: 4.2rem;
+    height: 4.2rem;
+    font-size: 4.2rem;
+  }
+
+  .gz-req-v2-choice {
+    margin: 0 0 0.85rem;
+    padding: 0.7rem 0 0.8rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.052);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.052);
+  }
+
+  .gz-req-v2-choice__title {
+    margin-bottom: 0.45rem;
+    color: rgba(220, 220, 220, 0.46);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .gz-req-v2-choice__items {
+    display: grid;
+    gap: 0.18rem;
+  }
+
+  .gz-req-v2-criterion__values {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 0.55rem;
+  }
+
+  .gz-req-v2-criterion__value,
+  .gz-req-v2-criterion__advance {
+    max-width: 11rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  @media (max-width: 1250px) {
+    .gz-req-v2-rank__icon svg,
+    .gz-req-v2-rank__icon .svg-inline--fa {
+      width: 3.7rem;
+      height: 3.7rem;
+      font-size: 3.7rem;
+    }
+  }
+
+  @media (max-width: 820px) {
+    .gz-req-v2-rank__icon svg,
+    .gz-req-v2-rank__icon .svg-inline--fa {
+      width: 3.1rem;
+      height: 3.1rem;
+      font-size: 3.1rem;
+    }
+
+    .gz-req-v2-criterion__values {
+      gap: 0.35rem;
+    }
+  }
+
+  .gz-req-v2 {
+    max-width: 1700px;
+  }
+
+  .gz-req-v2-section {
+    margin-top: 1.55rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .gz-req-v2-row {
+    grid-template-columns: minmax(10.5rem, 15.5rem) minmax(0, 1fr) minmax(0, 1fr);
+    gap: clamp(1.25rem, 2.4vw, 2.45rem);
+    padding: 1.15rem 0 1.35rem;
+  }
+
+  .gz-req-v2-rank__title {
+    padding-bottom: 0.55rem;
+    font-size: 1.02rem;
+  }
+
+  .gz-req-v2-rank__icon {
+    min-height: 5.25rem;
+  }
+
+  .gz-req-v2-rank__icon i,
+  .gz-req-v2-rank__icon svg,
+  .gz-req-v2-rank__icon .svg-inline--fa,
+  .gz-req-v2-rank__icon [data-icon] {
+    width: 3.9rem !important;
+    height: 3.9rem !important;
+    min-width: 3.9rem !important;
+    min-height: 3.9rem !important;
+    max-width: 3.9rem !important;
+    max-height: 3.9rem !important;
+    font-size: 3.9rem !important;
+    line-height: 1 !important;
+  }
+
+  .gz-req-v2-rank__icon i::before {
+    font-size: 3.9rem !important;
+  }
+
+  .gz-req-v2-rank__icon i:not(.fa-times):not(.fa-question),
+  .gz-req-v2-rank__icon svg:not([data-icon="times"]):not([data-icon="question"]),
+  .gz-req-v2-rank__icon .svg-inline--fa:not([data-icon="times"]):not([data-icon="question"]) {
+    width: 4.65rem !important;
+    height: 4.65rem !important;
+    min-width: 4.65rem !important;
+    min-height: 4.65rem !important;
+    max-width: 4.65rem !important;
+    max-height: 4.65rem !important;
+    font-size: 4.65rem !important;
+  }
+
+  .gz-req-v2-rank__icon i:not(.fa-times):not(.fa-question)::before {
+    font-size: 4.65rem !important;
+  }
+
+  .gz-req-v2-rank__description {
+    padding-top: 0.6rem;
+    font-size: 0.86rem;
+    line-height: 1.25;
+  }
+
+  .gz-req-v2-panel__heading {
+    margin-bottom: 0.55rem;
+    padding-bottom: 0.48rem;
+    font-size: 0.92rem;
+  }
+
+  .gz-req-v2-choice {
+    margin-bottom: 0.52rem;
+    padding: 0.48rem 0 0.52rem;
+  }
+
+  .gz-req-v2-choice__title {
+    margin-bottom: 0.3rem;
+    font-size: 0.68rem;
+  }
+
+  .gz-req-v2-criterion {
+    grid-template-columns: minmax(0, 1fr) minmax(9rem, auto) 1.25rem;
+    gap: 0.55rem;
+    padding: 0.04rem 0;
+    font-size: 0.92rem;
+    line-height: 1.22;
+  }
+
+  .gz-req-v2-criterion__label {
+    gap: 0.36rem;
+  }
+
+  .gz-req-v2-criterion__values {
+    gap: 0.38rem;
+  }
+
+  .gz-req-v2-criterion__advance {
+    font-size: 0.72rem;
+  }
+
+  .gz-req-v2-status {
+    font-size: 1rem;
+  }
+
+  .gz-req-v2-perk {
+    padding: 0.47rem 0;
+    font-size: 0.92rem;
+    line-height: 1.25;
+  }
+
+  @media (max-width: 1250px) {
+    .gz-req-v2-row {
+      grid-template-columns: minmax(9.5rem, 13rem) minmax(0, 1fr);
+      gap: 1.35rem;
+      padding: 1rem 0 1.2rem;
+    }
+
+    .gz-req-v2-rank__icon {
+      min-height: 4.8rem;
+    }
+
+    .gz-req-v2-rank__icon i,
+    .gz-req-v2-rank__icon svg,
+    .gz-req-v2-rank__icon .svg-inline--fa,
+    .gz-req-v2-rank__icon [data-icon] {
+      width: 3.5rem !important;
+      height: 3.5rem !important;
+      min-width: 3.5rem !important;
+      min-height: 3.5rem !important;
+      max-width: 3.5rem !important;
+      max-height: 3.5rem !important;
+      font-size: 3.5rem !important;
+    }
+
+    .gz-req-v2-rank__icon i::before {
+      font-size: 3.5rem !important;
+    }
+
+    .gz-req-v2-rank__icon i:not(.fa-times):not(.fa-question),
+    .gz-req-v2-rank__icon svg:not([data-icon="times"]):not([data-icon="question"]),
+    .gz-req-v2-rank__icon .svg-inline--fa:not([data-icon="times"]):not([data-icon="question"]) {
+      width: 4rem !important;
+      height: 4rem !important;
+      min-width: 4rem !important;
+      min-height: 4rem !important;
+      max-width: 4rem !important;
+      max-height: 4rem !important;
+      font-size: 4rem !important;
+    }
+
+    .gz-req-v2-rank__icon i:not(.fa-times):not(.fa-question)::before {
+      font-size: 4rem !important;
+    }
+  }
+
+  @media (max-width: 820px) {
+    .gz-req-v2-row {
+      gap: 0.9rem;
+      padding: 0.9rem 0 1.05rem;
+    }
+
+    .gz-req-v2-rank__icon {
+      min-height: 4.5rem;
+    }
+
+    .gz-req-v2-rank__icon i,
+    .gz-req-v2-rank__icon svg,
+    .gz-req-v2-rank__icon .svg-inline--fa,
+    .gz-req-v2-rank__icon [data-icon] {
+      width: 3.25rem !important;
+      height: 3.25rem !important;
+      min-width: 3.25rem !important;
+      min-height: 3.25rem !important;
+      max-width: 3.25rem !important;
+      max-height: 3.25rem !important;
+      font-size: 3.25rem !important;
+    }
+
+    .gz-req-v2-rank__icon i::before {
+      font-size: 3.25rem !important;
+    }
+
+    .gz-req-v2-rank__icon i:not(.fa-times):not(.fa-question),
+    .gz-req-v2-rank__icon svg:not([data-icon="times"]):not([data-icon="question"]),
+    .gz-req-v2-rank__icon .svg-inline--fa:not([data-icon="times"]):not([data-icon="question"]) {
+      width: 3.75rem !important;
+      height: 3.75rem !important;
+      min-width: 3.75rem !important;
+      min-height: 3.75rem !important;
+      max-width: 3.75rem !important;
+      max-height: 3.75rem !important;
+      font-size: 3.75rem !important;
+    }
+
+    .gz-req-v2-rank__icon i:not(.fa-times):not(.fa-question)::before {
+      font-size: 3.75rem !important;
+    }
+  }
+
+  .gz-req-v2-row {
+    padding: 0.95rem 0 1.05rem;
+  }
+
+  .gz-req-v2-rank__icon {
+    min-height: 3.6rem;
+  }
+
+  .gz-req-v2-rank__icon i,
+  .gz-req-v2-rank__icon svg,
+  .gz-req-v2-rank__icon .svg-inline--fa,
+  .gz-req-v2-rank__icon [data-icon],
+  .gz-req-v2-rank__icon i:not(.fa-times):not(.fa-question),
+  .gz-req-v2-rank__icon svg:not([data-icon="times"]):not([data-icon="question"]),
+  .gz-req-v2-rank__icon .svg-inline--fa:not([data-icon="times"]):not([data-icon="question"]) {
+    width: 1.85rem !important;
+    height: 1.85rem !important;
+    min-width: 1.85rem !important;
+    min-height: 1.85rem !important;
+    max-width: 1.85rem !important;
+    max-height: 1.85rem !important;
+    font-size: 1.85rem !important;
+    line-height: 1 !important;
+  }
+
+  .gz-req-v2-rank__icon i::before,
+  .gz-req-v2-rank__icon i:not(.fa-times):not(.fa-question)::before {
+    font-size: 1.85rem !important;
+  }
+
+  .gz-req-v2-criterion {
+    grid-template-columns: minmax(0, 1fr) minmax(4.75rem, auto) 1.15rem;
+    gap: 0.42rem;
+  }
+
+  .gz-req-v2-criterion__values {
+    gap: 0;
+  }
+
+  .gz-req-v2-criterion__value--tooltip {
+    cursor: help;
+    text-decoration: underline dotted rgba(220, 220, 220, 0.28);
+    text-underline-offset: 0.16em;
+  }
+
+  .gz-req-v2-criterion__advance {
+    display: none;
+  }
+
+  @media (max-width: 820px) {
+    .gz-req-v2-rank__icon {
+      min-height: 3.2rem;
+    }
+
+    .gz-req-v2-rank__icon i,
+    .gz-req-v2-rank__icon svg,
+    .gz-req-v2-rank__icon .svg-inline--fa,
+    .gz-req-v2-rank__icon [data-icon],
+    .gz-req-v2-rank__icon i:not(.fa-times):not(.fa-question),
+    .gz-req-v2-rank__icon svg:not([data-icon="times"]):not([data-icon="question"]),
+    .gz-req-v2-rank__icon .svg-inline--fa:not([data-icon="times"]):not([data-icon="question"]) {
+      width: 1.65rem !important;
+      height: 1.65rem !important;
+      min-width: 1.65rem !important;
+      min-height: 1.65rem !important;
+      max-width: 1.65rem !important;
+      max-height: 1.65rem !important;
+      font-size: 1.65rem !important;
+    }
+
+    .gz-req-v2-rank__icon i::before,
+    .gz-req-v2-rank__icon i:not(.fa-times):not(.fa-question)::before {
+      font-size: 1.65rem !important;
+    }
+  }
+
+  .gz-req-v2 {
+    max-width: 1600px;
+  }
+
+  .gz-req-v2-header {
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.45rem;
+  }
+
+  .gz-req-v2-section {
+    margin-top: 0.9rem;
+    padding-bottom: 0.35rem;
+  }
+
+  .gz-req-v2-row {
+    grid-template-columns: minmax(9.5rem, 13.5rem) minmax(0, 1fr) minmax(0, 1fr);
+    gap: clamp(1.2rem, 2vw, 2.1rem);
+    padding: 0.55rem 0 0.68rem;
+  }
+
+  .gz-req-v2-rank__title {
+    padding-bottom: 0.32rem;
+    font-size: 1rem;
+    line-height: 1.12;
+  }
+
+  .gz-req-v2-rank__icon {
+    min-height: 2.65rem;
+    padding: 0.2rem 0;
+  }
+
+  .gz-req-v2-rank__description {
+    padding-top: 0.35rem;
+    font-size: 0.9rem;
+    line-height: 1.12;
+  }
+
+  .gz-req-v2-panel__heading {
+    margin-bottom: 0.34rem;
+    padding-bottom: 0.32rem;
+    font-size: 1rem;
+    line-height: 1.12;
+  }
+
+  .gz-req-v2-choice {
+    margin-bottom: 0.28rem;
+    padding: 0.25rem 0 0.3rem;
+  }
+
+  .gz-req-v2-choice__title {
+    margin-bottom: 0.18rem;
+    font-size: 0.76rem;
+    line-height: 1.1;
+  }
+
+  .gz-req-v2-choice__items {
+    gap: 0;
+  }
+
+  .gz-req-v2-criterion {
+    grid-template-columns: minmax(0, 1fr) minmax(4.25rem, auto) 1.05rem;
+    gap: 0.36rem;
+    padding: 0;
+    font-size: 1rem;
+    line-height: 1.1;
+  }
+
+  .gz-req-v2-criterion__label {
+    gap: 0.32rem;
+  }
+
+  .gz-req-v2-criterion__label i {
+    font-size: 0.86rem;
+  }
+
+  .gz-req-v2-status {
+    font-size: 1rem;
+  }
+
+  .gz-req-v2-perk {
+    padding: 0.32rem 0;
+    font-size: 1rem;
+    line-height: 1.12;
+  }
+
+  .gz-req-v2-empty {
+    padding: 0.22rem 0;
+    font-size: 1rem;
+  }
+
+  @media (max-width: 1250px) {
+    .gz-req-v2-row {
+      grid-template-columns: minmax(8.5rem, 11.5rem) minmax(0, 1fr);
+      gap: 1.15rem;
+      padding: 0.5rem 0 0.62rem;
+    }
+
+    .gz-req-v2-panel--perks {
+      grid-column: 2;
+    }
+  }
+
+  @media (max-width: 820px) {
+    .gz-req-v2-row {
+      grid-template-columns: 1fr;
+      gap: 0.65rem;
+      padding: 0.55rem 0 0.7rem;
+    }
+
+    .gz-req-v2-panel--perks {
+      grid-column: auto;
+    }
+  }
+
+  .gz-req-v2-row {
+    grid-template-columns: minmax(9.5rem, 13rem) minmax(22rem, 36rem) minmax(0, 1fr);
+    gap: clamp(1.1rem, 2vw, 2rem);
+  }
+
+  .gz-req-v2-panel {
+    max-width: 36rem;
+  }
+
+  .gz-req-v2-panel--perks {
+    max-width: none;
+  }
+
+  .gz-req-v2-criterion {
+    grid-template-columns: minmax(10rem, 1fr) 6.5rem 1.05rem;
+  }
+
+  .gz-req-v2-criterion__values {
+    justify-content: flex-end;
+  }
+
+  .gz-req-v2-perk {
+    display: grid;
+    grid-template-columns: 1.15rem minmax(0, 1fr);
+  }
+
+  @media (max-width: 1250px) {
+    .gz-req-v2-row {
+      grid-template-columns: minmax(8.5rem, 11.5rem) minmax(0, 1fr);
+    }
+
+    .gz-req-v2-panel,
+    .gz-req-v2-panel--perks {
+      max-width: none;
+    }
+  }
+
+  @media (max-width: 820px) {
+    .gz-req-v2-row {
+      grid-template-columns: 1fr;
+    }
+
+    .gz-req-v2-criterion {
+      grid-template-columns: minmax(0, 1fr) minmax(4.25rem, auto) 1.05rem;
+    }
+  }
+
+  .gz-req-v2 {
+    width: min(100% - 3rem, 1320px);
+    max-width: 1320px;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 1.08rem;
+  }
+
+  .gz-req-v2-row {
+    grid-template-columns: 13rem 33rem 34rem;
+    justify-content: center;
+    gap: 2.1rem;
+  }
+
+  .gz-req-v2-panel,
+  .gz-req-v2-panel--perks {
+    max-width: none;
+    width: 100%;
+  }
+
+  .gz-req-v2-title {
+    font-size: 1.45rem;
+  }
+
+  .gz-req-v2-rank__title,
+  .gz-req-v2-panel__heading {
+    font-size: 1.08rem;
+  }
+
+  .gz-req-v2-rank__description {
+    font-size: 0.98rem;
+  }
+
+  .gz-req-v2-choice__title {
+    font-size: 0.82rem;
+  }
+
+  .gz-req-v2-criterion,
+  .gz-req-v2-perk,
+  .gz-req-v2-empty {
+    font-size: 1.08rem;
+  }
+
+  .gz-req-v2-criterion {
+    grid-template-columns: minmax(0, 1fr) 6rem 1.15rem;
+  }
+
+  .gz-req-v2-criterion__label i,
+  .gz-req-v2-perk i {
+    font-size: 0.95rem;
+  }
+
+  @media (max-width: 1450px) {
+    .gz-req-v2 {
+      width: min(100% - 2rem, 1180px);
+      max-width: 1180px;
+    }
+
+    .gz-req-v2-row {
+      grid-template-columns: 11.5rem minmax(0, 1fr) minmax(0, 1fr);
+      gap: 1.5rem;
+    }
+  }
+
+  @media (max-width: 1250px) {
+    .gz-req-v2 {
+      width: min(100% - 1.5rem, 900px);
+      max-width: 900px;
+    }
+
+    .gz-req-v2-row {
+      grid-template-columns: 11rem minmax(0, 1fr);
+    }
+  }
+
+  @media (max-width: 820px) {
+    .gz-req-v2 {
+      width: min(100% - 1rem, 640px);
+      max-width: 640px;
+      font-size: 1rem;
+    }
+
+    .gz-req-v2-row {
+      grid-template-columns: 1fr;
+    }
+
+    .gz-req-v2-criterion {
+      grid-template-columns: minmax(0, 1fr) minmax(4.5rem, auto) 1.05rem;
+    }
+  }
+
+  .gz-req-v2 {
+    width: min(100% - 36px, 1540px);
+    max-width: 1540px;
+    font-size: 16px;
+  }
+
+  .gz-req-v2-row {
+    grid-template-columns: 280px 540px 640px;
+    gap: 30px;
+    justify-content: center;
+    padding: 10px 0 14px;
+  }
+
+  .gz-req-v2-rank {
+    overflow: visible;
+    min-width: 0;
+  }
+
+  .gz-req-v2-title {
+    font-size: 20px;
+  }
+
+  .gz-req-v2-section {
+    font-size: 13px;
+  }
+
+  .gz-req-v2-rank__title,
+  .gz-req-v2-panel__heading {
+    font-size: 16px;
+    line-height: 1.2;
+  }
+
+  .gz-req-v2-rank__description {
+    font-size: 14px;
+    line-height: 1.2;
+    max-width: 100%;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .gz-req-v2-choice__title {
+    font-size: 12px;
+    line-height: 1.15;
+  }
+
+  .gz-req-v2-criterion,
+  .gz-req-v2-perk,
+  .gz-req-v2-empty {
+    font-size: 16px;
+    line-height: 1.2;
+  }
+
+  .gz-req-v2-criterion {
+    grid-template-columns: minmax(0, 1fr) 110px 18px;
+  }
+
+  .gz-req-v2-choice {
+    border-top: 0;
+    margin-top: 0;
+    padding-top: 0.42rem;
+  }
+
+  .gz-req-v2-choice__items {
+    gap: 0.16rem;
+  }
+
+  .gz-req-v2-criterion {
+    padding: 0.08rem 0;
+    line-height: 1.28;
+  }
+
+  .gz-req-v2-criterion__label {
+    gap: 0;
+  }
+
+  .gz-req-v2-criterion__label i,
+  .gz-req-v2-criterion__label svg,
+  .gz-req-v2-criterion__label .svg-inline--fa {
+    margin-right: 0.42rem;
+    flex: 0 0 auto;
+  }
+
+  .gz-req-v2-perk {
+    display: block;
+    grid-template-columns: none;
+    column-gap: 0;
+  }
+
+  .gz-req-v2-perk i,
+  .gz-req-v2-perk svg,
+  .gz-req-v2-perk .svg-inline--fa {
+    margin-right: 0.35rem;
+    justify-self: start;
+  }
+
+  .gz-req-v2-criterion__label i,
+  .gz-req-v2-perk i {
+    font-size: 14px;
+  }
+
+  .gz-req-v2-status {
+    font-size: 16px;
+  }
+
+  @media (max-width: 1600px) {
+    .gz-req-v2 {
+      width: min(100% - 28px, 1320px);
+      max-width: 1320px;
+    }
+
+    .gz-req-v2-row {
+      grid-template-columns: 230px 470px 560px;
+      gap: 28px;
+    }
+  }
+
+  @media (max-width: 1350px) {
+    .gz-req-v2 {
+      width: min(100% - 24px, 1120px);
+      max-width: 1120px;
+    }
+
+    .gz-req-v2-row {
+      grid-template-columns: 190px minmax(0, 1fr) minmax(0, 1fr);
+      gap: 22px;
+    }
+  }
+
+  @media (max-width: 1050px) {
+    .gz-req-v2-row {
+      grid-template-columns: 170px minmax(0, 1fr);
+    }
+
+    .gz-req-v2-panel--perks {
+      grid-column: 2;
+    }
+  }
+
+  @media (max-width: 820px) {
+    .gz-req-v2 {
+      width: min(100% - 16px, 640px);
+      max-width: 640px;
+      font-size: 16px;
+    }
+
+    .gz-req-v2-row {
+      grid-template-columns: 1fr;
+    }
+
+    .gz-req-v2-panel--perks {
+      grid-column: auto;
+    }
+  }
+
+  .gz-req-v2-rank {
+    overflow: visible;
+    padding-inline: 0.45rem;
+  }
+
+  .gz-req-v2-rank__description {
+    display: block;
+    width: min(100%, 230px);
+    max-width: min(100%, 230px);
+    margin: 0 auto;
+    padding: 0.45rem 0 0;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    hyphens: auto;
+    white-space: normal;
+    text-align: center;
+    text-wrap: wrap;
+  }
+
+  .gz-req-v2-rank__icon {
+    min-height: 4.6rem;
+    overflow: visible;
+  }
+
+  .gz-req-v2-rank__icon > i,
+  .gz-req-v2-rank__icon > svg,
+  .gz-req-v2-rank__icon > .svg-inline--fa,
+  .gz-req-v2-rank__icon [data-icon] {
+    width: 1.6rem !important;
+    height: 1.6rem !important;
+    min-width: 1.6rem !important;
+    min-height: 1.6rem !important;
+    max-width: 1.6rem !important;
+    max-height: 1.6rem !important;
+    font-size: 1.6rem !important;
+    line-height: 1 !important;
+    transform: scale(2);
+    transform-origin: center center;
+  }
+
+  .gz-req-v2-rank__icon > i::before {
+    font-size: 1.6rem !important;
+  }
+
+  @media (max-width: 820px) {
+    .gz-req-v2-rank {
+      padding-inline: 0.35rem;
+    }
+
+    .gz-req-v2-rank__description {
+      width: min(100%, 220px);
+      max-width: min(100%, 220px);
+      padding-inline: 0;
+    }
+
+    .gz-req-v2-rank__icon {
+      min-height: 4rem;
+    }
+
+    .gz-req-v2-rank__icon > i,
+    .gz-req-v2-rank__icon > svg,
+    .gz-req-v2-rank__icon > .svg-inline--fa,
+    .gz-req-v2-rank__icon [data-icon] {
+      transform: scale(1.75);
+    }
+  }
+
+  main.page__stats--group-requirements.gz-req-v2-page {
+    overflow-x: visible;
+  }
+
+  .gz-req-v2 {
+    width: min(calc(100vw - 32px), 1720px);
+    max-width: 1720px;
+    overflow: visible;
+  }
+
+  .gz-req-v2-row {
+    grid-template-columns:
+      minmax(260px, 0.9fr)
+      minmax(450px, 1.55fr)
+      minmax(520px, 1.85fr);
+    gap: clamp(24px, 2.2vw, 38px);
+    justify-content: stretch;
+    overflow: visible;
+  }
+
+  .gz-req-v2-rank {
+    overflow: visible;
+    padding-inline: 0;
+  }
+
+  .gz-req-v2-rank__description {
+    width: calc(100% - 28px);
+    max-width: 320px;
+    padding-top: 0.45rem;
+    padding-inline: 0;
+    margin-inline: auto;
+    overflow: visible;
+    overflow-wrap: break-word;
+    word-break: normal;
+    white-space: normal;
+  }
+
+  .gz-req-v2-rank__icon {
+    min-height: 5.15rem;
+  }
+
+  .gz-req-v2-rank__icon > i,
+  .gz-req-v2-rank__icon > svg,
+  .gz-req-v2-rank__icon > .svg-inline--fa,
+  .gz-req-v2-rank__icon [data-icon] {
+    transform: scale(2.25);
+  }
+
+  @media (max-width: 1320px) {
+    .gz-req-v2 {
+      width: min(calc(100vw - 24px), 1120px);
+      max-width: 1120px;
+    }
+
+    .gz-req-v2-row {
+      grid-template-columns: minmax(230px, 0.8fr) minmax(0, 1.8fr);
+      gap: 24px;
+    }
+
+    .gz-req-v2-rank__description {
+      width: calc(100% - 20px);
+      max-width: 280px;
+    }
+
+    .gz-req-v2-panel--perks {
+      grid-column: 2;
+    }
+  }
+
+  @media (max-width: 820px) {
+    .gz-req-v2 {
+      width: min(calc(100vw - 16px), 640px);
+      max-width: 640px;
+    }
+
+    .gz-req-v2-row {
+      grid-template-columns: 1fr;
+      overflow: visible;
+    }
+
+    .gz-req-v2-rank__description {
+      width: min(calc(100% - 20px), 320px);
+      max-width: 320px;
+    }
+
+    .gz-req-v2-rank__icon > i,
+    .gz-req-v2-rank__icon > svg,
+    .gz-req-v2-rank__icon > .svg-inline--fa,
+    .gz-req-v2-rank__icon [data-icon] {
+      transform: scale(2);
+    }
+
+    .gz-req-v2-panel--perks {
+      grid-column: auto;
+    }
+  }
+
+main.page__stats--group-requirements.gz-req-v2-page {
+overflow-x: hidden;
+}
+
+.gz-req-v2 {
+width: min(100%, 1580px);
+max-width: calc(100% - 28px);
+margin-inline: auto;
+font-size: 16px;
+overflow: visible;
+}
+
+.gz-req-v2-header {
+margin-bottom: 0.85rem;
+padding-bottom: 0.55rem;
+}
+
+.gz-req-v2-section {
+margin-top: 1.15rem;
+padding-bottom: 0.42rem;
+}
+
+.gz-req-v2-row {
+grid-template-columns: minmax(210px, 20%) minmax(0, 36%) minmax(0, 44%);
+gap: 0;
+max-width: 100%;
+padding: 0.9rem 0 1.05rem;
+overflow: visible;
+}
+
+.gz-req-v2-rank {
+min-width: 0;
+padding-inline: 10px;
+overflow: visible;
+}
+
+.gz-req-v2-panel,
+.gz-req-v2-panel--perks {
+min-width: 0;
+width: 100%;
+max-width: none;
+padding-inline: clamp(18px, 1.8vw, 28px);
+overflow: visible;
+}
+
+.gz-req-v2-rank__title,
+.gz-req-v2-panel__heading {
+margin-bottom: 0.5rem;
+padding-bottom: 0.48rem;
+font-size: 1rem;
+line-height: 1.2;
+}
+
+.gz-req-v2-rank__icon {
+min-height: 6.7rem;
+padding: 0.7rem 0;
+overflow: visible;
+}
+
+.gz-req-v2-rank__icon > i,
+.gz-req-v2-rank__icon > svg,
+.gz-req-v2-rank__icon > .svg-inline--fa,
+.gz-req-v2-rank__icon [data-icon] {
+width: 1.6rem !important;
+height: 1.6rem !important;
+min-width: 1.6rem !important;
+min-height: 1.6rem !important;
+max-width: 1.6rem !important;
+max-height: 1.6rem !important;
+font-size: 1.6rem !important;
+line-height: 1 !important;
+transform: scale(3.1);
+transform-origin: center center;
+}
+
+.gz-req-v2-rank__icon > i::before {
+font-size: 1.6rem !important;
+}
+
+.gz-req-v2-rank__description {
+display: block;
+width: 100%;
+max-width: none;
+min-width: 0;
+margin: 0;
+padding: 0.58rem 0.65rem 0.08rem;
+overflow: visible;
+overflow-wrap: break-word;
+word-break: normal;
+hyphens: none;
+white-space: normal;
+font-size: 0.94rem;
+line-height: 1.32;
+text-align: center;
+}
+
+.gz-req-v2-choice {
+margin: 0 0 0.22rem;
+padding: 0.05rem 0 0.32rem;
+border-top: 0;
+}
+
+.gz-req-v2-choice__title {
+margin-bottom: 0.22rem;
+font-size: 0.76rem;
+line-height: 1.15;
+}
+
+.gz-req-v2-criterion {
+grid-template-columns: minmax(0, 1fr) max-content 1.05rem;
+gap: 0.42rem;
+padding: 0.07rem 0;
+font-size: 1rem;
+line-height: 1.28;
+}
+
+.gz-req-v2-criterion__label {
+overflow-wrap: break-word;
+}
+
+.gz-req-v2-criterion__values {
+align-items: flex-end;
+}
+
+.gz-req-v2-perk {
+display: block;
+grid-template-columns: none;
+padding: 0.36rem 0;
+font-size: 1rem;
+line-height: 1.3;
+}
+
+.gz-req-v2-empty {
+font-size: 1rem;
+line-height: 1.3;
+}
+
+@media (max-width: 1200px) {
+.gz-req-v2 {
+width: min(100%, 1040px);
+max-width: calc(100% - 24px);
+}
+
+.gz-req-v2-row {
+grid-template-columns: minmax(210px, 26%) minmax(0, 74%);
+}
+
+.gz-req-v2-panel--perks {
+grid-column: 2;
+}
+
+.gz-req-v2-rank__icon {
+min-height: 6rem;
+}
+
+.gz-req-v2-rank__icon > i,
+.gz-req-v2-rank__icon > svg,
+.gz-req-v2-rank__icon > .svg-inline--fa,
+.gz-req-v2-rank__icon [data-icon] {
+transform: scale(2.7);
+}
+}
+
+@media (max-width: 820px) {
+.gz-req-v2 {
+width: min(100%, 640px);
+max-width: calc(100% - 16px);
+}
+
+.gz-req-v2-row {
+grid-template-columns: 1fr;
+}
+
+.gz-req-v2-rank,
+.gz-req-v2-panel,
+.gz-req-v2-panel--perks {
+padding-inline: 8px;
+}
+
+.gz-req-v2-panel--perks {
+grid-column: auto;
+}
+
+.gz-req-v2-rank__icon {
+min-height: 5.5rem;
+}
+
+.gz-req-v2-rank__icon > i,
+.gz-req-v2-rank__icon > svg,
+.gz-req-v2-rank__icon > .svg-inline--fa,
+.gz-req-v2-rank__icon [data-icon] {
+transform: scale(2.35);
+}
+}
+
+  .gz-search-title {
+    display: flex;
+    flex-direction: column;
       gap: 0.2rem;
       line-height: 1.2;
     }
@@ -953,14 +2789,30 @@
 
     .gz-dropdown-details {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+      gap: 12px;
+      padding: 4px 0;
+      line-height: 1.5;
       font-size: 0.9em;
       color: rgba(255, 255, 255, 0.85);
     }
 
     .gz-details-section {
       min-width: 0;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .gz-details-section--flags .gz-details-grid {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
+      gap: 6px 16px;
+    }
+
+    .gz-details-section--flags .gz-details-row {
+      border-bottom: 0;
+      padding: 6px 0;
     }
 
     .gz-trump-report-alert-host {
@@ -1087,66 +2939,92 @@
     }
 
     .gz-details-heading {
-      margin: 0 0 8px;
-      font-size: 0.78em;
-      line-height: 1.2;
+      margin: 0 0 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      font-size: 0.75em;
+      line-height: 1.3;
+      letter-spacing: 0.09em;
       text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.52);
-      font-weight: 700;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 600;
     }
 
     .gz-details-grid {
       display: grid;
-      gap: 6px;
       margin: 0;
     }
 
     .gz-details-row {
       display: grid;
-      grid-template-columns: minmax(92px, 0.8fr) minmax(0, 1fr);
-      gap: 10px;
-      align-items: baseline;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
       min-width: 0;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+    }
+
+    .gz-details-row:last-child {
+      border-bottom: 0;
     }
 
     .gz-details-label {
-      color: rgba(255, 255, 255, 0.55);
-      font-weight: 600;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 400;
       min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .gz-details-value {
       margin: 0;
       min-width: 0;
+      max-width: 20ch;
+      text-align: right;
       overflow-wrap: anywhere;
+      font-variant-numeric: tabular-nums;
       color: rgba(255, 255, 255, 0.9);
     }
 
     .gz-details-link {
-      color: #eaeeecff;
+      color: #b7d6e7;
       text-decoration: none;
+      border-radius: 3px;
+    }
+
+    .gz-details-link::after {
+      content: ' ↗';
+      font-size: 0.85em;
+      opacity: 0.55;
     }
 
     .gz-details-link:hover {
+      color: #d9eef9;
       text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .gz-details-link:focus-visible {
+      outline: 2px solid #b7d6e7;
+      outline-offset: 4px;
     }
 
     .gz-details-value--flag {
-      justify-self: start;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-weight: 700;
-      font-size: 0.9em;
+      justify-self: end;
+      padding: 1px 7px;
+      border-radius: 5px;
+      font-weight: 500;
+      font-size: 0.85em;
     }
 
     .gz-details-value--active {
-      color: #dff7e8;
-      background: rgba(70, 160, 105, 0.22);
+      color: #b6edcc;
+      background: rgba(70, 160, 105, 0.18);
     }
 
     .gz-details-value--inactive {
-      color: rgba(255, 255, 255, 0.58);
-      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.035);
     }
 
     .gz-dropdown-description {
@@ -1169,32 +3047,54 @@
     }
 
     .gz-dropdown-filelist {
-    }
-
-    .gz-dropdown-mediainfo {
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 10px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.02);
     }
 
     .gz-dropdown-filelist table {
       width: 100%;
+      margin: 0;
+      table-layout: fixed;
       border-collapse: collapse;
       font-size: 0.85em;
+      line-height: 1.5;
     }
 
-    .gz-dropdown-filelist th,
-    .gz-dropdown-filelist td {
-      padding: 6px 10px;
+    .gz-dropdown-filelist table th,
+    .gz-dropdown-filelist table td {
+      padding: 9px 14px !important;
       text-align: left;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      vertical-align: middle;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.045);
     }
 
-    .gz-dropdown-filelist th {
-      color: rgba(255, 255, 255, 0.6);
+    .gz-dropdown-filelist table th {
+      padding-top: 12px !important;
+      padding-bottom: 12px !important;
+      color: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.025);
+      font-size: 0.82em;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
       font-weight: 600;
     }
 
-    .gz-dropdown-filelist td:last-child {
+    .gz-dropdown-filelist table .gz-file-size-heading {
+      width: 100px;
+      text-align: right;
+    }
+
+    .gz-dropdown-filelist table td:last-child:not([colspan]) {
       text-align: right;
       white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .gz-dropdown-filelist tbody tr:hover {
+      background: rgba(255, 255, 255, 0.035);
     }
 
     .gz-dropdown-mediainfo pre {
@@ -1405,60 +3305,94 @@
 
     /* File List Tree Styles */
     .gz-filelist-root-info {
-      margin-bottom: 10px;
-      padding: 8px 12px;
-      background: rgba(118, 219, 166, 0.06);
-      border-radius: 4px;
-      font-size: 0.9em;
-      color: rgba(255, 255, 255, 0.8);
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      font-size: 0.85em;
+      overflow-wrap: anywhere;
+      color: rgba(255, 255, 255, 0.7);
     }
 
     .gz-filelist-root-info strong {
-      color: rgba(118, 219, 166, 0.9);
+      font-weight: 500;
+      color: #b7d6e7;
     }
 
     .gz-filelist-folder-row {
       cursor: pointer;
+      background: rgba(255, 255, 255, 0.025);
     }
 
-    .gz-filelist-folder-row:hover {
-      background: rgba(255, 255, 255, 0.03);
+    .gz-folder-button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .gz-folder-button:focus-visible {
+      outline: 2px solid #b7d6e7;
+      outline-offset: 4px;
+      border-radius: 3px;
     }
 
     .gz-folder-toggle {
-      display: inline-block;
-      width: 12px;
-      margin-right: 4px;
-      font-size: 0.8em;
-      color: rgba(255, 255, 255, 0.6);
-      transition: transform 0.15s ease;
+      flex: 0 0 12px;
+      text-align: center;
+      font-size: 1.3em;
+      line-height: 1;
+      color: rgba(255, 255, 255, 0.5);
     }
 
-    .gz-folder-icon {
-      margin-right: 6px;
+    .gz-folder-button[aria-expanded="true"] .gz-folder-toggle {
+      transform: rotate(90deg);
+    }
+
+    .gz-folder-icon,
+    .gz-file-icon {
+      width: 17px;
+      height: 17px;
+      flex: 0 0 17px;
+      color: #9bb9cb;
     }
 
     .gz-folder-name {
-      font-weight: 600;
-      color: rgba(255, 255, 255, 0.95);
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.9);
+      overflow-wrap: anywhere;
+      min-width: 0;
     }
 
     .gz-folder-count {
       font-weight: 400;
-      color: rgba(255, 255, 255, 0.5);
-      font-size: 0.9em;
-      margin-left: 6px;
+      color: rgba(255, 255, 255, 0.45);
+      font-size: 0.85em;
+      white-space: nowrap;
+      margin-left: auto;
     }
 
-    .gz-filelist-file-row td:first-child {
-      color: rgba(255, 255, 255, 0.85);
+    .gz-file-name {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      color: rgba(255, 255, 255, 0.8);
     }
 
-    .gz-tree-indent {
-      display: inline-block !important;
-      flex-shrink: 0;
-      height: 1em;
-      vertical-align: middle;
+    .gz-file-name > span {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .gz-file-icon {
+      align-self: flex-start;
+      margin-top: 2px;
+      color: rgba(255, 255, 255, 0.3);
     }
 
     /* MediaInfo Summary Styles */
@@ -2259,6 +4193,85 @@
     .comparison__button { font-weight: 300; background-color: transparent; color: #5dade2; border: none; cursor: pointer; text-decoration: underline; padding: 0 4px; }
   `;
 
+  // Preserve the original host DOM while projecting icons into the visible layout.
+  const createLiveTorrentIcons = () => {
+    const projections = new Map();
+    let lifetimeObserver = null;
+    const seadexMarker = (node) => node.nodeType === 1
+      ? (node.matches('[data-seadex]') ? node : node.querySelector('[data-seadex]')) : null;
+    const keep = (node, removeIcons) => {
+      if (node.nodeType !== 1) return false;
+      if (seadexMarker(node)) return true;
+      if (node.matches('.fa-comment-alt-plus, .torrent-icons__comments')) return false;
+      return !removeIcons || node.matches('.torrent-icons__torrent-trump, .torrent-icons__personal-release, .torrent-icons__internal');
+    };
+    const filter = (source, removeIcons = true) => {
+      Array.from(source.childNodes).forEach((node) => {
+        if (!keep(node, removeIcons)) node.remove();
+      });
+    };
+    const project = ({ sourceRoot, targetRoot, entries, kind = 'icons', removeIcons = true }) => {
+      if (projections.has(targetRoot)) return projections.get(targetRoot);
+      const clones = new Map();
+      const sync = (entry) => {
+        let copied = clones.get(entry);
+        if (!copied) {
+          copied = new Map();
+          clones.set(entry, copied);
+          entry.target.replaceChildren();
+        }
+        // Ordinary icons stay in the source; Seadex nodes move with their handlers.
+        for (const [original, clone] of copied) {
+          if (original.parentNode !== entry.source || (kind === 'icons' && !keep(original, removeIcons))) {
+            clone.remove();
+            copied.delete(original);
+          }
+        }
+        Array.from(entry.source.children).forEach((node) => {
+          if (kind === 'icons' && !keep(node, removeIcons)) return;
+          if (seadexMarker(node)) {
+            copied.get(node)?.remove();
+            copied.delete(node);
+            entry.target.appendChild(node);
+          } else {
+            const copy = node.cloneNode(true);
+            if (copied.has(node)) copied.get(node).replaceWith(copy);
+            else entry.target.appendChild(copy);
+            copied.set(node, copy);
+          }
+        });
+      };
+      entries.forEach(sync);
+      const observer = new MutationObserver((mutations) => {
+        entries.forEach((entry) => {
+          if (mutations.some((mutation) => entry.source === mutation.target || entry.source.contains(mutation.target))) sync(entry);
+        });
+      });
+      observer.observe(sourceRoot, { childList: true, subtree: true, attributes: true, characterData: true });
+      const dispose = () => {
+        observer.disconnect();
+        projections.delete(targetRoot);
+        if (!projections.size && lifetimeObserver) {
+          lifetimeObserver.disconnect();
+          lifetimeObserver = null;
+        }
+      };
+      projections.set(targetRoot, dispose);
+      if (!lifetimeObserver) {
+        lifetimeObserver = new MutationObserver(() => {
+          for (const [target, disconnect] of projections) {
+            if (!target.isConnected) disconnect();
+          }
+        });
+        lifetimeObserver.observe(document.body, { childList: true, subtree: true });
+      }
+      return dispose;
+    };
+    return Object.freeze({ filter, project });
+  };
+
+  const liveTorrentIcons = createLiveTorrentIcons();
+
   const READY_STATES = ['complete', 'interactive'];
 
   const $ = (selector, scope = document) => (scope ? scope.querySelector(selector) : null);
@@ -2274,11 +4287,6 @@
   const removeNode = (node) => {
     if (node) node.remove();
   };
-  const tokenizeWords = (text) =>
-    (text || '')
-      .split(/[^A-Za-z0-9]+/)
-      .map((token) => token.trim().toUpperCase())
-      .filter(Boolean);
   const setOriginalTitle = (element, originalText) => {
     if (!element || element.dataset.gzOriginal) return;
     const source = originalText ?? element.textContent ?? '';
@@ -2337,59 +4345,9 @@
       }
     });
   };
-  const findMetadataStartIndex = (text = '') => {
-    // 1. TV Shows: Priority on Season/Episode patterns.
-    // This allows unique title modifiers (like "AKA Title") to exist between Year and Season.
-    const tvPattern = /\b(?:S\d{1,3}(?:E\d{1,3})?|E\d{1,3}|Season\s*\d+|Complete(?:\s*Series)?|OVA|OAD|NCED|NCOP)\b/i;
-    const tvMatch = text.match(tvPattern);
-    if (tvMatch) {
-      return tvMatch.index;
-    }
-
-    // 2. Movies: Priority on Year.
-    // If a Year is present, we assume everything after it is metadata.
-    // This handles cases like "Movie Title 1999 Language 1080p..."
-    const yearMatch = text.match(/\b(?:19|20)\d{2}\b/);
-    if (yearMatch) {
-      return yearMatch.index + yearMatch[0].length;
-    }
-
-    // 3. Fallback: If no Season or Year, look for the start of common technical tags.
-    const patterns = [
-      /\b(?:2160p|4320p|1080p|720p|576p|480p|1080i|720i|576i|480i|360p|240p|144p|8K|4K|2K|SD)\b/i,
-      /\b(?:Blu-?ray|WEB(?:-?DL|Rip)?|HDTV|UHD|DVD(?:\d|R)?|BD|BRRip|BDRip|DVDRip|NTSC|PAL|SECAM|LaserDisc|VHS|PPV|VOD|REMUX|ISO|3D)\b/i,
-      /\b(?:H\.?26[45]|HEVC|AVC|MVC|x265|x264|MPEG-?2|MPEG-?4|VP9|AV1|VC-?1|XviD|DivX)\b/i,
-      /\b(?:DTS(?::?X|-?HD)?|TrueHD|Atmos|DD(?:\+|P|-?EX)?|Dolby(?:[\s\.]?Digital)?|FLAC|AAC|AC-?3|E-?AC-?3|PCM|LPCM|Opus|Vorbis|WMA|MP3)\b/i,
-      /\b(?:HDR10\+?|DV|HLG|SDR|10.?bit)\b/i,
-      /\b(?:JAPANESE|ENGLISH|KOREAN|FRENCH|GERMAN|SPANISH|ITALIAN|RUSSIAN|HINDI|THAI|CHINESE|MANDARIN|CANTONESE|PORTUGUESE|POLISH|FINNISH|SWEDISH|NORWEGIAN|DANISH|DUTCH|TURKISH|LATINO|MULTI(?:-?AUDIO)?|DUAL(?:-?AUDIO)?)\b/i,
-      /\b(?:MKV|MP4|AVI|WMV|M4V|TS)\b/i,
-    ];
-
-    let startIndex = Number.POSITIVE_INFINITY;
-    for (const pattern of patterns) {
-      const match = pattern.exec(text);
-      if (match && match.index < startIndex) {
-        startIndex = match.index;
-      }
-    }
-
-    if (!Number.isFinite(startIndex)) return 0;
-    return startIndex;
-  };
-  const normalizeSceneGroupName = (value = '') =>
-    String(value)
-      .replace(/[^A-Za-z0-9]+/g, '')
-      .toUpperCase();
   const CONFIG_URL = 'https://raw.githubusercontent.com/anonymoize/GAZELL3D/main/config.json';
   const CACHE_KEY = typeof GM_info !== 'undefined' ? 'GAZELL3D_CONFIG_' + GM_info.script.version : 'GAZELL3D_CONFIG_V2';
   const CACHE_EXPIRY = 24 * 60 * 60 * 1000;
-
-  let SCENE_RELEASE_GROUPS = new Set();
-  let SERVICE_TOKENS = [];
-  let COUNTRY_MAP = {};
-  let LANGUAGE_MAP = {};
-  let TAG_STYLES = {};
-  let RELEASE_GROUP_BLOCK_TOKENS = new Set();
 
   const loadConfig = async () => {
     try {
@@ -2405,54 +4363,13 @@
       console.warn('GAZELL3D: Cache read error', e);
     }
 
-    console.log('GAZELL3D: Fetching config...');
-    return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({
-        method: 'GET',
-        url: CONFIG_URL,
-        onload: (response) => {
-          if (response.status >= 200 && response.status < 300) {
-            try {
-              const data = JSON.parse(response.responseText);
-              try {
-                localStorage.setItem(CACHE_KEY, JSON.stringify({
-                  timestamp: Date.now(),
-                  data
-                }));
-              } catch (e) {
-                console.warn('GAZELL3D: Cache write error', e);
-              }
-              resolve(data);
-            } catch (e) {
-              reject(new Error('Config parse failed: ' + e.message));
-            }
-          } else {
-            reject(new Error('Config fetch failed with status: ' + response.status));
-          }
-        },
-        onerror: (err) => reject(new Error('Config fetch error: ' + err))
-      });
-    });
-  };
-
-  const initReleaseGroupBlockTokens = () => {
-    const tokens = new Set([
-      'WEB', 'DL', 'DUAL', 'AUDIO', 'SUBBED', 'DUBBED', 'MULTI', 'MULTISUB',
-      'REMUX', 'REPACK', 'PROPER', 'LIMITED', 'COMPLETE', 'UNCENSORED',
-      'UNRATED', 'THEATRICAL', 'EXTENDED', 'PACK', 'COLLECTION', 'SAMPLE',
-      'HDR', 'SDR', 'ATMOS', 'DOLBY', 'TRUEHD', 'COMMENTARY', '3D', 'MVC',
-    ]);
-    const addTokens = (values) => {
-      values.forEach((value) => tokenizeWords(value).forEach((token) => tokens.add(token)));
-    };
-    addTokens(RESOLUTIONS);
-    addTokens(SERVICE_TOKENS);
-    addTokens(SOURCE_PATTERNS.map((pattern) => pattern.value));
-    addTokens(VIDEO_CODEC_PATTERNS.map((pattern) => pattern.value));
-    addTokens(AUDIO_CODEC_PATTERNS.map((pattern) => pattern.value));
-    addTokens(HDR_PATTERNS.map((pattern) => pattern.value));
-    addTokens(CUT_PATTERNS.map((pattern) => pattern.value));
-    return tokens;
+    const data = await gmFetchJson(CONFIG_URL);
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data }));
+    } catch (error) {
+      console.warn('GAZELL3D: Cache write error', error);
+    }
+    return data;
   };
 
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -2609,295 +4526,374 @@
     return $$('section.panelV2').find((panel) => getText(panel.querySelector('.panel__heading')).toLowerCase() === target);
   };
 
-  const VIDEO_CODEC_PATTERNS = [
-    { regex: /\bHEVC\b|\bH\.?265\b|\bH265\b|\bx265\b/i, value: 'H.265' },
-    { regex: /\bAVC\b|\bH\.?264\b|\bH264\b|\bx264\b/i, value: 'H.264' },
-    { regex: /\bVVC\b|\bH\.?266\b|\bH266\b|\bx266\b/i, value: 'H.266' },
-    { regex: /\bMVC\b/i, value: 'H.264/MVC' },
-    { regex: /\bAV1\b/i, value: 'AV1' },
-    { regex: /\bVC-?1\b/i, value: 'VC-1' },
-    { regex: /\bMPEG-?2\b/i, value: 'MPEG-2' },
-    { regex: /\bMPEG-?1\b/i, value: 'MPEG-1' },
-    { regex: /\bMPEG\b/i, value: 'MPEG' },
-    { regex: /\bXvid\b/i, value: 'Xvid' },
-    { regex: /\bDivX\b/i, value: 'DivX' },
-    { regex: /\bJPEG2000\b/i, value: 'JPEG2000' },
-  ];
+  // Immutable naming context: callers supply page presentation choices explicitly.
+  const createTorrentNaming = ({ catalog = {}, sequence = [] } = {}) => {
+    const VIDEO_CODEC_PATTERNS = [
+      { regex: /\bHEVC\b|\bH\.?265\b|\bH265\b|\bx265\b/i, value: 'H.265' },
+      { regex: /\bAVC\b|\bH\.?264\b|\bH264\b|\bx264\b/i, value: 'H.264' },
+      { regex: /\bVVC\b|\bH\.?266\b|\bH266\b|\bx266\b/i, value: 'H.266' },
+      { regex: /\bMVC\b/i, value: 'H.264/MVC' },
+      { regex: /\bAV1\b/i, value: 'AV1' },
+      { regex: /\bVC-?1\b/i, value: 'VC-1' },
+      { regex: /\bMPEG-?2\b/i, value: 'MPEG-2' },
+      { regex: /\bMPEG-?1\b/i, value: 'MPEG-1' },
+      { regex: /\bMPEG\b/i, value: 'MPEG' },
+      { regex: /\bXvid\b/i, value: 'Xvid' },
+      { regex: /\bDivX\b/i, value: 'DivX' },
+      { regex: /\bJPEG2000\b/i, value: 'JPEG2000' },
+    ];
 
-  const RESOLUTIONS = ['4320p', '2160p', '1080p', '1080i', '720p', '576p', '576i', '540p', '480p', '480i', "360p", '240p', '144p'];
+    const RESOLUTIONS = ['4320p', '2160p', '1080p', '1080i', '720p', '576p', '576i', '540p', '480p', '480i', "360p", '240p', '144p'];
 
-  const SOURCE_PATTERNS = [
-    { regex: /\bUHD[\s-]*Blu-?ray\b/i, value: 'UHD BluRay' },
-    { regex: /\b(?:3D[\s\.-]*Blu-?ray|Blu-?ray[\s\.-]*3D|3D)\b/i, value: '3D BluRay' },
-    { regex: /\bBlu-?ray\b/i, value: 'BluRay' },
-    { regex: /\bWEB[-\s]?DL\b/i, value: 'WEB-DL' },
-    { regex: /\bWEBRip\b/i, value: 'WEBRip' },
-    { regex: /\bDVD(?:Rip)?\b|\bNTSC DVD[59]\b|\bPAL DVD[59]\b|\bDVD[59]\b/i, value: 'DVD' },
-    { regex: /\bHD-?DVD\b|\bHDDVD\b/i, value: 'HD DVD' },
-    { regex: /\bHDTV\b/i, value: 'HDTV' },
-    { regex: /\bLaserDisc\b/i, value: 'LaserDisc' },
-    { regex: /\bVHS\b/i, value: 'VHS' },
-    { regex: /\bTV[-\s]?Rip\b|\bTV\b/i, value: 'TV' },
-    { regex: /\bDCP\b/i, value: 'DCP' },
-  ];
+    const SOURCE_PATTERNS = [
+      { regex: /\bUHD[\s-]*Blu-?ray\b/i, value: 'UHD BluRay' },
+      { regex: /\b(?:3D[\s\.-]*Blu-?ray|Blu-?ray[\s\.-]*3D|3D)\b/i, value: '3D BluRay' },
+      { regex: /\bBlu-?ray\b/i, value: 'BluRay' },
+      { regex: /\bWEB[-\s]?DL\b/i, value: 'WEB-DL' },
+      { regex: /\bWEBRip\b/i, value: 'WEBRip' },
+      { regex: /\bDVD(?:Rip)?\b|\bNTSC DVD[59]\b|\bPAL DVD[59]\b|\bDVD[59]\b/i, value: 'DVD' },
+      { regex: /\bHD-?DVD\b|\bHDDVD\b/i, value: 'HD DVD' },
+      { regex: /\bHDTV\b/i, value: 'HDTV' },
+      { regex: /\bLaserDisc\b/i, value: 'LaserDisc' },
+      { regex: /\bVHS\b/i, value: 'VHS' },
+      { regex: /\bTV[-\s]?Rip\b|\bTV\b/i, value: 'TV' },
+      { regex: /\bDCP\b/i, value: 'DCP' },
+    ];
 
-  const AUDIO_CHANNEL_PATTERN = /\b(?:1\.0|2\.0|2\.1|3\.0|3\.1|4\.0|4\.1|5\.0|5\.1|6\.1|7\.1)\b/i;
+    const AUDIO_CHANNEL_PATTERN = /\b(?:1\.0|2\.0|2\.1|3\.0|3\.1|4\.0|4\.1|5\.0|5\.1|6\.1|7\.1)\b/i;
 
-  const AUDIO_CODEC_PATTERNS = [
-    { regex: /\bDTS-?HD\s*MA\b/i, value: 'DTS-HD MA' },
-    { regex: /\bDTS-?HD\s*HRA\b/i, value: 'DTS-HD HRA' },
-    { regex: /\bDTS-?HD\b/i, value: 'DTS-HD' },
-    { regex: /\bDTS:?X\b/i, value: 'DTS:X' },
-    { regex: /\bDTS-?ES\b/i, value: 'DTS-ES' },
-    { regex: /\bDTS\b/i, value: 'DTS' },
-    { regex: /\bTrueHD\b/i, value: 'TrueHD' },
-    { regex: /\bDolby\s+Digital\s+EX\b|\bDD-?EX\b/i, value: 'DD-EX' },
-    { regex: /DD\+|DDP|\bE-?AC-?3\b/i, value: 'DD+' },
-    { regex: /\bDD\b|\bDolby Digital\b/i, value: 'DD' },
-    { regex: /\bAAC\b/i, value: 'AAC' },
-    { regex: /\bOpus\b/i, value: 'Opus' },
-    { regex: /\bFLAC\b/i, value: 'FLAC' },
-    { regex: /\bVorbis\b/i, value: 'Vorbis' },
-    { regex: /\bLPCM\b|\bPCM\b/i, value: 'LPCM' },
-    { regex: /\bMP3\b/i, value: 'MP3' },
-    { regex: /\bMP2\b/i, value: 'MP2' }
-  ];
+    const AUDIO_CODEC_PATTERNS = [
+      { regex: /\bDTS-?HD\s*MA\b/i, value: 'DTS-HD MA' },
+      { regex: /\bDTS-?HD\s*HRA\b/i, value: 'DTS-HD HRA' },
+      { regex: /\bDTS-?HD\b/i, value: 'DTS-HD' },
+      { regex: /\bDTS:?X\b/i, value: 'DTS:X' },
+      { regex: /\bDTS-?ES\b/i, value: 'DTS-ES' },
+      { regex: /\bDTS\b/i, value: 'DTS' },
+      { regex: /\bTrueHD\b/i, value: 'TrueHD' },
+      { regex: /\bDolby\s+Digital\s+EX\b|\bDD-?EX\b/i, value: 'DD-EX' },
+      { regex: /DD\+|DDP|\bE-?AC-?3\b/i, value: 'DD+' },
+      { regex: /\bDD\b|\bDolby Digital\b/i, value: 'DD' },
+      { regex: /\bAAC\b/i, value: 'AAC' },
+      { regex: /\bOpus\b/i, value: 'Opus' },
+      { regex: /\bFLAC\b/i, value: 'FLAC' },
+      { regex: /\bVorbis\b/i, value: 'Vorbis' },
+      { regex: /\bLPCM\b|\bPCM\b/i, value: 'LPCM' },
+      { regex: /\bMP3\b/i, value: 'MP3' },
+      { regex: /\bMP2\b/i, value: 'MP2' }
+    ];
 
-  const HDR_PATTERNS = [
-    { regex: /\bDV\s+HDR10\+/i, value: 'DV HDR10+' },
-    { regex: /\bDV\s+HDR\b/i, value: 'DV HDR' },
-    { regex: /\bHDR10\+/i, value: 'HDR10+' },
-    { regex: /\bHLG\b/i, value: 'HLG' },
-    { regex: /\bDV\b/i, value: 'DV' },
-    { regex: /\bHDR\b/i, value: 'HDR' },
-  ];
+    const HDR_PATTERNS = [
+      { regex: /\bDV\s+HDR10\+/i, value: 'DV HDR10+' },
+      { regex: /\bDV\s+HDR\b/i, value: 'DV HDR' },
+      { regex: /\bHDR10\+/i, value: 'HDR10+' },
+      { regex: /\bHLG\b/i, value: 'HLG' },
+      { regex: /\bDV\b/i, value: 'DV' },
+      { regex: /\bHDR\b/i, value: 'HDR' },
+    ];
 
-  const CUT_PATTERNS = [
-    { regex: /Director'?s\s+Cut/i, value: "Director's Cut" },
-    { regex: /\bTheatrical\b/i, value: 'Theatrical' },
-    { regex: /\bExtended\b/i, value: 'Extended' },
-    { regex: /\bUnrated\b/i, value: 'Unrated' },
-    { regex: /\bRegraded\b/i, value: 'Regraded' },
-    { regex: /\bRedux\b/i, value: 'Redux' },
-    { regex: /\bSpecial\s+Edition\b/i, value: 'Special Edition' },
-    { regex: /\bSuper\s+Duper\s+Cut\b/i, value: 'Super Duper Cut' },
-    { regex: /\bOpen\s+Matte\b/i, value: 'Open Matte' },
-    { regex: /\bUncensored\b/i, value: 'Uncensored' },
-    { regex: /\bUncut\b/i, value: 'Uncut' },
-    { regex: /\bRemastered\b/i, value: 'Remastered' },
-    { regex: /\bRestored\b/i, value: 'Restored' },
-    { regex: /\bAnniversary\s+Edition\b/i, value: 'Anniversary Edition' },
-    { regex: /\bUltimate\s+Edition\b/i, value: 'Ultimate Edition' },
-    { regex: /\bCollector'?s\s+Edition\b/i, value: "Collector's Edition" },
-    { regex: /\bFinal\s+Cut\b/i, value: 'Final Cut' },
-    { regex: /\bIMAX\b/i, value: 'IMAX' },
-    { regex: /\bWorkprint\b/i, value: 'Workprint' },
-  ];
+    const CUT_PATTERNS = [
+      { regex: /Director'?s\s+Cut/i, value: "Director's Cut" },
+      { regex: /\bTheatrical\b/i, value: 'Theatrical' },
+      { regex: /\bExtended\b/i, value: 'Extended' },
+      { regex: /\bUnrated\b/i, value: 'Unrated' },
+      { regex: /\bRegraded\b/i, value: 'Regraded' },
+      { regex: /\bRedux\b/i, value: 'Redux' },
+      { regex: /\bSpecial\s+Edition\b/i, value: 'Special Edition' },
+      { regex: /\bSuper\s+Duper\s+Cut\b/i, value: 'Super Duper Cut' },
+      { regex: /\bOpen\s+Matte\b/i, value: 'Open Matte' },
+      { regex: /\bUncensored\b/i, value: 'Uncensored' },
+      { regex: /\bUncut\b/i, value: 'Uncut' },
+      { regex: /\bRemastered\b/i, value: 'Remastered' },
+      { regex: /\bRestored\b/i, value: 'Restored' },
+      { regex: /\bAnniversary\s+Edition\b/i, value: 'Anniversary Edition' },
+      { regex: /\bUltimate\s+Edition\b/i, value: 'Ultimate Edition' },
+      { regex: /\bCollector'?s\s+Edition\b/i, value: "Collector's Edition" },
+      { regex: /\bFinal\s+Cut\b/i, value: 'Final Cut' },
+      { regex: /\bIMAX\b/i, value: 'IMAX' },
+      { regex: /\bWorkprint\b/i, value: 'Workprint' },
+    ];
 
 
 
-  const isBlockedReleaseToken = (token) => {
-    const value = token ? token.toUpperCase() : '';
-    if (!value) return false;
-    if (RELEASE_GROUP_BLOCK_TOKENS.has(value)) return true;
-    if (/^\d{1,4}$/.test(value)) return true;
-    if (/^(?:S|E)\d{1,3}$/i.test(value)) return true;
-    return false;
-  };
+    const tokenizeWords = (text) =>
+      (text || '')
+        .split(/[^A-Za-z0-9]+/)
+        .map((token) => token.trim().toUpperCase())
+        .filter(Boolean);
+    const findMetadataStartIndex = (text = '') => {
+      // 1. TV Shows: Priority on Season/Episode patterns.
+      // This allows unique title modifiers (like "AKA Title") to exist between Year and Season.
+      const tvPattern = /\b(?:S\d{1,3}(?:E\d{1,3})?|E\d{1,3}|Season\s*\d+|Complete(?:\s*Series)?|OVA|OAD|NCED|NCOP)\b/i;
+      const tvMatch = text.match(tvPattern);
+      if (tvMatch) {
+        return tvMatch.index;
+      }
 
-  const getReleaseGroupTokens = (candidate) => {
-    const tokens = tokenizeWords(candidate);
-    if (!tokens.length) return null;
-    return tokens.some((token) => isBlockedReleaseToken(token)) ? null : tokens;
-  };
+      // 2. Movies: Priority on Year.
+      // If a Year is present, we assume everything after it is metadata.
+      // This handles cases like "Movie Title 1999 Language 1080p..."
+      const yearMatch = text.match(/\b(?:19|20)\d{2}\b/);
+      if (yearMatch) {
+        return yearMatch.index + yearMatch[0].length;
+      }
 
-  const extractReleaseGroup = (normalized) => {
-    let best = null;
-    let index = normalized.indexOf('-');
-    while (index !== -1) {
-      const candidate = normalized.slice(index + 1).trim();
-      const tokens = candidate && /\w/.test(candidate) ? getReleaseGroupTokens(candidate) : null;
-      if (tokens) {
-        const score = tokens.length * 100 + candidate.length;
-        if (!best || score > best.score) {
-          best = { score, value: candidate, index };
+      // 3. Fallback: If no Season or Year, look for the start of common technical tags.
+      const patterns = [
+        /\b(?:2160p|4320p|1080p|720p|576p|480p|1080i|720i|576i|480i|360p|240p|144p|8K|4K|2K|SD)\b/i,
+        /\b(?:Blu-?ray|WEB(?:-?DL|Rip)?|HDTV|UHD|DVD(?:\d|R)?|BD|BRRip|BDRip|DVDRip|NTSC|PAL|SECAM|LaserDisc|VHS|PPV|VOD|REMUX|ISO|3D)\b/i,
+        /\b(?:H\.?26[45]|HEVC|AVC|MVC|x265|x264|MPEG-?2|MPEG-?4|VP9|AV1|VC-?1|XviD|DivX)\b/i,
+        /\b(?:DTS(?::?X|-?HD)?|TrueHD|Atmos|DD(?:\+|P|-?EX)?|Dolby(?:[\s\.]?Digital)?|FLAC|AAC|AC-?3|E-?AC-?3|PCM|LPCM|Opus|Vorbis|WMA|MP3)\b/i,
+        /\b(?:HDR10\+?|DV|HLG|SDR|10.?bit)\b/i,
+        /\b(?:JAPANESE|ENGLISH|KOREAN|FRENCH|GERMAN|SPANISH|ITALIAN|RUSSIAN|HINDI|THAI|CHINESE|MANDARIN|CANTONESE|PORTUGUESE|POLISH|FINNISH|SWEDISH|NORWEGIAN|DANISH|DUTCH|TURKISH|LATINO|MULTI(?:-?AUDIO)?|DUAL(?:-?AUDIO)?)\b/i,
+        /\b(?:MKV|MP4|AVI|WMV|M4V|TS)\b/i,
+      ];
+
+      let startIndex = Number.POSITIVE_INFINITY;
+      for (const pattern of patterns) {
+        const match = pattern.exec(text);
+        if (match && match.index < startIndex) {
+          startIndex = match.index;
         }
       }
-      index = normalized.indexOf('-', index + 1);
-    }
-    if (best) {
-      return {
-        group: best.value,
-        baseTitle: normalized.slice(0, best.index).trim(),
+
+      if (!Number.isFinite(startIndex)) return 0;
+      return startIndex;
+    };
+    const normalizeSceneGroupName = (value = '') =>
+      String(value)
+        .replace(/[^A-Za-z0-9]+/g, '')
+        .toUpperCase();
+    const SCENE_RELEASE_GROUPS = new Set((catalog.SCENE_RELEASE_GROUPS || []).map(normalizeSceneGroupName));
+    const SERVICE_TOKENS = [...(catalog.SERVICE_TOKENS || [])];
+    const COUNTRY_MAP = { ...(catalog.COUNTRY_MAP || {}) };
+    const LANGUAGE_MAP = { ...(catalog.LANGUAGE_MAP || {}) };
+    const sequenceOrder = [...sequence];
+    const initReleaseGroupBlockTokens = () => {
+      const tokens = new Set([
+        'WEB', 'DL', 'DUAL', 'AUDIO', 'SUBBED', 'DUBBED', 'MULTI', 'MULTISUB',
+        'REMUX', 'REPACK', 'PROPER', 'LIMITED', 'COMPLETE', 'UNCENSORED',
+        'UNRATED', 'THEATRICAL', 'EXTENDED', 'PACK', 'COLLECTION', 'SAMPLE',
+        'HDR', 'SDR', 'ATMOS', 'DOLBY', 'TRUEHD', 'COMMENTARY', '3D', 'MVC',
+      ]);
+      const addTokens = (values) => {
+        values.forEach((value) => tokenizeWords(value).forEach((token) => tokens.add(token)));
       };
-    }
-    return { group: 'NOGRP', baseTitle: normalized };
-  };
-
-  const formatTorrentName = (name, { typeLabel } = {}) => {
-    if (!name) return '';
-    const normalized = name.replace(/\s+/g, ' ').trim();
-    if (!normalized) return '';
-
-    const { group, baseTitle } = extractReleaseGroup(normalized);
-
-    const getMatchFromPatterns = (patterns, text) => {
-      const found = patterns.find((pattern) => pattern.regex.test(text));
-      return found ? found.value : '';
+      addTokens(RESOLUTIONS);
+      addTokens(SERVICE_TOKENS);
+      addTokens(SOURCE_PATTERNS.map((pattern) => pattern.value));
+      addTokens(VIDEO_CODEC_PATTERNS.map((pattern) => pattern.value));
+      addTokens(AUDIO_CODEC_PATTERNS.map((pattern) => pattern.value));
+      addTokens(HDR_PATTERNS.map((pattern) => pattern.value));
+      addTokens(CUT_PATTERNS.map((pattern) => pattern.value));
+      return tokens;
     };
 
-    const videoCodec = getMatchFromPatterns(VIDEO_CODEC_PATTERNS, baseTitle) || 'UNKNOWN';
-    const bitDepth =
-      /\bHi10P\b.*\bx264\b/i.test(baseTitle) ? 'Hi10P' : '';
-    const resolution =
-      RESOLUTIONS.find((res) => new RegExp(`\\b${res}\\b`, 'i').test(baseTitle)) || 'UNKNOWN';
-    const source = (() => {
-      const discPattern = /\b(?:(NTSC|PAL)\s*)?(?:([1-9]\d*)x)?DVD([59])\b/gi;
-      const discMatches = Array.from(baseTitle.matchAll(discPattern));
-      if (discMatches.length) {
-        const parts = discMatches.map(([, region, count, size]) =>
-          region ? `${region} ${count ? `${count}x` : ''}DVD${size}` : `${count ? `${count}x` : ''}DVD${size}`
+    const RELEASE_GROUP_BLOCK_TOKENS = initReleaseGroupBlockTokens();
+
+    const isBlockedReleaseToken = (token) => {
+      const value = token ? token.toUpperCase() : '';
+      if (!value) return false;
+      if (RELEASE_GROUP_BLOCK_TOKENS.has(value)) return true;
+      if (/^\d{1,4}$/.test(value)) return true;
+      if (/^(?:S|E)\d{1,3}$/i.test(value)) return true;
+      return false;
+    };
+
+    const getReleaseGroupTokens = (candidate) => {
+      const tokens = tokenizeWords(candidate);
+      if (!tokens.length) return null;
+      return tokens.some((token) => isBlockedReleaseToken(token)) ? null : tokens;
+    };
+
+    const extractReleaseGroup = (normalized) => {
+      let best = null;
+      let index = normalized.indexOf('-');
+      while (index !== -1) {
+        const candidate = normalized.slice(index + 1).trim();
+        const tokens = candidate && /\w/.test(candidate) ? getReleaseGroupTokens(candidate) : null;
+        if (tokens) {
+          const score = tokens.length * 100 + candidate.length;
+          if (!best || score > best.score) {
+            best = { score, value: candidate, index };
+          }
+        }
+        index = normalized.indexOf('-', index + 1);
+      }
+      if (best) {
+        return {
+          group: best.value,
+          baseTitle: normalized.slice(0, best.index).trim(),
+        };
+      }
+      return { group: 'NOGRP', baseTitle: normalized };
+    };
+
+    const formatTorrentName = (name, { typeLabel, hideSeasonEpisode = false } = {}) => {
+      if (!name) return [];
+      const normalized = name.replace(/\s+/g, ' ').trim();
+      if (!normalized) return [];
+
+      const { group, baseTitle } = extractReleaseGroup(normalized);
+
+      const getMatchFromPatterns = (patterns, text) => {
+        const found = patterns.find((pattern) => pattern.regex.test(text));
+        return found ? found.value : '';
+      };
+
+      const videoCodec = getMatchFromPatterns(VIDEO_CODEC_PATTERNS, baseTitle) || 'UNKNOWN';
+      const bitDepth =
+        /\bHi10P\b.*\bx264\b/i.test(baseTitle) ? 'Hi10P' : '';
+      const resolution =
+        RESOLUTIONS.find((res) => new RegExp(`\\b${res}\\b`, 'i').test(baseTitle)) || 'UNKNOWN';
+      const source = (() => {
+        const discPattern = /\b(?:(NTSC|PAL)\s*)?(?:([1-9]\d*)x)?DVD([59])\b/gi;
+        const discMatches = Array.from(baseTitle.matchAll(discPattern));
+        if (discMatches.length) {
+          const parts = discMatches.map(([, region, count, size]) =>
+            region ? `${region} ${count ? `${count}x` : ''}DVD${size}` : `${count ? `${count}x` : ''}DVD${size}`
+          );
+          const uniqueParts = parts.filter((value, index, arr) => arr.indexOf(value) === index);
+          return uniqueParts.join(' / ');
+        }
+        return getMatchFromPatterns(SOURCE_PATTERNS, baseTitle) || 'UNKNOWN';
+      })();
+
+      const isWebSource = /\bWEB(?:[-\s]?DL|Rip)\b/i.test(baseTitle);
+      const metadataStart = findMetadataStartIndex(baseTitle);
+      const metadataSlice = metadataStart ? baseTitle.slice(metadataStart) : baseTitle;
+      const service =
+        isWebSource && SERVICE_TOKENS.length
+          ? (() => {
+            const serviceRegex = new RegExp(
+              `\\b(${SERVICE_TOKENS.join('|')})\\b(?=[^\\n]*\\bWEB(?:-?DL|Rip)\\b)`,
+              'i'
+            );
+            const fallbackRegex = new RegExp(`\\b(${SERVICE_TOKENS.join('|')})\\b`, 'i');
+            const match = serviceRegex.exec(metadataSlice) || fallbackRegex.exec(metadataSlice);
+            if (!match) return '';
+            const token = match[1];
+            return SERVICE_TOKENS.find((candidate) => candidate.toLowerCase() === token.toLowerCase()) || token;
+          })()
+          : '';
+
+      const isFullDisc =
+        typeof typeLabel === 'string' && typeLabel.trim().toLowerCase().includes('full disc');
+      const hasDiscContext = /\b(?:PAL|NTSC|SECAM|DVD\d?|Blu-ray|BD|UHD)\b/i.test(baseTitle);
+      const country =
+        (isFullDisc || hasDiscContext) && Object.keys(COUNTRY_MAP).length
+          ? (() => {
+            const countryRegex = new RegExp(
+              `\\b(${Object.keys(COUNTRY_MAP).join('|')})\\b`,
+              'i'
+            );
+            const match = countryRegex.exec(baseTitle);
+            if (!match) return '';
+            const token = match[1].toUpperCase();
+            return COUNTRY_MAP[token] || token;
+          })()
+          : '';
+
+      const seasonEpisode = (() => {
+        const patterns = [
+          /S\d{2}E\d{2}(?:E\d{2})+/i,
+          /S\d{2}E\d{2}-E\d{2}/i,
+          /S\d{2}E\d{2}/i,
+          /S\d{2}-S\d{2}/i,
+          /S\d{2}/i,
+        ];
+        const matchPattern = patterns.find((pattern) => pattern.test(baseTitle));
+        return matchPattern ? baseTitle.match(matchPattern)[0].toUpperCase() : '';
+      })();
+
+      const language = (() => {
+        if (/Dual[-\s]?Audio/i.test(baseTitle)) {
+          return 'Dual-Audio';
+        }
+        if (/\bDubbed\b/i.test(baseTitle)) {
+          return 'Dubbed';
+        }
+        if (!Object.keys(LANGUAGE_MAP).length) return '';
+        const languageRegex = new RegExp(
+          `\\b(${Object.keys(LANGUAGE_MAP).join('|')})\\b`,
+          'i'
         );
-        const uniqueParts = parts.filter((value, index, arr) => arr.indexOf(value) === index);
-        return uniqueParts.join(' / ');
-      }
-      return getMatchFromPatterns(SOURCE_PATTERNS, baseTitle) || 'UNKNOWN';
-    })();
+        const match = languageRegex.exec(metadataSlice);
+        if (!match) return '';
+        const key = match[1].toUpperCase();
+        if (service && key === service) {
+          return '';
+        }
+        return LANGUAGE_MAP[key] || match[1];
+      })();
 
-    const isWebSource = /\bWEB(?:[-\s]?DL|Rip)\b/i.test(baseTitle);
-    const metadataStart = findMetadataStartIndex(baseTitle);
-    const metadataSlice = metadataStart ? baseTitle.slice(metadataStart) : baseTitle;
-    const service =
-      isWebSource
-        ? (() => {
-          const serviceRegex = new RegExp(
-            `\\b(${SERVICE_TOKENS.join('|')})\\b(?=[^\\n]*\\bWEB(?:-?DL|Rip)\\b)`,
-            'i'
-          );
-          const fallbackRegex = new RegExp(`\\b(${SERVICE_TOKENS.join('|')})\\b`, 'i');
-          const match = serviceRegex.exec(metadataSlice) || fallbackRegex.exec(metadataSlice);
-          if (!match) return '';
-          const token = match[1];
-          return SERVICE_TOKENS.find((candidate) => candidate.toLowerCase() === token.toLowerCase()) || token;
-        })()
-        : '';
+      const audioCodec = getMatchFromPatterns(AUDIO_CODEC_PATTERNS, baseTitle) || 'UNKNOWN';
+      const audioChannels = (() => {
+        const match = AUDIO_CHANNEL_PATTERN.exec(baseTitle);
+        return match ? match[0].toUpperCase() : '';
+      })();
+      const audioCodecWithChannels = [audioCodec, audioChannels].filter(Boolean).join(' ');
+      const atmos = /\bAtmos\b/i.test(baseTitle) ? 'Atmos' : '';
+      const hdr = getMatchFromPatterns(HDR_PATTERNS, baseTitle);
+      const hybrid = /\bHybrid\b/i.test(baseTitle) ? 'Hybrid' : '';
+      const remux = /\bRemux\b/i.test(baseTitle) ? 'Remux' : '';
+      const repackProper = (() => {
+        const match = /\b(REPACK(?:\d+)?|PROPER(?:\d+)?)\b/i.exec(baseTitle);
+        return match ? match[1].toUpperCase() : '';
+      })();
+      const cut = getMatchFromPatterns(CUT_PATTERNS, baseTitle);
+      const scene = (() => {
+        if (!group || group === 'NOGRP') return '';
+        const normalizedGroupName = normalizeSceneGroupName(group);
+        if (!normalizedGroupName) return '';
+        return SCENE_RELEASE_GROUPS.has(normalizedGroupName) ? 'Scene' : '';
+      })();
 
-    const isFullDisc =
-      typeof typeLabel === 'string' && typeLabel.trim().toLowerCase().includes('full disc');
-    const hasDiscContext = /\b(?:PAL|NTSC|SECAM|DVD\d?|Blu-ray|BD|UHD)\b/i.test(baseTitle);
-    const country =
-      isFullDisc || hasDiscContext
-        ? (() => {
-          const countryRegex = new RegExp(
-            `\\b(${Object.keys(COUNTRY_MAP).join('|')})\\b`,
-            'i'
-          );
-          const match = countryRegex.exec(baseTitle);
-          if (!match) return '';
-          const token = match[1].toUpperCase();
-          return COUNTRY_MAP[token] || token;
-        })()
-        : '';
+      const partValues = {
+        videoCodec,
+        bitDepth,
+        resolution,
+        country,
+        service,
+        source,
+        remux,
+        seasonEpisode,
+        language,
+        audio: audioCodecWithChannels,
+        atmos,
+        hdr,
+        hybrid,
+        cut,
+        repack: repackProper,
+        scene,
+        group: group || 'NOGRP',
+      };
 
-    const seasonEpisode = (() => {
-      const patterns = [
-        /S\d{2}E\d{2}(?:E\d{2})+/i,
-        /S\d{2}E\d{2}-E\d{2}/i,
-        /S\d{2}E\d{2}/i,
-        /S\d{2}-S\d{2}/i,
-        /S\d{2}/i,
-      ];
-      const matchPattern = patterns.find((pattern) => pattern.test(baseTitle));
-      return matchPattern ? baseTitle.match(matchPattern)[0].toUpperCase() : '';
-    })();
-
-    const language = (() => {
-      if (/Dual[-\s]?Audio/i.test(baseTitle)) {
-        return 'Dual-Audio';
-      }
-      if (/\bDubbed\b/i.test(baseTitle)) {
-        return 'Dubbed';
-      }
-      const languageRegex = new RegExp(
-        `\\b(${Object.keys(LANGUAGE_MAP).join('|')})\\b`,
-        'i'
-      );
-      const match = languageRegex.exec(metadataSlice);
-      if (!match) return '';
-      const key = match[1].toUpperCase();
-      if (service && key === service) {
-        return '';
-      }
-      return LANGUAGE_MAP[key] || match[1];
-    })();
-
-    const audioCodec = getMatchFromPatterns(AUDIO_CODEC_PATTERNS, baseTitle) || 'UNKNOWN';
-    const audioChannels = (() => {
-      const match = AUDIO_CHANNEL_PATTERN.exec(baseTitle);
-      return match ? match[0].toUpperCase() : '';
-    })();
-    const audioCodecWithChannels = [audioCodec, audioChannels].filter(Boolean).join(' ');
-    const atmos = /\bAtmos\b/i.test(baseTitle) ? 'Atmos' : '';
-    const hdr = getMatchFromPatterns(HDR_PATTERNS, baseTitle);
-    const hybrid = /\bHybrid\b/i.test(baseTitle) ? 'Hybrid' : '';
-    const remux = /\bRemux\b/i.test(baseTitle) ? 'Remux' : '';
-    const repackProper = (() => {
-      const match = /\b(REPACK(?:\d+)?|PROPER(?:\d+)?)\b/i.exec(baseTitle);
-      return match ? match[1].toUpperCase() : '';
-    })();
-    const cut = getMatchFromPatterns(CUT_PATTERNS, baseTitle);
-    const scene = (() => {
-      if (!group || group === 'NOGRP') return '';
-      const normalizedGroupName = normalizeSceneGroupName(group);
-      if (!normalizedGroupName) return '';
-      return SCENE_RELEASE_GROUPS.has(normalizedGroupName) ? 'Scene' : '';
-    })();
-
-    const partValues = {
-      videoCodec,
-      bitDepth,
-      resolution,
-      country,
-      service,
-      source,
-      remux,
-      seasonEpisode,
-      language,
-      audio: audioCodecWithChannels,
-      atmos,
-      hdr,
-      hybrid,
-      cut,
-      repack: repackProper,
-      scene,
-      group: group || 'NOGRP',
+      return sequenceOrder
+        .filter((key) => !(hideSeasonEpisode && key === 'seasonEpisode'))
+        .map((key) => ({ category: key, value: partValues[key] }))
+        .filter((part) => Boolean(part.value));
     };
 
-    const isSimilarPage = window.location.pathname.includes('/similar');
-    const shouldHideSeasonEpisode = CONFIG.enableGazelleTorrentLayout && isSimilarPage;
+    const buildSearchDisplay = (text) => {
+      const normalized = normalizeText(text);
+      if (!normalized) return { heading: '', subtitle: [] };
+      const yearMatch = normalized.match(/\b(19|20)\d{2}\b/);
+      let headingTitle = normalized;
+      let yearText = '';
+      if (yearMatch) {
+        yearText = yearMatch[0];
+        headingTitle = normalized.slice(0, yearMatch.index).replace(/[-–_.]+$/g, '').trim();
+      }
+      if (!headingTitle) headingTitle = normalized;
 
-    return GAZELLIFY_SEQUENCE
-      .filter((key) => !(shouldHideSeasonEpisode && key === 'seasonEpisode'))
-      .map((key) => ({ category: key, value: partValues[key] }))
-      .filter((part) => Boolean(part.value));
+      const heading = yearText ? `${headingTitle} (${yearText})` : headingTitle;
+      const subtitle = formatTorrentName(normalized);
+      return { heading, subtitle };
+    };
+    return Object.freeze({ format: formatTorrentName, searchDisplay: buildSearchDisplay });
   };
 
-  const buildSearchDisplay = (text) => {
-    const normalized = normalizeText(text);
-    if (!normalized) return { heading: '', subtitle: [] };
-    const yearMatch = normalized.match(/\b(19|20)\d{2}\b/);
-    let headingTitle = normalized;
-    let yearText = '';
-    if (yearMatch) {
-      yearText = yearMatch[0];
-      headingTitle = normalized.slice(0, yearMatch.index).replace(/[-–_.]+$/g, '').trim();
-    }
-    if (!headingTitle) headingTitle = normalized;
-
-    const heading = yearText ? `${headingTitle} (${yearText})` : headingTitle;
-    const subtitle = formatTorrentName(normalized);
-    return { heading, subtitle };
-  };
+  let torrentNaming = createTorrentNaming({ sequence: GAZELLIFY_SEQUENCE });
 
   const updateDetailTitle = () => {
     if (!CONFIG.enableGazellifyDetail) return;
@@ -2912,7 +4908,7 @@
     const yearText = yearNode ? yearNode.textContent.replace(/[()]/g, '').trim() : '';
     const heading = yearText ? `${titleText} (${yearText})` : titleText;
     const originalHeadline = headline.dataset.gzOriginal || headline.textContent || '';
-    const subtitle = formatTorrentName(originalHeadline);
+    const subtitle = torrentNaming.format(originalHeadline);
     if (!subtitle || subtitle.length === 0) return;
 
     const wrapper = create('div', 'gz-detail-title');
@@ -2927,8 +4923,8 @@
     headline.dataset.gzDetail = '1';
   };
 
-  const gazellifySearchResults = () => {
-    if (!CONFIG.enableGazellifySearch) return;
+const gazellifySearchResults = () => {
+  if (!CONFIG.enableGazellifySearch) return;
     $$(SELECTORS.searchResults).forEach((link) => {
       if (!link || link.dataset.gzSearch === '1') return;
       setOriginalTitle(link);
@@ -2942,9 +4938,9 @@
       const { heading, subtitle } = popupHeading
         ? {
           heading: popupYearText ? `${popupHeading} (${popupYearText})` : popupHeading,
-          subtitle: formatTorrentName(raw),
+          subtitle: torrentNaming.format(raw),
         }
-        : buildSearchDisplay(raw);
+        : torrentNaming.searchDisplay(raw);
       if (!heading || !subtitle || subtitle.length === 0) return;
 
       link.textContent = '';
@@ -2965,10 +4961,265 @@
       link.appendChild(wrapper);
       link.appendChild(hiddenOriginal);
       link.dataset.gzSearch = '1';
-    });
-  };
+  });
+};
 
-  const getSearchResultTorrentId = (row, link) => {
+const parseRequirementRow = (row) => {
+  const cells = Array.from(row.children);
+  const labelCell = cells.find((cell) => !cell.classList.contains('group-requirements__group--requirement-row-to-advance') && !cell.classList.contains('group-requirements__group--requirement-row-dropdown') && !cell.classList.contains('group-requirements__group--requirement-row-extended'));
+  const valueCell = cells.find((cell) => cell !== labelCell && !cell.classList.contains('group-requirements__group--requirement-row-to-advance') && !cell.classList.contains('group-requirements__group--requirement-row-dropdown') && !cell.classList.contains('group-requirements__group--requirement-row-extended'));
+  const statusCell = row.querySelector('.group-requirements__group--requirement-row-to-advance');
+  const labelIcon = labelCell?.querySelector('i')?.cloneNode(true) || null;
+  const label = getText(labelCell).replace(/\s+/g, ' ');
+  const currentValue = getText(valueCell);
+  const statusIcon = statusCell?.querySelector('i');
+  const isPassed = !!statusIcon && (statusIcon.classList.contains('fa-check') || statusIcon.classList.contains('text-green'));
+  const isFailed = !!statusIcon && (statusIcon.classList.contains('fa-x') || statusIcon.classList.contains('text-red'));
+  const detailCells = Array.from(row.querySelectorAll('.group-requirements__group--requirement-row-extended tbody tr:last-child td'));
+  const requiredValue = detailCells[0] ? getText(detailCells[0]) : '';
+  const toAdvance = detailCells[1] ? getText(detailCells[1]) : '';
+
+  return {
+    label,
+    labelIcon,
+    currentValue,
+    requiredValue,
+    toAdvance,
+    isPassed,
+    isFailed,
+  };
+};
+
+const parseGroupRequirementsData = (page) => {
+  return $$('.group-requirements__path-wrapper', page).flatMap((section) => {
+    const sectionName = getText(section.querySelector(':scope > h3')) || 'Group';
+
+    return $$('.group-requirements__group-wrapper', section).map((group) => {
+      const titleNode = group.querySelector('.group-requirements__group--header h3 span');
+      const titleIcon = titleNode?.querySelector('i')?.cloneNode(true) || null;
+      const title = getText(titleNode);
+      const color = titleNode?.style?.color || '';
+      const description = getText(group.querySelector('.group-requirements__group--description'));
+      const separators = $$('.group-requirements__group--separator', group).map((node) => getText(node));
+      const requirements = $$('.group-requirements__group--requirement-row', group).map(parseRequirementRow).filter((item) => item.label);
+      const perks = $$('.group-requirements__perk-extended', group).map((node) => ({
+        icon: node.querySelector('i')?.cloneNode(true) || null,
+        text: getText(node),
+      })).filter((item) => item.text);
+
+      return {
+        sectionName,
+        title,
+        titleIcon,
+        color,
+        description,
+        separators,
+        requirements,
+        perks,
+      };
+    });
+  }).filter((group) => group.title);
+};
+
+const arrangeGroupRequirements = (groups) => {
+  const byTitle = new Map();
+  groups.forEach((group) => {
+    const key = normalizeText(group.title).toLowerCase();
+    if (!key) return;
+    if (!byTitle.has(key)) byTitle.set(key, { count: 0, sections: new Set() });
+    const entry = byTitle.get(key);
+    entry.count += 1;
+    entry.sections.add(group.sectionName);
+  });
+
+  const sharedKeys = new Set(
+    Array.from(byTitle.entries())
+      .filter(([, entry]) => entry.count > 1 && entry.sections.size > 1)
+      .map(([key]) => key)
+  );
+  const addedShared = new Set();
+  const shared = [];
+  const sectioned = [];
+
+  groups.forEach((group) => {
+    const key = normalizeText(group.title).toLowerCase();
+    if (sharedKeys.has(key)) {
+      if (!addedShared.has(key)) {
+        shared.push({ ...group, sectionName: 'Shared Classes' });
+        addedShared.add(key);
+      }
+      return;
+    }
+    sectioned.push(group);
+  });
+
+  return [...shared, ...sectioned];
+};
+
+const getGroupRequirementSummary = (groups) => {
+  const sectionCount = new Set(groups.map((group) => group.sectionName)).size;
+  return `${groups.length} classes / ${sectionCount} sections`;
+};
+
+const makeRequirementItem = (requirement) => {
+  const item = create('div', 'gz-req-v2-criterion');
+  const label = create('div', 'gz-req-v2-criterion__label');
+  label.appendChild(document.createTextNode(requirement.label));
+
+  const values = create('div', 'gz-req-v2-criterion__values');
+  const primaryValue = requirement.requiredValue || requirement.currentValue || '-';
+  const primary = create('span', 'gz-req-v2-criterion__value');
+  primary.textContent = primaryValue;
+  if (requirement.toAdvance && requirement.toAdvance !== primaryValue) {
+    const advanceText = requirement.isPassed ? requirement.toAdvance : `Need ${requirement.toAdvance}`;
+    primary.title = advanceText;
+    primary.setAttribute('aria-label', `${primaryValue} (${advanceText})`);
+    primary.classList.add('gz-req-v2-criterion__value--tooltip');
+  }
+  values.appendChild(primary);
+
+  const status = create('span', requirement.isPassed ? 'gz-req-v2-status gz-req-v2-status--pass' : 'gz-req-v2-status gz-req-v2-status--fail');
+  const statusIcon = create('i', requirement.isPassed ? 'fas fa-check' : requirement.isFailed ? 'fas fa-x' : 'fas fa-minus');
+  status.appendChild(statusIcon);
+
+  item.appendChild(label);
+  item.appendChild(values);
+  item.appendChild(status);
+  return item;
+};
+
+const makePerkItem = (perk) => {
+  const item = create('div', 'gz-req-v2-perk');
+  const text = create('span');
+  text.textContent = perk.text;
+  item.appendChild(text);
+  return item;
+};
+
+const appendRequirementItems = (panel, group) => {
+  const used = new Set();
+  const choiceSeparator = group.separators.find((separator) => /satisfy one of:/i.test(separator));
+  const choiceLabels = choiceSeparator
+    ? choiceSeparator
+        .replace(/satisfy one of:/i, '')
+        .replace(/[✓✔✕×]/g, '')
+        .split(/\s+OR\s+/i)
+        .map((label) => normalizeText(label).toLowerCase())
+        .filter(Boolean)
+    : [];
+  let appendedChoice = false;
+
+  if (choiceLabels.length > 1) {
+    const choice = create('div', 'gz-req-v2-choice');
+    const choiceTitle = create('div', 'gz-req-v2-choice__title');
+    choiceTitle.textContent = 'Satisfy one of';
+    const choiceItems = create('div', 'gz-req-v2-choice__items');
+
+    choiceLabels.forEach((choiceLabel) => {
+      const requirement = group.requirements.find((item, index) => !used.has(index) && normalizeText(item.label).toLowerCase() === choiceLabel);
+      if (!requirement) return;
+      const index = group.requirements.indexOf(requirement);
+      used.add(index);
+      choiceItems.appendChild(makeRequirementItem(requirement));
+    });
+
+    if (choiceItems.children.length) {
+      choice.appendChild(choiceTitle);
+      choice.appendChild(choiceItems);
+      panel.appendChild(choice);
+      appendedChoice = true;
+    }
+  }
+
+  group.separators
+    .filter((separator) => !appendedChoice || separator !== choiceSeparator)
+    .forEach((separator) => {
+      const note = create('div', 'gz-req-v2-rule-note');
+      note.textContent = separator;
+      panel.appendChild(note);
+    });
+
+  group.requirements.forEach((requirement, index) => {
+    if (!used.has(index)) panel.appendChild(makeRequirementItem(requirement));
+  });
+};
+
+const buildGroupRequirementsLayout = (page = $(SELECTORS.groupRequirementsPage)) => {
+  if (!page || page.dataset.gzRequirementsLayout === '1') return !!page;
+  const groups = parseGroupRequirementsData(page);
+  if (!groups.length) return false;
+  const displayGroups = arrangeGroupRequirements(groups);
+
+  const article = page.querySelector('article') || page;
+  const shell = create('section', 'gz-req-v2');
+  const header = create('div', 'gz-req-v2-header');
+  const title = create('h1', 'gz-req-v2-title');
+  title.textContent = 'User Groups';
+  const summary = create('div', 'gz-req-v2-summary');
+  summary.textContent = getGroupRequirementSummary(displayGroups);
+  header.appendChild(title);
+  header.appendChild(summary);
+  shell.appendChild(header);
+
+  let lastSection = '';
+  displayGroups.forEach((group) => {
+    if (group.sectionName !== lastSection) {
+      const section = create('div', 'gz-req-v2-section');
+      section.textContent = group.sectionName;
+      shell.appendChild(section);
+      lastSection = group.sectionName;
+    }
+
+    const row = create('article', 'gz-req-v2-row');
+    const identity = create('section', 'gz-req-v2-rank');
+    const rankTitle = create('h2', 'gz-req-v2-rank__title');
+    rankTitle.textContent = group.title;
+    const rankIcon = create('div', 'gz-req-v2-rank__icon');
+    if (group.titleIcon) rankIcon.appendChild(group.titleIcon);
+    const desc = create('p', 'gz-req-v2-rank__description');
+    desc.textContent = group.description || 'No description available';
+    identity.appendChild(rankTitle);
+    identity.appendChild(rankIcon);
+    identity.appendChild(desc);
+
+    const reqPanel = create('section', 'gz-req-v2-panel');
+    const reqHeading = create('h3', 'gz-req-v2-panel__heading');
+    reqHeading.textContent = 'Requirements / Restrictions';
+    reqPanel.appendChild(reqHeading);
+    if (group.requirements.length) {
+      appendRequirementItems(reqPanel, group);
+    } else {
+      const empty = create('div', 'gz-req-v2-empty');
+      empty.textContent = 'No requirements';
+      reqPanel.appendChild(empty);
+    }
+
+    const perksPanel = create('section', 'gz-req-v2-panel gz-req-v2-panel--perks');
+    const perksHeading = create('h3', 'gz-req-v2-panel__heading');
+    perksHeading.textContent = 'Additional Perks';
+    perksPanel.appendChild(perksHeading);
+    if (group.perks.length) {
+      group.perks.forEach((perk) => perksPanel.appendChild(makePerkItem(perk)));
+    } else {
+      const empty = create('div', 'gz-req-v2-empty');
+      empty.textContent = 'No additional perks';
+      perksPanel.appendChild(empty);
+    }
+
+    row.appendChild(identity);
+    row.appendChild(reqPanel);
+    row.appendChild(perksPanel);
+    shell.appendChild(row);
+  });
+
+  article.textContent = '';
+  article.appendChild(shell);
+  page.classList.add('gz-req-v2-page');
+  page.dataset.gzRequirementsLayout = '1';
+  return true;
+};
+
+const getSearchResultTorrentId = (row, link) => {
     const rowId = row?.dataset?.torrentId;
     if (rowId) return rowId;
     const torrentUrl = link?.href || '';
@@ -2993,56 +5244,14 @@
       const torrentId = getSearchResultTorrentId(row, link);
       if (!torrentId) return;
 
-      link.classList.add('gz-clickable');
       link.dataset.torrentId = torrentId;
       link.dataset.gzSearchDropdown = '1';
-
-      link.addEventListener('click', async (e) => {
-        if (e.button !== 0 || e.ctrlKey || e.metaKey) {
-          return;
-        }
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        const existingDropdown = row.nextElementSibling;
-        if (existingDropdown && existingDropdown.classList.contains('gz-dropdown-row')) {
-          existingDropdown.remove();
-          return;
-        }
-
-        const colSpan = getSearchDropdownColSpan(row);
-        const loadingRow = createLoadingDropdownRow(colSpan);
-        row.insertAdjacentElement('afterend', loadingRow);
-
-        let torrentData = null;
-        let errorMessage = 'Failed to fetch torrent data. Check API key.';
-        try {
-          torrentData = await fetchTorrentById(torrentId);
-        } catch (err) {
-          errorMessage = err?.message
-            ? `Failed to fetch torrent data: ${err.message}`
-            : errorMessage;
-          console.error(`GAZELL3D: Failed to fetch torrent data for ${torrentId}`, err);
-        }
-        if (!loadingRow.isConnected) return;
-
-        if (!torrentData) {
-          loadingRow.replaceWith(createErrorDropdownRow(colSpan, errorMessage));
-          return;
-        }
-
-        const dropdownRow = create('tr', 'gz-dropdown-row');
-        const td = create('td');
-        td.setAttribute('colspan', colSpan);
-        const trumpableReason = extractTrumpableReasonFromElement(row);
-        const dropdownTorrentData = trumpableReason
-          ? { ...torrentData, trumpable_reason: trumpableReason }
-          : torrentData;
-        td.appendChild(renderTorrentDropdown(dropdownTorrentData, colSpan));
-        dropdownRow.appendChild(td);
-
-        loadingRow.replaceWith(dropdownRow);
+      torrentDropdowns.attach({
+        row,
+        link,
+        load: () => torrentRepository.byId(torrentId),
+        colSpan: () => getSearchDropdownColSpan(row),
+        getTrumpableReason: () => extractTrumpableReasonFromElement(row),
       });
     });
   };
@@ -3089,8 +5298,9 @@
       if (!link) return;
       setOriginalTitle(link);
       const sourceText = link.dataset.gzOriginal || link.textContent || '';
-      const formatted = formatTorrentName(sourceText, {
+      const formatted = torrentNaming.format(sourceText, {
         typeLabel: findTorrentTypeForHeading(heading),
+        hideSeasonEpisode: CONFIG.enableGazelleTorrentLayout,
       });
       if (formatted && formatted.length > 0) {
         applyUnknownHighlight(link, formatted);
@@ -3103,20 +5313,7 @@
   let searchResultsObserver;
 
   const stripTorrentDecorations = () => {
-    $$('.torrent-icons').forEach((node) => {
-      Array.from(node.childNodes).forEach((child) => {
-        if (
-          child.nodeType === 1 &&
-          (child.hasAttribute('data-seadex') ||
-            child.classList.contains('torrent-icons__torrent-trump') ||
-            child.classList.contains('torrent-icons__personal-release') ||
-            child.classList.contains('torrent-icons__internal'))
-        ) {
-          return;
-        }
-        child.remove();
-      });
-    });
+    $$('.torrent-icons').forEach((node) => liveTorrentIcons.filter(node));
 
     if (!CONFIG.showEditButton) {
       $$('.torrent-search--grouped__edit a[title="Edit"]').forEach((node) => node.remove());
@@ -3526,17 +5723,122 @@
     });
   };
 
-  // =====================
-  // Torrent Dropdown Feature
-  // =====================
+  // Cache and pending work are private to a credential-scoped repository.
+  const createTorrentRepository = ({ request, getApiKey }) => {
+    let credential = null;
+    let cache = new Map();
+    let pending = new Map();
+    const session = () => {
+      const key = getApiKey();
+      if (key !== credential) {
+        credential = key;
+        cache = new Map();
+        pending = new Map();
+      }
+      if (!key || key === 'YOUR_API_KEY_HERE') throw new Error('Aither API key not configured.');
+      return { key, cache, pending };
+    };
+    const fetchJson = (state, path, payload) => request(
+      `https://aither.cc/api/${path}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${state.key}`,
+        },
+        ...(payload === undefined ? {} : { data: JSON.stringify(payload) }),
+      },
+      payload === undefined ? 'GET' : 'POST',
+      payload === undefined ? 15000 : 30000
+    );
+    const lookup = async (key, load) => {
+      const state = session();
+      if (state.cache.has(key)) return state.cache.get(key);
+      if (state.pending.has(key)) return state.pending.get(key);
+      // Defer load so pending is registered even for a synchronous adapter.
+      const promise = Promise.resolve().then(() => load(state)).then((result) => {
+        if (state.pending.get(key) === promise) state.cache.set(key, result);
+        return result;
+      }).finally(() => {
+        if (state.pending.get(key) === promise) state.pending.delete(key);
+      });
+      state.pending.set(key, promise);
+      return promise;
+    };
+    const resource = (value, fallbackId) => {
+      if (!value?.attributes || typeof value.attributes !== 'object') {
+        throw new Error(value?.message || 'Empty torrent response.');
+      }
+      return { ...value.attributes, id: value.attributes.id ?? value.id ?? fallbackId };
+    };
+    const reportItems = (response) => {
+      const payload = response?.data ?? response;
+      if (Array.isArray(payload)) return payload;
+      if (Array.isArray(payload?.data)) return payload.data;
+      if (payload && typeof payload === 'object' && (
+        payload.id || payload.title || payload.solved !== undefined ||
+        payload.reported_torrents || payload.trumping_torrent
+      )) return [payload];
+      if (response?.message) throw new Error(response.message);
+      return [];
+    };
+    return Object.freeze({
+      byId: (torrentId) => {
+        const id = String(torrentId ?? '').trim();
+        if (!id) return Promise.reject(new Error('Torrent ID is required.'));
+        return lookup(`torrent:${id}`, async (state) => {
+          const response = await fetchJson(state, `torrents/${encodeURIComponent(id)}`);
+          return resource(response?.data?.attributes ? response.data : response, id);
+        });
+      },
+      byTmdb: (tmdbId) => {
+        const id = String(tmdbId ?? '').trim();
+        if (!id) return Promise.reject(new Error('Could not detect TMDB ID'));
+        return lookup(`tmdb:${id}`, async (state) => {
+          const torrents = new Map();
+          for (let page = 1; page <= 20; page++) {
+            const query = new URLSearchParams({ perPage: '100', page: String(page), tmdbId: id });
+            const response = await fetchJson(state, `torrents/filter?${query}`);
+            if (!Array.isArray(response?.data)) throw new Error(response?.message || 'Empty torrent response.');
+            response.data.forEach((torrent) => torrents.set(String(torrent.id), resource(torrent, torrent.id)));
+            if (response.data.length < 100) return torrents;
+          }
+          // Never cache a partial group as a complete result.
+          throw new Error('Torrent group exceeds the 20-page limit.');
+        });
+      },
+      reportsFor: (torrentId) => {
+        const id = String(torrentId ?? '').trim();
+        if (!id) return Promise.resolve([]);
+        return lookup(`reports:${id}`, async (state) => {
+          const reports = new Map();
+          for (let page = 1; page <= 20; page++) {
+            const query = new URLSearchParams({ reported_torrent_id: id, page: String(page) });
+            const response = await fetchJson(state, `trumping-reports/filter?${query}`);
+            reportItems(response).filter(Boolean).forEach((report) => {
+              reports.set(report.id ?? JSON.stringify(report), report);
+            });
+            const lastPage = Number(response?.meta?.last_page || 0);
+            const hasMore = lastPage ? page < lastPage : Boolean(response?.links?.next);
+            if (!hasMore) return Array.from(reports.values());
+          }
+          throw new Error('Trump reports exceed the 20-page limit.');
+        });
+      },
+      submitReport: async (payload) => {
+        const state = session();
+        const response = await fetchJson(state, 'trumping-reports/create', payload);
+        if (response?.success) {
+          const key = `reports:${payload.reported_torrent_id}`;
+          state.cache.delete(key);
+          state.pending.delete(key);
+        }
+        return response;
+      },
+    });
+  };
 
-  // Cache for fetched torrent data
-  let torrentDataCache = null;
-  let torrentDataPromise = null;
-  const torrentByIdCache = new Map();
-  const torrentByIdPromises = new Map();
-  const trumpReportsByTorrentCache = new Map();
-  const trumpReportsByTorrentPromises = new Map();
+  const torrentRepository = createTorrentRepository({ request: gmFetchJson, getApiKey: () => AITHER_API_KEY });
 
   // Extract TMDB ID from the page
   const getTmdbIdFromPage = () => {
@@ -3546,216 +5848,6 @@
       if (match) return parseInt(match[1], 10);
     }
     return null;
-  };
-
-  // Fetch all torrents for a given TMDB ID (with pagination support)
-  const fetchTorrentsByTmdb = async (tmdbId) => {
-    if (torrentDataCache) return torrentDataCache;
-    if (torrentDataPromise) return torrentDataPromise;
-
-    if (!AITHER_API_KEY || AITHER_API_KEY === 'YOUR_API_KEY_HERE') {
-      console.warn('GAZELL3D: Aither API key not configured');
-      return null;
-    }
-
-    torrentDataPromise = (async () => {
-      try {
-        const dataMap = new Map();
-        let currentPage = 1;
-        let hasMorePages = true;
-        const perPage = 100;
-
-        while (hasMorePages) {
-          const response = await gmFetchJson(
-            `https://aither.cc/api/torrents/filter?perPage=${perPage}&page=${currentPage}&tmdbId=${tmdbId}`,
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${AITHER_API_KEY}`
-              }
-            }
-          );
-
-          if (!response || !response.data) {
-            if (currentPage === 1) {
-              console.warn('GAZELL3D: Empty API response');
-              return null;
-            }
-            // No more data on subsequent page, we're done
-            break;
-          }
-
-          // Add torrents from this page to the map
-          response.data.forEach(torrent => {
-            const attributes = torrent.attributes || {};
-            dataMap.set(String(torrent.id), {
-              ...attributes,
-              id: attributes.id ?? torrent.id
-            });
-          });
-
-          // Check if there are more pages to fetch
-          // If we got fewer results than perPage, we've reached the last page
-          if (response.data.length < perPage) {
-            hasMorePages = false;
-          } else {
-            currentPage++;
-            // Safety limit to prevent infinite loops (max 20 pages = 2000 torrents)
-            if (currentPage > 20) {
-              console.warn('GAZELL3D: Reached maximum page limit (20 pages)');
-              hasMorePages = false;
-            }
-          }
-        }
-
-        if (dataMap.size > 0) {
-          console.log(`GAZELL3D: Fetched ${dataMap.size} torrents across ${currentPage} page(s)`);
-        }
-
-        torrentDataCache = dataMap;
-        return dataMap;
-      } catch (err) {
-        console.error('GAZELL3D: Failed to fetch torrent data', err);
-        return null;
-      }
-    })();
-
-    return torrentDataPromise;
-  };
-
-  // Fetch one torrent's full detail payload by ID
-  const fetchTorrentById = async (torrentId) => {
-    const id = String(torrentId || '').trim();
-    if (!id) return null;
-    if (torrentByIdCache.has(id)) return torrentByIdCache.get(id);
-    if (torrentByIdPromises.has(id)) return torrentByIdPromises.get(id);
-
-    if (!AITHER_API_KEY || AITHER_API_KEY === 'YOUR_API_KEY_HERE') {
-      console.warn('GAZELL3D: Aither API key not configured');
-      throw new Error('Aither API key not configured.');
-    }
-
-    const promise = (async () => {
-      try {
-        const response = await gmFetchJson(
-          `https://aither.cc/api/torrents/${encodeURIComponent(id)}`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${AITHER_API_KEY}`
-            }
-          }
-        );
-
-        const torrentResource = response?.data?.attributes ? response.data : response;
-        const torrentData = torrentResource?.attributes || null;
-        if (!torrentData) {
-          const message = response?.message || 'Empty torrent API response.';
-          throw new Error(message);
-        }
-
-        const normalizedTorrentData = {
-          ...torrentData,
-          id: torrentData.id ?? torrentResource.id ?? id
-        };
-        torrentByIdCache.set(id, normalizedTorrentData);
-        return normalizedTorrentData;
-      } finally {
-        torrentByIdPromises.delete(id);
-      }
-    })();
-
-    torrentByIdPromises.set(id, promise);
-    return promise;
-  };
-
-  const normalizeTrumpReportData = (response) => {
-    const payload = response?.data ?? response;
-    if (Array.isArray(payload)) return payload;
-    if (Array.isArray(payload?.data)) return payload.data;
-    if (payload && typeof payload === 'object' && (
-      payload.id ||
-      payload.title ||
-      payload.solved !== undefined ||
-      payload.reported_torrents ||
-      payload.trumping_torrent
-    )) {
-      return [payload];
-    }
-    return [];
-  };
-
-  // Fetch existing trump reports filed against a torrent.
-  const fetchTrumpReportsForTorrent = async (torrentId) => {
-    const id = String(torrentId || '').trim();
-    if (!id) return [];
-    if (trumpReportsByTorrentCache.has(id)) return trumpReportsByTorrentCache.get(id);
-    if (trumpReportsByTorrentPromises.has(id)) return trumpReportsByTorrentPromises.get(id);
-
-    if (!AITHER_API_KEY || AITHER_API_KEY === 'YOUR_API_KEY_HERE') {
-      console.warn('GAZELL3D: Aither API key not configured');
-      throw new Error('Aither API key not configured.');
-    }
-
-    const promise = (async () => {
-      try {
-        const reports = [];
-        const seenReportIds = new Set();
-        let currentPage = 1;
-        let hasMorePages = true;
-
-        while (hasMorePages) {
-          const url = new URL('https://aither.cc/api/trumping-reports/filter');
-          url.searchParams.set('reported_torrent_id', id);
-          url.searchParams.set('page', String(currentPage));
-
-          const response = await gmFetchJson(
-            url,
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${AITHER_API_KEY}`
-              }
-            }
-          );
-
-          if (response?.message && response.data === undefined) {
-            throw new Error(response.message);
-          }
-
-          normalizeTrumpReportData(response).forEach((report) => {
-            const reportId = report?.id ?? JSON.stringify(report);
-            if (seenReportIds.has(reportId)) return;
-            seenReportIds.add(reportId);
-            reports.push(report);
-          });
-
-          const lastPage = Number(response?.meta?.last_page || 0);
-          if (lastPage) {
-            hasMorePages = currentPage < lastPage;
-          } else {
-            hasMorePages = Boolean(response?.links?.next);
-          }
-
-          currentPage++;
-          if (currentPage > 20) {
-            console.warn('GAZELL3D: Reached maximum trump report page limit (20 pages)');
-            hasMorePages = false;
-          }
-        }
-
-        trumpReportsByTorrentCache.set(id, reports);
-        return reports;
-      } finally {
-        trumpReportsByTorrentPromises.delete(id);
-      }
-    })();
-
-    trumpReportsByTorrentPromises.set(id, promise);
-    return promise;
   };
 
   // Format bytes to human readable
@@ -4010,597 +6102,304 @@
     return `<div class="bbcode-rendered">${state.source}</div>`;
   };
 
-  // MediaInfo parser - extracts key info into a summary
-  const parseMediaInfo = (raw) => {
-    if (!raw) return { summary: null, raw: '' };
 
-    const lines = raw.split('\n');
-    const info = {
-      completeName: '',
-      format: '',
-      duration: '',
-      fileSize: '',
-      overallBitrate: '',
-      video: [],
-      audio: [],
-      subtitles: [],
-      encodingSettings: ''
-    };
+  // Parsing and format-specific presentation stay private to the media summary.
+  const renderMediaSummary = (() => {
+    // MediaInfo parser - extracts key info into a summary
+    const parseMediaInfo = (raw) => {
+      if (!raw) return { summary: null, raw: '' };
 
-    let currentSection = '';
+      const lines = raw.split('\n');
+      const info = {
+        completeName: '',
+        format: '',
+        duration: '',
+        fileSize: '',
+        overallBitrate: '',
+        video: [],
+        audio: [],
+        subtitles: [],
+        encodingSettings: ''
+      };
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
+      let currentSection = '';
 
-      // Detect section headers (handle both "Video" and "Video #1" formats)
-      if (/^General$/i.test(trimmed) || /^General\s/i.test(trimmed)) {
-        currentSection = 'general';
-      } else if (/^Video(?:\s|$)/i.test(trimmed)) {
-        currentSection = 'video';
-        info.video.push({});
-      } else if (/^Audio(?:\s|$)/i.test(trimmed)) {
-        currentSection = 'audio';
-        info.audio.push({});
-      } else if (/^Text(?:\s|$)/i.test(trimmed)) {
-        currentSection = 'text';
-        info.subtitles.push({});
-      } else if (/^Menu(?:\s|$)/i.test(trimmed)) {
-        currentSection = 'menu';
-      } else if (trimmed.includes(':')) {
-        // Parse key: value pairs, accounting for multi-colon values
-        const colonIdx = trimmed.indexOf(':');
-        const key = trimmed.substring(0, colonIdx).trim();
-        const value = trimmed.substring(colonIdx + 1).trim();
-        const keyLower = key.toLowerCase();
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
 
-        if (currentSection === 'general') {
-          if (keyLower === 'complete name') info.completeName = value;
-          if (keyLower === 'format') info.format = value;
-          if (keyLower === 'duration') info.duration = value;
-          if (keyLower === 'file size') info.fileSize = value;
-          if (keyLower === 'overall bit rate') info.overallBitrate = value;
-        } else if (currentSection === 'video' && info.video.length > 0) {
-          const v = info.video[info.video.length - 1];
-          if (keyLower === 'format') v.format = value;
-          if (keyLower === 'width') v.width = value;
-          if (keyLower === 'height') v.height = value;
-          if (keyLower === 'display aspect ratio') v.aspectRatio = value;
-          if (keyLower === 'bit depth') v.bitDepth = value;
-          if (keyLower === 'frame rate') v.frameRate = value;
-          if (keyLower === 'bit rate') v.bitrate = value;
-          if (keyLower === 'hdr format') v.hdr = value;
-          if (keyLower === 'encoding settings') {
-            v.encodingSettings = value;
-            info.encodingSettings = value;
+        // Detect section headers (handle both "Video" and "Video #1" formats)
+        if (/^General$/i.test(trimmed) || /^General\s/i.test(trimmed)) {
+          currentSection = 'general';
+        } else if (/^Video(?:\s|$)/i.test(trimmed)) {
+          currentSection = 'video';
+          info.video.push({});
+        } else if (/^Audio(?:\s|$)/i.test(trimmed)) {
+          currentSection = 'audio';
+          info.audio.push({});
+        } else if (/^Text(?:\s|$)/i.test(trimmed)) {
+          currentSection = 'text';
+          info.subtitles.push({});
+        } else if (/^Menu(?:\s|$)/i.test(trimmed)) {
+          currentSection = 'menu';
+        } else if (trimmed.includes(':')) {
+          // Parse key: value pairs, accounting for multi-colon values
+          const colonIdx = trimmed.indexOf(':');
+          const key = trimmed.substring(0, colonIdx).trim();
+          const value = trimmed.substring(colonIdx + 1).trim();
+          const keyLower = key.toLowerCase();
+
+          if (currentSection === 'general') {
+            if (keyLower === 'complete name') info.completeName = value;
+            if (keyLower === 'format') info.format = value;
+            if (keyLower === 'duration') info.duration = value;
+            if (keyLower === 'file size') info.fileSize = value;
+            if (keyLower === 'overall bit rate') info.overallBitrate = value;
+          } else if (currentSection === 'video' && info.video.length > 0) {
+            const v = info.video[info.video.length - 1];
+            if (keyLower === 'format') v.format = value;
+            if (keyLower === 'width') v.width = value;
+            if (keyLower === 'height') v.height = value;
+            if (keyLower === 'display aspect ratio') v.aspectRatio = value;
+            if (keyLower === 'bit depth') v.bitDepth = value;
+            if (keyLower === 'frame rate') v.frameRate = value;
+            if (keyLower === 'bit rate') v.bitrate = value;
+            if (keyLower === 'hdr format') v.hdr = value;
+            if (keyLower === 'encoding settings') {
+              v.encodingSettings = value;
+              info.encodingSettings = value;
+            }
+          } else if (currentSection === 'audio' && info.audio.length > 0) {
+            const a = info.audio[info.audio.length - 1];
+            if (keyLower === 'format') a.format = value;
+            if (keyLower === 'commercial name') a.name = value;
+            if (keyLower === 'channel(s)') a.channels = value;
+            if (keyLower === 'language') a.language = value;
+            if (keyLower === 'bit rate') a.bitrate = value;
+            if (keyLower === 'title') a.title = value;
+          } else if (currentSection === 'text' && info.subtitles.length > 0) {
+            const s = info.subtitles[info.subtitles.length - 1];
+            if (keyLower === 'format') s.format = value;
+            if (keyLower === 'language') s.language = value;
+            if (keyLower === 'title') s.title = value;
+            if (keyLower === 'forced') s.forced = value.toLowerCase() === 'yes';
+            if (keyLower === 'default') s.default = value.toLowerCase() === 'yes';
           }
-        } else if (currentSection === 'audio' && info.audio.length > 0) {
-          const a = info.audio[info.audio.length - 1];
-          if (keyLower === 'format') a.format = value;
-          if (keyLower === 'commercial name') a.name = value;
-          if (keyLower === 'channel(s)') a.channels = value;
-          if (keyLower === 'language') a.language = value;
-          if (keyLower === 'bit rate') a.bitrate = value;
-          if (keyLower === 'title') a.title = value;
-        } else if (currentSection === 'text' && info.subtitles.length > 0) {
-          const s = info.subtitles[info.subtitles.length - 1];
-          if (keyLower === 'format') s.format = value;
-          if (keyLower === 'language') s.language = value;
-          if (keyLower === 'title') s.title = value;
-          if (keyLower === 'forced') s.forced = value.toLowerCase() === 'yes';
-          if (keyLower === 'default') s.default = value.toLowerCase() === 'yes';
         }
       }
-    }
 
-    return { summary: info, raw };
-  };
-
-
-  // BDInfo parser - handles BDInfo format which is different from MediaInfo
-  const parseBDInfo = (raw) => {
-    if (!raw) return { summary: null, raw: '' };
-
-    const lines = raw.split('\n');
-    const info = {
-      discTitle: '',
-      discLabel: '',
-      discSize: '',
-      length: '',
-      totalBitrate: '',
-      video: [],
-      audio: [],
-      subtitles: []
+      return { summary: info, raw };
     };
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
 
-      // Parse key: value lines
-      if (trimmed.includes(':')) {
-        const colonIdx = trimmed.indexOf(':');
-        const key = trimmed.substring(0, colonIdx).trim().toLowerCase();
-        const value = trimmed.substring(colonIdx + 1).trim();
+    // BDInfo parser - handles BDInfo format which is different from MediaInfo
+    const parseBDInfo = (raw) => {
+      if (!raw) return { summary: null, raw: '' };
 
-        if (key === 'disc title') info.discTitle = value;
-        else if (key === 'disc label') info.discLabel = value;
-        else if (key === 'disc size') info.discSize = value;
-        else if (key === 'length') info.length = value;
-        else if (key === 'total bitrate') info.totalBitrate = value;
-        else if (key === 'video') {
-          // Video: MPEG-4 AVC Video / 35949 kbps / 1080p / 23.976 fps / 16:9 / High Profile 4.1
-          const parts = value.split('/').map(p => p.trim());
-          info.video.push({
-            format: parts[0] || '',
-            bitrate: parts[1] || '',
-            resolution: parts[2] || '',
-            frameRate: parts[3] || '',
-            aspectRatio: parts[4] || '',
-            profile: parts[5] || ''
-          });
-        } else if (key === 'audio') {
-          // Audio: Japanese / LPCM Audio / 2.0 / 48 kHz / 2304 kbps / 24-bit
-          const parts = value.split('/').map(p => p.trim());
-          info.audio.push({
-            language: parts[0] || '',
-            format: parts[1] || '',
-            channels: parts[2] || '',
-            sampleRate: parts[3] || '',
-            bitrate: parts[4] || '',
-            bitDepth: parts[5] || ''
-          });
-        } else if (key === 'subtitle') {
-          // Subtitle: English / 50.053 kbps
-          const parts = value.split('/').map(p => p.trim());
-          info.subtitles.push({
-            language: parts[0] || '',
-            bitrate: parts[1] || ''
-          });
+      const lines = raw.split('\n');
+      const info = {
+        discTitle: '',
+        discLabel: '',
+        discSize: '',
+        length: '',
+        totalBitrate: '',
+        video: [],
+        audio: [],
+        subtitles: []
+      };
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        // Parse key: value lines
+        if (trimmed.includes(':')) {
+          const colonIdx = trimmed.indexOf(':');
+          const key = trimmed.substring(0, colonIdx).trim().toLowerCase();
+          const value = trimmed.substring(colonIdx + 1).trim();
+
+          if (key === 'disc title') info.discTitle = value;
+          else if (key === 'disc label') info.discLabel = value;
+          else if (key === 'disc size') info.discSize = value;
+          else if (key === 'length') info.length = value;
+          else if (key === 'total bitrate') info.totalBitrate = value;
+          else if (key === 'video') {
+            // Video: MPEG-4 AVC Video / 35949 kbps / 1080p / 23.976 fps / 16:9 / High Profile 4.1
+            const parts = value.split('/').map(p => p.trim());
+            info.video.push({
+              format: parts[0] || '',
+              bitrate: parts[1] || '',
+              resolution: parts[2] || '',
+              frameRate: parts[3] || '',
+              aspectRatio: parts[4] || '',
+              profile: parts[5] || ''
+            });
+          } else if (key === 'audio') {
+            // Audio: Japanese / LPCM Audio / 2.0 / 48 kHz / 2304 kbps / 24-bit
+            const parts = value.split('/').map(p => p.trim());
+            info.audio.push({
+              language: parts[0] || '',
+              format: parts[1] || '',
+              channels: parts[2] || '',
+              sampleRate: parts[3] || '',
+              bitrate: parts[4] || '',
+              bitDepth: parts[5] || ''
+            });
+          } else if (key === 'subtitle') {
+            // Subtitle: English / 50.053 kbps
+            const parts = value.split('/').map(p => p.trim());
+            info.subtitles.push({
+              language: parts[0] || '',
+              bitrate: parts[1] || ''
+            });
+          }
         }
       }
-    }
 
-    return { summary: info, raw };
-  };
+      return { summary: info, raw };
+    };
 
-  // Render BDInfo summary as HTML (matches MediaInfo styling)
-  const renderBDInfoSummary = (info, rawContent = '') => {
-    const container = create('div', 'gz-mediainfo-summary');
 
-    // Disc title/label header (clickable to show/hide raw content)
-    const titleStr = info.discTitle || info.discLabel || 'BDInfo';
-
-    const title = create('div', 'gz-mediainfo-filename');
-    title.textContent = titleStr;
-    container.appendChild(title);
-
-    // Raw content section (hidden by default, appears between header and summary)
-    const rawSection = create('div', 'gz-mediainfo-raw-inline');
-    const rawPre = create('pre');
-    rawPre.textContent = rawContent;
-    rawSection.appendChild(rawPre);
-    container.appendChild(rawSection);
-
-    // Click handler to toggle raw content visibility
-    title.addEventListener('click', () => {
-      title.classList.toggle('expanded');
-      rawSection.classList.toggle('visible');
+    const textNode = (tag, className, text) => {
+      const node = create(tag, className);
+      node.textContent = text;
+      return node;
+    };
+    const mediaView = (info) => ({
+      title: info.completeName ? info.completeName.split(/[/\\]/).pop() || info.completeName : 'MediaInfo',
+      generalTitle: 'General',
+      general: [['Format', info.format], ['Duration', info.duration], ['Size', info.fileSize], ['Bit rate', info.overallBitrate]],
+      video: info.video.length ? [
+        ['Format', [info.video[0].format, info.video[0].bitDepth ? `(${info.video[0].bitDepth})` : ''].filter(Boolean).join(' ')],
+        ['Resolution', info.video[0].width && info.video[0].height ? `${info.video[0].width} × ${info.video[0].height}` : ''],
+        ['Aspect ratio', info.video[0].aspectRatio], ['Frame rate', info.video[0].frameRate],
+        ['Bit rate', info.video[0].bitrate], ['HDR', info.video[0].hdr],
+      ] : [],
+      audio: info.audio.map((track) => {
+        let channels = track.channels || '';
+        const match = channels.match(/(\d+)\s*channel/i);
+        if (match) {
+          const count = Number(match[1]);
+          channels = ({ 1: '1.0ch', 2: '2.0ch', 3: '2.1ch', 6: '5.1ch', 7: '6.1ch', 8: '7.1ch' })[count] || `${count}ch`;
+        }
+        return {
+          text: [track.language || 'Unknown', track.name || track.format || 'Unknown', channels, (track.bitrate || '').replace(/\s+/g, '')].filter(Boolean).join(' / '),
+          extra: track.title ? ` / ${track.title}` : '',
+        };
+      }),
+      subtitles: info.subtitles,
+      detailedSubtitles: true,
+      encodingSettings: info.encodingSettings,
     });
-
-    // Summary content wrapper
-    const summaryContent = create('div', 'gz-mediainfo-summary-content');
-
-    // Columns container (Disc Info + Video side by side)
-    const hasGeneral = info.discSize || info.length || info.totalBitrate;
-    const hasVideo = info.video.length > 0;
-
-    if (hasGeneral || hasVideo) {
+    const discView = (info) => {
+      const subtitles = new Map();
+      info.subtitles.forEach((track) => {
+        const language = track.language || 'Unknown';
+        const key = language.toLowerCase();
+        const entry = subtitles.get(key) || { language, count: 0 };
+        entry.count++;
+        subtitles.set(key, entry);
+      });
+      return {
+        title: info.discTitle || info.discLabel || 'BDInfo',
+        generalTitle: 'Disc Info',
+        general: [['Size', info.discSize], ['Length', info.length], ['Bitrate', info.totalBitrate]],
+        video: info.video.length ? [
+          ['Format', info.video[0].format], ['Resolution', info.video[0].resolution],
+          ['Aspect ratio', info.video[0].aspectRatio], ['Frame rate', info.video[0].frameRate],
+          ['Bit rate', info.video[0].bitrate], ['Profile', info.video[0].profile],
+        ] : [],
+        audio: info.audio.map((track) => {
+          const match = (track.channels || '').match(/(\d+(?:\.\d+)?)/);
+          const channels = match ? `${match[1]}ch` : track.channels;
+          const extended = [track.sampleRate, track.bitDepth].filter(Boolean);
+          return {
+            text: [track.language || 'Unknown', track.format || 'Unknown', channels, track.bitrate].filter(Boolean).join(' / '),
+            extra: extended.length ? ` (${extended.join(' / ')})` : '',
+          };
+        }),
+        subtitles: Array.from(subtitles.values()),
+        detailedSubtitles: false,
+      };
+    };
+    const formats = [
+      { id: 'mediainfo', label: 'MediaInfo', field: 'media_info', parse: parseMediaInfo, view: mediaView },
+      { id: 'bdinfo', label: 'BDInfo', field: 'bd_info', parse: parseBDInfo, view: discView },
+    ];
+    return (torrent) => {
+      const format = formats.find(({ field }) => typeof torrent[field] === 'string' && torrent[field].trim());
+      if (!format) return null;
+      const rawContent = torrent[format.field];
+      const view = format.view(format.parse(rawContent).summary);
+      const element = create('div', 'gz-mediainfo-summary');
+      const title = textNode('div', 'gz-mediainfo-filename', view.title);
+      const raw = create('div', 'gz-mediainfo-raw-inline');
+      raw.appendChild(textNode('pre', '', rawContent));
+      title.addEventListener('click', () => {
+        title.classList.toggle('expanded');
+        raw.classList.toggle('visible');
+      });
+      element.append(title, raw);
+      const summary = create('div', 'gz-mediainfo-summary-content');
       const columns = create('div', 'gz-mediainfo-columns');
-
-      // Disc Info column (like General in MediaInfo)
-      if (hasGeneral) {
-        const discCol = create('div', 'gz-mediainfo-column');
-        discCol.innerHTML = `<div class="gz-mediainfo-column-title">Disc Info</div>`;
-
-        if (info.discSize) {
-          discCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Size</span>
-              <span class="gz-mediainfo-row-value">${info.discSize}</span>
-            </div>`;
-        }
-        if (info.length) {
-          discCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Length</span>
-              <span class="gz-mediainfo-row-value">${info.length}</span>
-            </div>`;
-        }
-        if (info.totalBitrate) {
-          discCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Bitrate</span>
-              <span class="gz-mediainfo-row-value">${info.totalBitrate}</span>
-            </div>`;
-        }
-        columns.appendChild(discCol);
+      [[view.generalTitle, view.general], ['Video', view.video]].forEach(([heading, fields]) => {
+        const values = fields.filter(([, value]) => value);
+        if (!values.length) return;
+        const column = create('div', 'gz-mediainfo-column');
+        column.appendChild(textNode('div', 'gz-mediainfo-column-title', heading));
+        values.forEach(([label, value]) => {
+          const row = create('div', 'gz-mediainfo-row');
+          row.append(textNode('span', 'gz-mediainfo-row-label', label), textNode('span', 'gz-mediainfo-row-value', value));
+          column.appendChild(row);
+        });
+        columns.appendChild(column);
+      });
+      if (columns.children.length) summary.appendChild(columns);
+      if (view.audio.length) {
+        const section = create('div', 'gz-mediainfo-audio-section');
+        section.appendChild(textNode('div', 'gz-mediainfo-section-title', 'Audio'));
+        const list = create('div', 'gz-mediainfo-audio-list');
+        view.audio.forEach((track, index) => {
+          const item = create('div', 'gz-mediainfo-audio-item');
+          const details = textNode('span', 'gz-mediainfo-audio-details', track.text);
+          details.appendChild(textNode('span', 'gz-mediainfo-audio-title', track.extra));
+          item.append(textNode('span', 'gz-mediainfo-audio-num', `${index + 1}.`), details);
+          list.appendChild(item);
+        });
+        section.appendChild(list);
+        summary.appendChild(section);
       }
-
-      // Video column
-      if (hasVideo) {
-        const v = info.video[0]; // Use first video track
-        const videoCol = create('div', 'gz-mediainfo-column');
-        videoCol.innerHTML = `<div class="gz-mediainfo-column-title">Video</div>`;
-
-        if (v.format) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Format</span>
-              <span class="gz-mediainfo-row-value">${v.format}</span>
-            </div>`;
-        }
-        if (v.resolution) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Resolution</span>
-              <span class="gz-mediainfo-row-value">${v.resolution}</span>
-            </div>`;
-        }
-        if (v.aspectRatio) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Aspect ratio</span>
-              <span class="gz-mediainfo-row-value">${v.aspectRatio}</span>
-            </div>`;
-        }
-        if (v.frameRate) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Frame rate</span>
-              <span class="gz-mediainfo-row-value">${v.frameRate}</span>
-            </div>`;
-        }
-        if (v.bitrate) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Bit rate</span>
-              <span class="gz-mediainfo-row-value">${v.bitrate}</span>
-            </div>`;
-        }
-        if (v.profile) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Profile</span>
-              <span class="gz-mediainfo-row-value">${v.profile}</span>
-            </div>`;
-        }
-
-        columns.appendChild(videoCol);
+      if (view.subtitles.length) {
+        const section = create('div', 'gz-mediainfo-subtitles-section');
+        section.appendChild(textNode('div', 'gz-mediainfo-section-title', 'Subtitles'));
+        const list = create('div', 'gz-mediainfo-subtitles-list');
+        if (view.detailedSubtitles) list.classList.add('gz-mediainfo-subtitles-list--detailed');
+        view.subtitles.forEach((track, index) => {
+          const item = create(view.detailedSubtitles ? 'div' : 'span', 'gz-mediainfo-subtitle-item');
+          if (view.detailedSubtitles) {
+            item.classList.add('gz-mediainfo-subtitle-item--detailed');
+            const details = textNode('span', 'gz-mediainfo-subtitle-details', [track.language || 'Unknown', track.format].filter(Boolean).join(' '));
+            if (track.title) details.appendChild(textNode('span', 'gz-mediainfo-subtitle-title', ` [${track.title}]`));
+            const flags = [track.forced && 'forced', track.default && 'default'].filter(Boolean);
+            if (flags.length) details.appendChild(textNode('span', 'gz-mediainfo-subtitle-flags', ` (${flags.join(', ')})`));
+            item.append(textNode('span', 'gz-mediainfo-subtitle-num', `#${index + 1}:`), details);
+          } else {
+            item.textContent = track.language + (track.count > 1 ? ` (${track.count})` : '') + (index < view.subtitles.length - 1 ? ',' : '');
+          }
+          list.appendChild(item);
+        });
+        section.appendChild(list);
+        summary.appendChild(section);
       }
-
-      summaryContent.appendChild(columns);
-    }
-
-    // Audio section (numbered tracks like MediaInfo)
-    if (info.audio.length > 0) {
-      const audioSection = create('div', 'gz-mediainfo-audio-section');
-      audioSection.innerHTML = `<div class="gz-mediainfo-section-title">Audio</div>`;
-
-      const audioList = create('div', 'gz-mediainfo-audio-list');
-      info.audio.forEach((a, i) => {
-        const audioItem = create('div', 'gz-mediainfo-audio-item');
-        const num = `${i + 1}.`;
-        const lang = a.language || 'Unknown';
-        const format = a.format || 'Unknown';
-
-        // Parse channels to a cleaner format
-        let channels = a.channels || '';
-        const channelMatch = channels.match(/(\d+(?:\.\d+)?)/);
-        if (channelMatch) {
-          channels = `${channelMatch[1]}ch`;
-        }
-
-        // Format bitrate (remove 'kbps' redundancy if needed)
-        const bitrate = a.bitrate || '';
-        const sampleRate = a.sampleRate || '';
-        const bitDepth = a.bitDepth || '';
-
-        // Build the detail string
-        const detailParts = [lang, format, channels, bitrate].filter(Boolean);
-
-        // Add extended info if available
-        const extendedParts = [sampleRate, bitDepth].filter(Boolean);
-        const extendedInfo = extendedParts.length > 0 ? ` (${extendedParts.join(' / ')})` : '';
-
-        audioItem.innerHTML = `
-          <span class="gz-mediainfo-audio-num">${num}</span>
-          <span class="gz-mediainfo-audio-details">${detailParts.join(' / ')}<span class="gz-mediainfo-audio-title">${extendedInfo}</span></span>
-        `;
-        audioList.appendChild(audioItem);
-      });
-
-      audioSection.appendChild(audioList);
-      summaryContent.appendChild(audioSection);
-    }
-
-    // Subtitles section
-    if (info.subtitles.length > 0) {
-      const subSection = create('div', 'gz-mediainfo-subtitles-section');
-      subSection.innerHTML = `<div class="gz-mediainfo-section-title">Subtitles</div>`;
-
-      const subList = create('div', 'gz-mediainfo-subtitles-list');
-
-      // Group subtitles by language
-      const subtitleMap = new Map();
-      info.subtitles.forEach(s => {
-        const lang = s.language || 'Unknown';
-        const key = lang.toLowerCase();
-        if (!subtitleMap.has(key)) {
-          subtitleMap.set(key, { language: lang, count: 0 });
-        }
-        subtitleMap.get(key).count++;
-      });
-
-      // Render each unique language
-      const uniqueLanguages = Array.from(subtitleMap.values());
-      uniqueLanguages.forEach((sub, index) => {
-        const item = create('span', 'gz-mediainfo-subtitle-item');
-        let text = sub.language;
-
-        // Add count if more than 1
-        if (sub.count > 1) {
-          text += ` (${sub.count})`;
-        }
-
-        // Add separator except for last item
-        if (index < uniqueLanguages.length - 1) {
-          text += ',';
-        }
-
-        item.innerHTML = text;
-        subList.appendChild(item);
-      });
-
-      subSection.appendChild(subList);
-      summaryContent.appendChild(subSection);
-    }
-
-    container.appendChild(summaryContent);
-    return container;
-  };
-
-  // Render parsed MediaInfo as HTML
-  const renderMediaInfoSummary = (info, rawContent = '') => {
-    const container = create('div', 'gz-mediainfo-summary');
-
-    // Filename header (clickable to show/hide raw content)
-    const filenameStr = info.completeName
-      ? (info.completeName.split(/[/\\]/).pop() || info.completeName)
-      : 'MediaInfo';
-
-    const filename = create('div', 'gz-mediainfo-filename');
-    filename.textContent = filenameStr;
-    container.appendChild(filename);
-
-    // Raw content section (hidden by default, appears between header and summary)
-    const rawSection = create('div', 'gz-mediainfo-raw-inline');
-    const rawPre = create('pre');
-    rawPre.textContent = rawContent;
-    rawSection.appendChild(rawPre);
-    container.appendChild(rawSection);
-
-    // Click handler to toggle raw content visibility
-    filename.addEventListener('click', () => {
-      filename.classList.toggle('expanded');
-      rawSection.classList.toggle('visible');
-    });
-
-    // Summary content wrapper
-    const summaryContent = create('div', 'gz-mediainfo-summary-content');
-
-    // Columns container (General + Video side by side)
-    const hasGeneral = info.format || info.duration || info.overallBitrate || info.fileSize;
-    const hasVideo = info.video.length > 0;
-
-    if (hasGeneral || hasVideo) {
-      const columns = create('div', 'gz-mediainfo-columns');
-
-      // General column
-      if (hasGeneral) {
-        const generalCol = create('div', 'gz-mediainfo-column');
-        generalCol.innerHTML = `<div class="gz-mediainfo-column-title">General</div>`;
-
-        if (info.format) {
-          generalCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Format</span>
-              <span class="gz-mediainfo-row-value">${info.format}</span>
-            </div>`;
-        }
-        if (info.duration) {
-          generalCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Duration</span>
-              <span class="gz-mediainfo-row-value">${info.duration}</span>
-            </div>`;
-        }
-        if (info.overallBitrate) {
-          generalCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Bitrate</span>
-              <span class="gz-mediainfo-row-value">${info.overallBitrate}</span>
-            </div>`;
-        }
-        if (info.fileSize) {
-          generalCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Size</span>
-              <span class="gz-mediainfo-row-value">${info.fileSize}</span>
-            </div>`;
-        }
-        columns.appendChild(generalCol);
+      if (view.encodingSettings) {
+        const section = create('div', 'gz-mediainfo-encode-section');
+        section.append(textNode('div', 'gz-mediainfo-section-title', 'Encode Settings'), textNode('div', 'gz-mediainfo-encode-settings', view.encodingSettings));
+        summary.appendChild(section);
       }
-
-      // Video column
-      if (hasVideo) {
-        const v = info.video[0]; // Use first video track
-        const videoCol = create('div', 'gz-mediainfo-column');
-        videoCol.innerHTML = `<div class="gz-mediainfo-column-title">Video</div>`;
-
-        const formatStr = v.format ? `${v.format}${v.bitDepth ? ` (${v.bitDepth})` : ''}` : '';
-        if (formatStr) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Format</span>
-              <span class="gz-mediainfo-row-value">${formatStr}</span>
-            </div>`;
-        }
-
-        const resolution = v.width && v.height ? `${v.width} × ${v.height}` : '';
-        if (resolution) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Resolution</span>
-              <span class="gz-mediainfo-row-value">${resolution}</span>
-            </div>`;
-        }
-
-        if (v.aspectRatio) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Aspect ratio</span>
-              <span class="gz-mediainfo-row-value">${v.aspectRatio}</span>
-            </div>`;
-        }
-
-        if (v.frameRate) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Frame rate</span>
-              <span class="gz-mediainfo-row-value">${v.frameRate}</span>
-            </div>`;
-        }
-
-        if (v.bitrate) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">Bit rate</span>
-              <span class="gz-mediainfo-row-value">${v.bitrate}</span>
-            </div>`;
-        }
-
-        if (v.hdr) {
-          videoCol.innerHTML += `
-            <div class="gz-mediainfo-row">
-              <span class="gz-mediainfo-row-label">HDR</span>
-              <span class="gz-mediainfo-row-value">${v.hdr}</span>
-            </div>`;
-        }
-
-        columns.appendChild(videoCol);
-      }
-
-      summaryContent.appendChild(columns);
-    }
-
-    // Audio section
-    if (info.audio.length > 0) {
-      const audioSection = create('div', 'gz-mediainfo-audio-section');
-      audioSection.innerHTML = `<div class="gz-mediainfo-section-title">Audio</div>`;
-
-      const audioList = create('div', 'gz-mediainfo-audio-list');
-      info.audio.forEach((a, i) => {
-        const audioItem = create('div', 'gz-mediainfo-audio-item');
-        const num = `${i + 1}.`;
-        const lang = a.language || 'Unknown';
-        const format = a.name || a.format || 'Unknown';
-
-        // Parse channels to a cleaner format (e.g., "8 channels" -> "8ch")
-        let channels = a.channels || '';
-        const channelMatch = channels.match(/(\d+)\s*channel/i);
-        if (channelMatch) {
-          const numChannels = parseInt(channelMatch[1], 10);
-          // Map common channel counts to standard formats
-          const channelMap = { 1: '1.0ch', 2: '2.0ch', 3: '2.1ch', 6: '5.1ch', 7: '6.1ch', 8: '7.1ch' };
-          channels = channelMap[numChannels] || `${numChannels}ch`;
-        }
-
-        // Format bitrate (e.g., "1 536 kb/s" -> "1536kb/s")
-        const bitrate = a.bitrate ? a.bitrate.replace(/\s+/g, '') : '';
-
-        // Build the detail string: Language / Format / Channels / Bitrate
-        const detailParts = [lang, format, channels, bitrate].filter(Boolean);
-
-        // Title/Description (for commentary tracks, etc.)
-        const title = a.title ? ` / ${a.title}` : '';
-
-        audioItem.innerHTML = `
-          <span class="gz-mediainfo-audio-num">${num}</span>
-          <span class="gz-mediainfo-audio-details">${detailParts.join(' / ')}<span class="gz-mediainfo-audio-title">${title}</span></span>
-        `;
-        audioList.appendChild(audioItem);
-      });
-
-      audioSection.appendChild(audioList);
-      summaryContent.appendChild(audioSection);
-    }
-
-    // Subtitles section - show each track individually with details
-    if (info.subtitles.length > 0) {
-      const subSection = create('div', 'gz-mediainfo-subtitles-section');
-      subSection.innerHTML = `<div class="gz-mediainfo-section-title">Subtitles</div>`;
-
-      const subList = create('div', 'gz-mediainfo-subtitles-list gz-mediainfo-subtitles-list--detailed');
-
-      // Render each subtitle track individually
-      info.subtitles.forEach((s, index) => {
-        const item = create('div', 'gz-mediainfo-subtitle-item gz-mediainfo-subtitle-item--detailed');
-
-        const trackNum = `#${index + 1}:`;
-        const lang = s.language || 'Unknown';
-        const format = s.format || '';
-        const title = s.title || '';
-
-        // Build flags array
-        const flags = [];
-        if (s.forced) flags.push('forced');
-        if (s.default) flags.push('default');
-
-        // Build the display text
-        let text = `<span class="gz-mediainfo-subtitle-num">${trackNum}</span>`;
-        text += `<span class="gz-mediainfo-subtitle-details">`;
-        text += `${lang}`;
-        if (format) text += ` ${format}`;
-        if (title) text += ` <span class="gz-mediainfo-subtitle-title">[${title}]</span>`;
-        if (flags.length > 0) {
-          text += ` <span class="gz-mediainfo-subtitle-flags">(${flags.join(', ')})</span>`;
-        }
-        text += `</span>`;
-
-        item.innerHTML = text;
-        subList.appendChild(item);
-      });
-
-      subSection.appendChild(subList);
-      summaryContent.appendChild(subSection);
-    }
-
-    // Encode Settings section
-    if (info.encodingSettings) {
-      const encodeSection = create('div', 'gz-mediainfo-encode-section');
-      encodeSection.innerHTML = `<div class="gz-mediainfo-section-title">Encode Settings</div>`;
-
-      const settingsBlock = create('div', 'gz-mediainfo-encode-settings');
-      settingsBlock.textContent = info.encodingSettings;
-      encodeSection.appendChild(settingsBlock);
-      summaryContent.appendChild(encodeSection);
-    }
-
-    container.appendChild(summaryContent);
-    return container;
-  };
-
+      element.appendChild(summary);
+      return { id: format.id, label: format.label, element, rawContent };
+    };
+  })();
 
   const formatDropdownDetailValue = (value) => {
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
@@ -4835,6 +6634,7 @@
       },
       {
         heading: 'Flags',
+        className: 'gz-details-section--flags',
         rows: [
           { label: 'Double Upload', value: torrentData.double_upload, kind: 'flag' },
           { label: 'Freeleech', value: torrentData.freeleech, kind: 'freeleech' },
@@ -4861,6 +6661,7 @@
       rawLines.push(`${sectionConfig.heading}:`);
 
       const section = create('section', 'gz-details-section');
+      if (sectionConfig.className) section.classList.add(sectionConfig.className);
       const heading = create('h3', 'gz-details-heading');
       heading.textContent = sectionConfig.heading;
       section.appendChild(heading);
@@ -4904,7 +6705,7 @@
   };
 
   // Render the dropdown content for a torrent
-  const renderTorrentDropdown = (torrentData, colSpan) => {
+  const renderTorrentDropdown = (torrentData) => {
     const container = create('div', 'gz-dropdown-container');
 
     // Header: Uploaded by X on Date
@@ -4928,14 +6729,8 @@
       { id: 'filelist', label: 'Files', hasContent: torrentData.files && torrentData.files.length > 0 }
     ];
 
-    // Mediainfo / Bdinfo - show whichever is not empty, prefer mediainfo if both exist
-    const hasMediainfo = torrentData.media_info && torrentData.media_info.trim();
-    const hasBdinfo = torrentData.bd_info && torrentData.bd_info.trim();
-    if (hasMediainfo) {
-      tabsConfig.push({ id: 'mediainfo', label: 'MediaInfo', hasContent: true, content: torrentData.media_info });
-    } else if (hasBdinfo) {
-      tabsConfig.push({ id: 'bdinfo', label: 'BDInfo', hasContent: true, content: torrentData.bd_info });
-    }
+    const mediaSummary = renderMediaSummary(torrentData);
+    if (mediaSummary) tabsConfig.push({ id: mediaSummary.id, label: mediaSummary.label, hasContent: true, mediaSummary });
 
     // Create tabs and panels
     tabsConfig.forEach((config, index) => {
@@ -4960,7 +6755,7 @@
         rawCopyContent = details.rawContent;
         panel.appendChild(details.element);
         if (details.torrentId && details.trumpReportHost) {
-          fetchTrumpReportsForTorrent(details.torrentId)
+          torrentRepository.reportsFor(details.torrentId)
             .then((reports) => {
               const rawReportContent = renderTrumpReportAlert(details.trumpReportHost, reports);
               panel.dataset.rawContent = [details.rawContent, rawReportContent].filter(Boolean).join('\n\n');
@@ -4976,6 +6771,12 @@
         panel.innerHTML = parseBBCode(rawCopyContent);
       } else if (config.id === 'filelist') {
         panel.classList.add('gz-dropdown-filelist');
+
+        const escapeFileText = (value) => {
+          const span = create('span');
+          span.textContent = String(value);
+          return span.innerHTML;
+        };
 
         // Build raw file list content for copying
         const fileLines = [];
@@ -4995,7 +6796,7 @@
         // Show root folder name if available
         if (torrentData.folder) {
           const folderInfo = create('div', 'gz-filelist-root-info');
-          folderInfo.innerHTML = `<strong>Folder:</strong> ${torrentData.folder}`;
+          folderInfo.innerHTML = `<strong>Folder:</strong> ${escapeFileText(torrentData.folder)}`;
           panel.appendChild(folderInfo);
         }
 
@@ -5004,7 +6805,7 @@
 
         // Build a nested tree structure
         const buildTree = (files) => {
-          const root = { folders: {}, files: [] };
+          const root = { folders: Object.create(null), files: [] };
 
           files.forEach(file => {
             const filePath = file.name || file;
@@ -5015,7 +6816,7 @@
             for (let i = 0; i < parts.length - 1; i++) {
               const folderName = parts[i];
               if (!current.folders[folderName]) {
-                current.folders[folderName] = { folders: {}, files: [] };
+                current.folders[folderName] = { folders: Object.create(null), files: [] };
               }
               current = current.folders[folderName];
             }
@@ -5043,7 +6844,7 @@
         let folderIdCounter = 0;
         const renderTree = (node, depth = 0, parentId = null) => {
           const rows = [];
-          const indentPx = depth * 28; // Indentation in pixels (bigger for visibility)
+          const indentPx = Math.min(depth, 6) * 20;
 
           // Get sorted folder names and file names
           const folderNames = Object.keys(node.folders).sort(naturalSort);
@@ -5060,11 +6861,12 @@
             rows.push(`
               <tr class="gz-filelist-folder-row" data-folder-id="${folderId}" ${parentId ? `data-parent="${parentId}"` : ''} data-depth="${depth}" ${isHidden ? 'style="display:none;"' : ''}>
                 <td>
-                  <span class="gz-tree-indent" style="display:inline-block; width:${indentPx}px; min-width:${indentPx}px;"></span>
-                  <span class="gz-folder-toggle">▶</span>
-                  <span class="gz-folder-icon">📁</span>
-                  <span class="gz-folder-name">${folderName}</span>
-                  <span class="gz-folder-count">(${fileCount} files)</span>
+                  <button type="button" class="gz-folder-button" aria-expanded="false" style="padding-left:${indentPx}px">
+                    <span class="gz-folder-toggle" aria-hidden="true">›</span>
+                    <svg class="gz-folder-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7V5a1 1 0 0 1 1-1h5l2 3h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Z"/></svg>
+                    <span class="gz-folder-name">${escapeFileText(folderName)}</span>
+                    <span class="gz-folder-count">${fileCount} ${fileCount === 1 ? 'file' : 'files'}</span>
+                  </button>
                 </td>
                 <td></td>
               </tr>
@@ -5083,8 +6885,10 @@
             rows.push(`
               <tr class="gz-filelist-file-row" ${parentId ? `data-parent="${parentId}"` : ''} data-depth="${depth}" ${isHidden ? 'style="display:none;"' : ''}>
                 <td>
-                  <span class="gz-tree-indent" style="display:inline-block; width:${fileIndentPx}px; min-width:${fileIndentPx}px;"></span>
-                  ${file.name}
+                  <div class="gz-file-name" style="padding-left:${fileIndentPx}px">
+                    <svg class="gz-file-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 3H5v18h14V8l-5-5Zm0 0v6h5"/></svg>
+                    <span>${escapeFileText(file.name)}</span>
+                  </div>
                 </td>
                 <td>${formatBytes(file.size)}</td>
               </tr>
@@ -5100,7 +6904,7 @@
           <thead>
             <tr>
               <th>Name</th>
-              <th style="text-align: right; width: 100px;">Size</th>
+              <th class="gz-file-size-heading">Size</th>
             </tr>
           </thead>
           <tbody>
@@ -5112,8 +6916,8 @@
         table.querySelectorAll('.gz-filelist-folder-row').forEach(folderRow => {
           folderRow.addEventListener('click', () => {
             const folderId = folderRow.dataset.folderId;
-            const toggle = folderRow.querySelector('.gz-folder-toggle');
-            const isExpanded = toggle.textContent === '▼';
+            const button = folderRow.querySelector('.gz-folder-button');
+            const isExpanded = button.getAttribute('aria-expanded') === 'true';
 
             if (isExpanded) {
               // Collapse: hide all nested rows recursively
@@ -5122,20 +6926,19 @@
                   row.style.display = 'none';
                   // Also collapse any expanded subfolders
                   if (row.classList.contains('gz-filelist-folder-row')) {
-                    const nestedToggle = row.querySelector('.gz-folder-toggle');
-                    if (nestedToggle) nestedToggle.textContent = '▶';
+                    row.querySelector('.gz-folder-button').setAttribute('aria-expanded', 'false');
                     hideRecursive(row.dataset.folderId);
                   }
                 });
               };
               hideRecursive(folderId);
-              toggle.textContent = '▶';
+              button.setAttribute('aria-expanded', 'false');
             } else {
               // Expand: show direct children only
               table.querySelectorAll(`tr[data-parent="${folderId}"]`).forEach(row => {
                 row.style.display = '';
               });
-              toggle.textContent = '▼';
+              button.setAttribute('aria-expanded', 'true');
             }
           });
         });
@@ -5146,22 +6949,10 @@
         console.log('GAZELL3D: File tree rendered. Total rows:', allRows.length, 'Hidden:', hiddenRows.length);
 
         panel.appendChild(table);
-      } else if (config.id === 'mediainfo' || config.id === 'bdinfo') {
+      } else if (config.mediaSummary) {
         panel.classList.add('gz-dropdown-mediainfo');
-        rawCopyContent = config.content;
-
-        // Parse and display summary based on type
-        if (config.id === 'bdinfo') {
-          const parsed = parseBDInfo(config.content);
-          if (parsed.summary) {
-            panel.appendChild(renderBDInfoSummary(parsed.summary, config.content));
-          }
-        } else {
-          const parsed = parseMediaInfo(config.content);
-          if (parsed.summary) {
-            panel.appendChild(renderMediaInfoSummary(parsed.summary, config.content));
-          }
-        }
+        rawCopyContent = config.mediaSummary.rawContent;
+        panel.appendChild(config.mediaSummary.element);
       }
 
       // Store raw content on the panel for later
@@ -5213,25 +7004,68 @@
     return container;
   };
 
-  // Create a loading dropdown row
-  const createLoadingDropdownRow = (colSpan) => {
-    const dropdownRow = create('tr', 'gz-dropdown-row');
-    const td = create('td');
-    td.setAttribute('colspan', colSpan);
-    td.innerHTML = '<div class="gz-dropdown-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
-    dropdownRow.appendChild(td);
-    return dropdownRow;
+  const createTorrentDropdowns = ({ render }) => {
+    const attachments = new WeakMap();
+    const makeRow = (colSpan, className, message) => {
+      const row = create('tr', 'gz-dropdown-row');
+      const cell = create('td');
+      cell.colSpan = colSpan;
+      const content = create('div', className);
+      content.textContent = message;
+      cell.appendChild(content);
+      row.appendChild(cell);
+      return row;
+    };
+    return Object.freeze({
+      attach: ({ row, link, load, colSpan, getTrumpableReason = () => null }) => {
+        if (attachments.has(link)) return attachments.get(link);
+        let current = null;
+        const click = async (event) => {
+          if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (current?.isConnected) {
+            current.remove();
+            current = null;
+            return;
+          }
+          const columns = colSpan();
+          const loading = makeRow(columns, 'gz-dropdown-loading', 'Loading...');
+          current = loading;
+          row.insertAdjacentElement('afterend', loading);
+          const isCurrent = () => current === loading && row.isConnected && loading.isConnected && row.nextElementSibling === loading;
+          try {
+            const data = await load();
+            if (!isCurrent()) return;
+            if (!data) throw new Error('Torrent data not found in response.');
+            const reason = getTrumpableReason();
+            const result = makeRow(columns, '', '');
+            result.firstElementChild.replaceChildren(render(reason ? { ...data, trumpable_reason: reason } : data));
+            loading.replaceWith(result);
+            current = result;
+          } catch (error) {
+            if (!isCurrent()) return;
+            const result = makeRow(columns, 'gz-dropdown-error', `Failed to fetch torrent data: ${error?.message || 'Unknown error'}`);
+            loading.replaceWith(result);
+            current = result;
+          }
+        };
+        const detach = () => {
+          link.removeEventListener('click', click);
+          current?.remove();
+          current = null;
+          link.classList.remove('gz-clickable');
+          attachments.delete(link);
+        };
+        link.classList.add('gz-clickable');
+        link.addEventListener('click', click);
+        attachments.set(link, detach);
+        return detach;
+      },
+    });
   };
 
-  // Create an error dropdown row
-  const createErrorDropdownRow = (colSpan, message) => {
-    const dropdownRow = create('tr', 'gz-dropdown-row');
-    const td = create('td');
-    td.setAttribute('colspan', colSpan);
-    td.innerHTML = `<div class="gz-dropdown-error">${message}</div>`;
-    dropdownRow.appendChild(td);
-    return dropdownRow;
-  };
+  const torrentDropdowns = createTorrentDropdowns({ render: renderTorrentDropdown });
 
   // ============================================
   // Trump Report Feature
@@ -5272,32 +7106,6 @@
       toast.style.animation = 'gz-toast-slide-in 0.3s ease reverse';
       setTimeout(() => toast.remove(), 300);
     }, duration);
-  };
-
-  // Submit Trump Report to API
-  const submitTrumpReport = async (payload) => {
-    const url = 'https://aither.cc/api/trumping-reports/create';
-
-    try {
-      const response = await gmFetchJson(
-        url,
-        {
-          headers: {
-            'Authorization': `Bearer ${AITHER_API_KEY}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          data: JSON.stringify(payload)
-        },
-        'POST',
-        30000
-      );
-
-      return response;
-    } catch (error) {
-      console.error('GAZELL3D: Trump report submission failed:', error);
-      throw error;
-    }
   };
 
   // Show Trump Report Modal
@@ -5406,7 +7214,7 @@
           payload.screenshots_trumping_torrent = screenshotsTrumping;
         }
 
-        const response = await submitTrumpReport(payload);
+        const response = await torrentRepository.submitReport(payload);
 
         closeModal();
 
@@ -5428,7 +7236,7 @@
 
   const gazellifyTorrentLayout = (article) => {
     const section = $(SELECTORS.torrentGroup, article);
-    if (!section) return;
+    if (!section || section.querySelector('.gz-torrent-table')) return;
 
     // Clear the trump torrent registry for fresh population
     trumpTorrentRegistry.clear();
@@ -5461,6 +7269,7 @@
     }
 
     const newTable = create('table', 'gz-torrent-table');
+    const iconEntries = [];
 
     const thead = create('thead');
     // Conditionally include Actions header
@@ -5481,7 +7290,6 @@
     newTable.appendChild(thead);
 
     const tbody = create('tbody');
-    let rowIdCounter = 0;
 
     // Shared row processing logic
     // seasonGroup: identifier for the season (e.g., 'S01', 'S02') used for trump report filtering
@@ -5510,12 +7318,7 @@
         const nameLink = row.querySelector('.torrent-search--grouped__name a');
         if (!nameLink) return;
 
-        // Assign Sync ID
-        const syncId = `gz-sync-${++rowIdCounter}`;
-        row.dataset.gzSyncId = syncId;
-
         const newRow = create('tr');
-        newRow.dataset.gzSyncId = syncId;
 
         // 1. Episode/Season Column -> REMOVED (Replaced by header)
 
@@ -5531,43 +7334,8 @@
         const tdName = create('td', 'gz-col-name');
         const iconSpan = create('span', 'gz-torrent-icons');
 
-        const updateIcons = () => {
-          iconSpan.innerHTML = '';
-          const originalIcons = row.querySelector('.torrent-icons');
-          if (originalIcons) {
-            // Create a copy of children array since we may modify the original
-            const iconsToProcess = Array.from(originalIcons.children);
-            iconsToProcess.forEach(icon => {
-              // Filter text nodes but keep elements
-              if (icon.nodeType !== 1) return;
-
-              // Check if this is a Seadex icon - these need special handling
-              const isSeadex = icon.hasAttribute('data-seadex');
-
-              // Apply filtering logic
-              const isKeep = isSeadex ||
-                icon.classList.contains('torrent-icons__torrent-trump') ||
-                icon.classList.contains('torrent-icons__personal-release') ||
-                icon.classList.contains('torrent-icons__internal');
-
-              if (CONFIG.removeTorrentIcons && !isKeep) {
-                return;
-              }
-
-              // Skip comment icon always
-              if (icon.classList.contains('fa-comment-alt-plus') || icon.classList.contains('torrent-icons__comments')) return;
-
-              // For Seadex icons: MOVE them instead of cloning to preserve event listeners
-              // The original table is hidden anyway, so this is safe
-              if (isSeadex) {
-                iconSpan.appendChild(icon);
-              } else {
-                iconSpan.appendChild(icon.cloneNode(true));
-              }
-            });
-          }
-        };
-        updateIcons(); // Initial population
+        const originalIcons = row.querySelector('.torrent-icons');
+        if (originalIcons) iconEntries.push({ source: originalIcons, target: iconSpan });
 
         const newLink = nameLink.cloneNode(true);
         newLink.className = 'torrent-name-link';
@@ -5582,7 +7350,6 @@
         const typePart = currentType ? `[${currentType}]` : '';
         const episodePart = episodeId ? `${episodeId} ` : '';
         const torrentDisplayName = `${episodePart}${typePart} ${torrentName}`.trim();
-        const trumpableReason = extractTrumpableReasonFromElement(row);
 
         // Register torrent in the trump report registry for season-aware filtering
         if (torrentId) {
@@ -5591,62 +7358,18 @@
 
         // Add dropdown functionality if enabled
         if (CONFIG.enableTorrentDropdowns && torrentId) {
-          newLink.classList.add('gz-clickable');
           newLink.dataset.torrentId = torrentId;
-
-          newLink.addEventListener('click', async (e) => {
-            // Ctrl+click or Cmd+click: let the browser handle it natively
-            // (the browser already opens <a> links in a new tab on Ctrl/Cmd+click)
-            if (e.ctrlKey || e.metaKey) {
-              return;
-            }
-
-            e.preventDefault();
-            e.stopPropagation();
-
-            const colSpan = CONFIG.enableGazelleButtons ? 7 : 6;
-            const existingDropdown = newRow.nextElementSibling;
-
-            // Toggle existing dropdown
-            if (existingDropdown && existingDropdown.classList.contains('gz-dropdown-row')) {
-              existingDropdown.remove();
-              return;
-            }
-
-            // Create loading state
-            const loadingRow = createLoadingDropdownRow(colSpan);
-            newRow.insertAdjacentElement('afterend', loadingRow);
-
-            // Fetch torrent data
-            const tmdbId = getTmdbIdFromPage();
-            if (!tmdbId) {
-              loadingRow.replaceWith(createErrorDropdownRow(colSpan, 'Could not detect TMDB ID'));
-              return;
-            }
-
-            const torrentDataMap = await fetchTorrentsByTmdb(tmdbId);
-            if (!torrentDataMap) {
-              loadingRow.replaceWith(createErrorDropdownRow(colSpan, 'Failed to fetch torrent data. Check API key.'));
-              return;
-            }
-
-            const torrentData = torrentDataMap.get(torrentId);
-            if (!torrentData) {
-              loadingRow.replaceWith(createErrorDropdownRow(colSpan, 'Torrent data not found in API response'));
-              return;
-            }
-
-            // Render dropdown
-            const dropdownRow = create('tr', 'gz-dropdown-row');
-            const td = create('td');
-            td.setAttribute('colspan', colSpan);
-            const dropdownTorrentData = trumpableReason
-              ? { ...torrentData, trumpable_reason: trumpableReason }
-              : torrentData;
-            td.appendChild(renderTorrentDropdown(dropdownTorrentData, colSpan));
-            dropdownRow.appendChild(td);
-
-            loadingRow.replaceWith(dropdownRow);
+          torrentDropdowns.attach({
+            row: newRow,
+            link: newLink,
+            colSpan: () => CONFIG.enableGazelleButtons ? 7 : 6,
+            getTrumpableReason: () => extractTrumpableReasonFromElement(row),
+            load: async () => {
+              const tmdbId = getTmdbIdFromPage();
+              if (!tmdbId) throw new Error('Could not detect TMDB ID');
+              const torrents = await torrentRepository.byTmdb(tmdbId);
+              return torrents.get(torrentId);
+            },
           });
         }
 
@@ -5972,59 +7695,12 @@
 
     wrapper.appendChild(newTable);
 
-    // Observe the original hidden wrapper for changes (like Async Seadex icons)
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach(mutation => {
-        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-          // Only process when nodes are ADDED, not removed
-          // This prevents race conditions when we move icons (which triggers remove mutations)
-          const target = mutation.target;
-          if (target.matches && (target.matches('.torrent-icons') || target.closest('.torrent-icons'))) {
-            const row = target.closest('tr');
-            const syncId = row ? row.dataset.gzSyncId : null;
-            if (syncId) {
-              const newRow = newTable.querySelector(`tr[data-gz-sync-id="${syncId}"]`);
-              if (newRow) {
-                const iconSpan = newRow.querySelector('.gz-torrent-icons');
-                if (iconSpan) {
-                  // Process only the newly added nodes, don't rebuild everything
-                  mutation.addedNodes.forEach(node => {
-                    if (node.nodeType !== 1) return;
-
-                    // Check if this is a Seadex icon (or contains one)
-                    const isSeadexDirect = node.hasAttribute && node.hasAttribute('data-seadex');
-                    const containsSeadex = node.querySelector && node.querySelector('[data-seadex]');
-                    const seadexElement = isSeadexDirect ? node : containsSeadex;
-
-                    if (seadexElement) {
-                      // For Seadex icons: MOVE them to preserve event listeners
-                      // Find the containing li if wrapped, otherwise move the element directly
-                      const elementToMove = seadexElement.closest('li') || seadexElement;
-                      iconSpan.appendChild(elementToMove);
-                    } else {
-                      // Check if it's another "keep" icon
-                      const isKeep = node.classList && (
-                        node.classList.contains('torrent-icons__torrent-trump') ||
-                        node.classList.contains('torrent-icons__personal-release') ||
-                        node.classList.contains('torrent-icons__internal')
-                      );
-
-                      if (!CONFIG.removeTorrentIcons || isKeep) {
-                        // Skip comment icons
-                        if (node.classList && (node.classList.contains('fa-comment-alt-plus') || node.classList.contains('torrent-icons__comments'))) return;
-                        iconSpan.appendChild(node.cloneNode(true));
-                      }
-                    }
-                  });
-                }
-              }
-            }
-          }
-        }
-      });
+    liveTorrentIcons.project({
+      sourceRoot: section,
+      targetRoot: newTable,
+      entries: iconEntries,
+      removeIcons: CONFIG.removeTorrentIcons,
     });
-
-    observer.observe(wrapper, { childList: true, subtree: true });
 
     // Remove "Expand all" button
     const expandBtn = section.querySelector('.panel__actions button[x-bind="all"]');
@@ -6255,29 +7931,12 @@
       // Hide the original but keep it for Seadex to find
       torrentTags.style.display = 'none';
 
-      // Observe the hidden original for Seadex icons
-      const tagsObserver = new MutationObserver((mutations) => {
-        mutations.forEach(mutation => {
-          if (mutation.type === 'childList') {
-            mutation.addedNodes.forEach(node => {
-              // Check if a Seadex icon was added (it has data-seadex attribute)
-              if (node.nodeType === 1) {
-                const seadexIcon = node.querySelector ?
-                  (node.hasAttribute('data-seadex') ? node : node.querySelector('[data-seadex]')) :
-                  null;
-                if (seadexIcon || (node.hasAttribute && node.hasAttribute('data-seadex'))) {
-                  // Move the Seadex element to visible tags (preserves click handlers)
-                  const elementToMove = seadexIcon || node;
-                  // Find the corresponding li in visible tags, or append to visible tags
-                  visibleTags.appendChild(elementToMove.closest('li') || elementToMove);
-                }
-              }
-            });
-          }
-        });
+      liveTorrentIcons.project({
+        sourceRoot: article,
+        targetRoot: visibleTags,
+        entries: [{ source: torrentTags, target: visibleTags }],
+        kind: 'tags',
       });
-
-      tagsObserver.observe(torrentTags, { childList: true, subtree: true });
     }
 
     const { panels } = createMetaPanels(meta, false);
@@ -6300,15 +7959,20 @@
       return buildTorrentLayout(torrentArticle);
     }
 
-    const searchPage = $(SELECTORS.torrentSearchPage);
-    if (searchPage) {
-      refreshSearchResults();
-      watchSearchResults();
-      return true;
-    }
+  const searchPage = $(SELECTORS.torrentSearchPage);
+  if (searchPage) {
+    refreshSearchResults();
+    watchSearchResults();
+    return true;
+  }
 
-    return false;
-  };
+  const groupRequirementsPage = $(SELECTORS.groupRequirementsPage);
+  if (groupRequirementsPage) {
+    return buildGroupRequirementsLayout(groupRequirementsPage);
+  }
+
+  return false;
+};
 
   // Config option definitions for the modal
   const CONFIG_OPTIONS = [
@@ -6635,15 +8299,14 @@
 
   const initApp = async () => {
     try {
-      const config = await loadConfig();
-      SCENE_RELEASE_GROUPS = new Set((config.SCENE_RELEASE_GROUPS || []).map(normalizeSceneGroupName));
-      SERVICE_TOKENS = config.SERVICE_TOKENS || [];
-      COUNTRY_MAP = config.COUNTRY_MAP || {};
-      LANGUAGE_MAP = config.LANGUAGE_MAP || {};
-      TAG_STYLES = config.TAG_STYLES || {};
-
-      // Initialize dependent sets
-      RELEASE_GROUP_BLOCK_TOKENS = initReleaseGroupBlockTokens();
+      let catalog = {};
+      try {
+        catalog = await loadConfig() || {};
+      } catch (error) {
+        // Catalog outages should not disable layouts, settings or dropdowns.
+        console.warn('GAZELL3D: Using built-in naming rules without the remote catalog', error);
+      }
+      torrentNaming = createTorrentNaming({ catalog, sequence: GAZELLIFY_SEQUENCE });
 
       const baseZoom = (CONFIG.baseFontSize || 100) / 100;
       const dynamicStyles = baseZoom !== 1 ? `

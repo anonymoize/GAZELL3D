@@ -90,47 +90,35 @@
   let AITHER_API_KEY = loadApiKey();
 
 
-  // Utility for making authenticated API calls
-  const gmFetchJson = (url, opts = {}, method = 'GET', timeout = 15000) => {
-    return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({
+  // Production and tests use the same status/JSON handling through this seam.
+  const createJsonRequest = (send) => (url, opts = {}, method = 'GET', timeout = 15000) =>
+    new Promise((resolve, reject) => {
+      send({
+        ...opts,
         method,
         timeout,
-        ...opts,
         url: url.toString(),
         ontimeout: () => reject(new Error(`Request timed out after ${timeout}ms`)),
-        onerror: (err) => reject(err || new Error('Failed to fetch')),
+        onerror: () => reject(new Error('Failed to fetch')),
         onload: (response) => {
+          let data;
           try {
-            resolve(JSON.parse(response.responseText));
-          } catch (e) {
-            reject(new Error('Failed to parse JSON response'));
+            data = JSON.parse(response.responseText);
+          } catch {
+            reject(new Error(response.status >= 200 && response.status < 300
+              ? 'Failed to parse JSON response' : `HTTP Error ${response.status}`));
+            return;
           }
-        }
+          if (response.status < 200 || response.status >= 300) {
+            reject(new Error(data?.message || `HTTP Error ${response.status}`));
+            return;
+          }
+          resolve(data);
+        },
       });
     });
-  };
 
-  // Utility for fetching raw HTML/text
-  const gmFetchText = (url, opts = {}, method = 'GET', timeout = 15000) => {
-    return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({
-        method,
-        timeout,
-        ...opts,
-        url: url.toString(),
-        ontimeout: () => reject(new Error(`Request timed out after ${timeout}ms`)),
-        onerror: (err) => reject(err || new Error('Failed to fetch')),
-        onload: (response) => {
-          if (response.status >= 200 && response.status < 300) {
-            resolve(response.responseText);
-          } else {
-            reject(new Error(`HTTP Error ${response.status}`));
-          }
-        }
-      });
-    });
-  };
+  const gmFetchJson = createJsonRequest((options) => GM_xmlhttpRequest(options));
 
   // Default sequence order - can be customized by user
   const DEFAULT_GAZELLIFY_SEQUENCE = Object.freeze([
@@ -219,6 +207,7 @@
     similarArticle: 'main.page__torrent-similar--index article',
     torrentArticle: 'main.page__torrent--show article',
     torrentSearchPage: 'main.page__torrent--index',
+    groupRequirementsPage: 'main.page__stats--group-requirements',
     torrentGroup: 'section.panelV2[x-data="torrentGroup"]',
     metaSection: 'section.meta',
     torrentButtons: 'menu.torrent__buttons',
