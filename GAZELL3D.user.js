@@ -953,7 +953,7 @@
 
   main.page__stats--group-requirements.gz-req-v2-page > article {
     width: 100%;
-    max-width: 1120px;
+    max-width: 1500px;
     margin: 0 auto;
     padding: 0;
   }
@@ -1106,6 +1106,45 @@
     .gz-req-v2-rank { grid-row: auto; }
     .gz-req-v2-panel--perks { grid-column: auto; }
     .gz-req-v2-rank__icon { min-height: 54px; }
+  }
+
+  .gz-req-v2-paths {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 36px;
+  }
+
+  .gz-req-v2-path { min-width: 0; }
+  .gz-req-v2-path > .gz-req-v2-section { font-size: 14px; }
+
+  .gz-req-v2-path .gz-req-v2-row {
+    grid-template-columns: 86px minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 18px;
+    padding: 18px 0 22px;
+    border-bottom: 1px solid var(--gz-req-v2-line);
+  }
+
+  .gz-req-v2-path .gz-req-v2-rank { grid-row: auto; }
+  .gz-req-v2-path .gz-req-v2-rank__description { font-size: 10px; }
+  .gz-req-v2-path .gz-req-v2-panel--perks { grid-column: auto; }
+  .gz-req-v2-path .gz-req-v2-rank__icon { min-height: 58px; border-bottom: 0; }
+  .gz-req-v2-path .gz-req-v2-criterion { font-size: 12px; gap: 4px; }
+  .gz-req-v2-path .gz-req-v2-perk { font-size: 12px; padding: 4px 0; }
+
+  @media (max-width: 1150px) {
+    .gz-req-v2-paths { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  }
+
+  @media (max-width: 620px) {
+    .gz-req-v2-path .gz-req-v2-row { grid-template-columns: 86px minmax(0, 1fr); gap: 12px 18px; }
+    .gz-req-v2-path .gz-req-v2-rank { grid-row: span 2; }
+    .gz-req-v2-path .gz-req-v2-panel--perks { grid-column: 2; }
+  }
+
+  @media (max-width: 420px) {
+    .gz-req-v2-path .gz-req-v2-row { grid-template-columns: minmax(0, 1fr); }
+    .gz-req-v2-path .gz-req-v2-rank { grid-row: auto; }
+    .gz-req-v2-path .gz-req-v2-panel--perks { grid-column: auto; }
   }
 
   .gz-search-title {
@@ -3562,9 +3601,10 @@ const parseGroupRequirementsData = (page) => {
       const description = getText(group.querySelector('.group-requirements__group--description'));
       const separators = $$('.group-requirements__group--separator', group).map((node) => getText(node));
       const requirements = $$('.group-requirements__group--requirement-row', group).map(parseRequirementRow).filter((item) => item.label);
-      const perks = $$('.group-requirements__perk-extended', group).map((node) => ({
+      // Alpine changes the class on expansion; both states contain the same perk.
+      const perks = $$('.group-requirements__perk, .group-requirements__perk-extended', group).map((node) => ({
         icon: node.querySelector('i')?.cloneNode(true) || null,
-        text: getText(node),
+        text: getText(node) || normalizeText(node.getAttribute('title') || ''),
       })).filter((item) => item.text);
 
       return {
@@ -3708,7 +3748,12 @@ const buildGroupRequirementsLayout = (page = $(SELECTORS.groupRequirementsPage))
   if (!page || page.dataset.gzRequirementsLayout === '1') return !!page;
   const groups = parseGroupRequirementsData(page);
   if (!groups.length) return false;
-  const displayGroups = arrangeGroupRequirements(groups);
+  const mainSection = groups.find((group) => /^main path$/i.test(group.sectionName))?.sectionName;
+  const displayGroups = arrangeGroupRequirements(groups).map((group) =>
+    group.sectionName === 'Shared Classes' && mainSection
+      ? { ...group, sectionName: mainSection }
+      : group
+  );
 
   const article = page.querySelector('article') || page;
   const shell = create('section', 'gz-req-v2');
@@ -3721,13 +3766,22 @@ const buildGroupRequirementsLayout = (page = $(SELECTORS.groupRequirementsPage))
   header.appendChild(summary);
   shell.appendChild(header);
 
-  let lastSection = '';
+  const paths = create('div', 'gz-req-v2-paths');
+  const sections = new Map();
   displayGroups.forEach((group) => {
-    if (group.sectionName !== lastSection) {
-      const section = create('div', 'gz-req-v2-section');
-      section.textContent = group.sectionName;
-      shell.appendChild(section);
-      lastSection = group.sectionName;
+    if (!sections.has(group.sectionName)) {
+      const isPath = /^(main|uploader) path$/i.test(group.sectionName);
+      const section = create('section', isPath ? 'gz-req-v2-path' : 'gz-req-v2-group-section');
+      const heading = create('h2', 'gz-req-v2-section');
+      heading.textContent = group.sectionName;
+      section.appendChild(heading);
+      if (isPath) {
+        if (!paths.parentNode) shell.appendChild(paths);
+        paths.appendChild(section);
+      } else {
+        shell.appendChild(section);
+      }
+      sections.set(group.sectionName, section);
     }
 
     const row = create('article', 'gz-req-v2-row');
@@ -3737,14 +3791,14 @@ const buildGroupRequirementsLayout = (page = $(SELECTORS.groupRequirementsPage))
     const rankIcon = create('div', 'gz-req-v2-rank__icon');
     if (group.titleIcon) rankIcon.appendChild(group.titleIcon);
     const desc = create('p', 'gz-req-v2-rank__description');
-    desc.textContent = group.description || 'No description available';
+    desc.textContent = group.description;
     identity.appendChild(rankTitle);
     identity.appendChild(rankIcon);
-    identity.appendChild(desc);
+    if (group.description && !/^no description available[.!]?$/i.test(group.description)) identity.appendChild(desc);
 
     const reqPanel = create('section', 'gz-req-v2-panel');
     const reqHeading = create('h3', 'gz-req-v2-panel__heading');
-    reqHeading.textContent = 'Requirements / Restrictions';
+    reqHeading.textContent = 'Requirements';
     reqPanel.appendChild(reqHeading);
     if (group.requirements.length) {
       appendRequirementItems(reqPanel, group);
@@ -3769,7 +3823,7 @@ const buildGroupRequirementsLayout = (page = $(SELECTORS.groupRequirementsPage))
     row.appendChild(identity);
     row.appendChild(reqPanel);
     row.appendChild(perksPanel);
-    shell.appendChild(row);
+    sections.get(group.sectionName).appendChild(row);
   });
 
   article.textContent = '';

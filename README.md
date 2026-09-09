@@ -74,7 +74,8 @@ Page dispatch uses the selectors in `01-config-and-storage.js`:
   poster rail. Original rows, controls and group associations remain intact.
   Dropdowns fetch individual torrents by ID; this path retains the individual-torrent retrieval flow.
 - **User-group requirements:** parse the site's class/requirement/perk markup,
-  consolidate shared classes, and replace the article with the requirements view.
+  consolidate shared entry classes into Main Path, and render Main Path and
+  Uploader Path side by side, with other groups outside the path columns.
 
 Dropdown rendering adds existing-report information asynchronously. Description
 comparisons and embedded code-copy controls emit attributes for Aither's Alpine
@@ -104,9 +105,9 @@ so observers and timers do not outlive the test.
 | `tests/naming-and-media.test.mjs` | Explicit naming context, catalog snapshots, release-group rules, raw media preservation and text rendering. |
 | `tests/boot.test.mjs` | Built-script search/grouped/detail integration and late icon handling. |
 | `tests/settings.test.mjs` | Draft isolation, focus, preview/reordering, validation, persistence and storage failure. |
+| `tests/group-requirements.test.mjs` | Split path ownership, shared-class deduplication, static groups, collapsed/expanded perks, safe text rendering, and idempotent rendering. |
 
-There are no dedicated tests yet for the user-group requirements transformation,
-full TV table grouping, BBCode interactions, file-tree interactions, or the report
+There are no dedicated tests yet for full TV table grouping, BBCode interactions, file-tree interactions, or the report
 form UI. Add focused regression coverage when changing those behaviors. Existing
 DOM tests do not replace browser checks for CSS, Alpine interactions, clipboard
 permissions, or integration with the live site and other userscripts.

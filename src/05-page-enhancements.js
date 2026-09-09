@@ -109,9 +109,10 @@ const parseGroupRequirementsData = (page) => {
       const description = getText(group.querySelector('.group-requirements__group--description'));
       const separators = $$('.group-requirements__group--separator', group).map((node) => getText(node));
       const requirements = $$('.group-requirements__group--requirement-row', group).map(parseRequirementRow).filter((item) => item.label);
-      const perks = $$('.group-requirements__perk-extended', group).map((node) => ({
+      // Alpine changes the class on expansion; both states contain the same perk.
+      const perks = $$('.group-requirements__perk, .group-requirements__perk-extended', group).map((node) => ({
         icon: node.querySelector('i')?.cloneNode(true) || null,
-        text: getText(node),
+        text: getText(node) || normalizeText(node.getAttribute('title') || ''),
       })).filter((item) => item.text);
 
       return {
@@ -255,7 +256,12 @@ const buildGroupRequirementsLayout = (page = $(SELECTORS.groupRequirementsPage))
   if (!page || page.dataset.gzRequirementsLayout === '1') return !!page;
   const groups = parseGroupRequirementsData(page);
   if (!groups.length) return false;
-  const displayGroups = arrangeGroupRequirements(groups);
+  const mainSection = groups.find((group) => /^main path$/i.test(group.sectionName))?.sectionName;
+  const displayGroups = arrangeGroupRequirements(groups).map((group) =>
+    group.sectionName === 'Shared Classes' && mainSection
+      ? { ...group, sectionName: mainSection }
+      : group
+  );
 
   const article = page.querySelector('article') || page;
   const shell = create('section', 'gz-req-v2');
@@ -268,13 +274,22 @@ const buildGroupRequirementsLayout = (page = $(SELECTORS.groupRequirementsPage))
   header.appendChild(summary);
   shell.appendChild(header);
 
-  let lastSection = '';
+  const paths = create('div', 'gz-req-v2-paths');
+  const sections = new Map();
   displayGroups.forEach((group) => {
-    if (group.sectionName !== lastSection) {
-      const section = create('div', 'gz-req-v2-section');
-      section.textContent = group.sectionName;
-      shell.appendChild(section);
-      lastSection = group.sectionName;
+    if (!sections.has(group.sectionName)) {
+      const isPath = /^(main|uploader) path$/i.test(group.sectionName);
+      const section = create('section', isPath ? 'gz-req-v2-path' : 'gz-req-v2-group-section');
+      const heading = create('h2', 'gz-req-v2-section');
+      heading.textContent = group.sectionName;
+      section.appendChild(heading);
+      if (isPath) {
+        if (!paths.parentNode) shell.appendChild(paths);
+        paths.appendChild(section);
+      } else {
+        shell.appendChild(section);
+      }
+      sections.set(group.sectionName, section);
     }
 
     const row = create('article', 'gz-req-v2-row');
@@ -284,14 +299,14 @@ const buildGroupRequirementsLayout = (page = $(SELECTORS.groupRequirementsPage))
     const rankIcon = create('div', 'gz-req-v2-rank__icon');
     if (group.titleIcon) rankIcon.appendChild(group.titleIcon);
     const desc = create('p', 'gz-req-v2-rank__description');
-    desc.textContent = group.description || 'No description available';
+    desc.textContent = group.description;
     identity.appendChild(rankTitle);
     identity.appendChild(rankIcon);
-    identity.appendChild(desc);
+    if (group.description && !/^no description available[.!]?$/i.test(group.description)) identity.appendChild(desc);
 
     const reqPanel = create('section', 'gz-req-v2-panel');
     const reqHeading = create('h3', 'gz-req-v2-panel__heading');
-    reqHeading.textContent = 'Requirements / Restrictions';
+    reqHeading.textContent = 'Requirements';
     reqPanel.appendChild(reqHeading);
     if (group.requirements.length) {
       appendRequirementItems(reqPanel, group);
@@ -316,7 +331,7 @@ const buildGroupRequirementsLayout = (page = $(SELECTORS.groupRequirementsPage))
     row.appendChild(identity);
     row.appendChild(reqPanel);
     row.appendChild(perksPanel);
-    shell.appendChild(row);
+    sections.get(group.sectionName).appendChild(row);
   });
 
   article.textContent = '';
