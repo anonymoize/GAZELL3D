@@ -11,15 +11,20 @@
       return buildTorrentLayout(torrentArticle);
     }
 
-    const searchPage = $(SELECTORS.torrentSearchPage);
-    if (searchPage) {
-      refreshSearchResults();
-      watchSearchResults();
-      return true;
-    }
+  const searchPage = $(SELECTORS.torrentSearchPage);
+  if (searchPage) {
+    refreshSearchResults();
+    watchSearchResults();
+    return true;
+  }
 
-    return false;
-  };
+  const groupRequirementsPage = $(SELECTORS.groupRequirementsPage);
+  if (groupRequirementsPage) {
+    return buildGroupRequirementsLayout(groupRequirementsPage);
+  }
+
+  return false;
+};
 
   // Config option definitions for the modal
   const CONFIG_OPTIONS = [

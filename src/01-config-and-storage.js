@@ -219,6 +219,7 @@
     similarArticle: 'main.page__torrent-similar--index article',
     torrentArticle: 'main.page__torrent--show article',
     torrentSearchPage: 'main.page__torrent--index',
+    groupRequirementsPage: 'main.page__stats--group-requirements',
     torrentGroup: 'section.panelV2[x-data="torrentGroup"]',
     metaSection: 'section.meta',
     torrentButtons: 'menu.torrent__buttons',
