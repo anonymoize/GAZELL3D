@@ -2601,16 +2601,23 @@
       text-align: left; font-size: 14px; font-weight: 400; overflow-wrap: anywhere;
     }
     .gz-user-profile .user-profile-card__buttons {
-      display: flex; justify-content: flex-start; flex-wrap: wrap; gap: 8px;
-      margin-top: 14px;
+      display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px 16px;
+      margin-top: 28px;
     }
     .gz-user-profile .user-profile-card__buttons:not(:has(a, button)) { display: none; }
     .gz-user-profile .user-profile-card__user-buttons,
-    .gz-user-profile .user-profile-card__staff-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+    .gz-user-profile .user-profile-card__staff-buttons {
+      display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px 16px;
+      min-width: 0;
+    }
+    .gz-user-profile :is(.user-profile-card__user-buttons, .user-profile-card__staff-buttons):empty { display: none; }
     .gz-user-profile .user-profile-card__section-button--info {
-      padding: 4px 10px; border: 1px solid var(--gz-profile-line); border-radius: 2px;
-      background: var(--gz-profile-bg); color: var(--gz-profile-fg); backdrop-filter: none;
-      font-size: 12px;
+      margin: 0; padding: 4px 0; border: 0; border-radius: 0; box-shadow: none;
+      background: transparent; color: var(--gz-profile-fg); backdrop-filter: none;
+      font-size: 14px; font-weight: 400; line-height: 1.5;
+    }
+    .gz-user-profile .user-profile-card__section-button--info:hover {
+      background: transparent; text-decoration: underline; text-underline-offset: 3px;
     }
     .gz-profile-layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 24px; align-items: start; }
     .gz-profile-content, .gz-profile-sidebar { min-width: 0; display: flex; flex-direction: column; gap: 22px; }
